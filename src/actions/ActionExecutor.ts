@@ -125,9 +125,22 @@ export class ActionExecutor {
   }
 
   private async _executeClick(action: ActionCommand): Promise<void> {
+    console.log('🎯 ActionExecutor._executeClick called with:', action.parameters);
+    
+    // Backward compatibility: accept `target` when `description` is absent
+    const rawTarget = action.parameters.description 
+      ?? action.description 
+      ?? action.parameters.target;
+
+    // If no explicit selector provided, but target looks like CSS, treat as selector
+    let selector = action.parameters.selector;
+    if (!selector && rawTarget && (rawTarget.includes('#') || rawTarget.includes('.') || rawTarget.includes('['))) {
+      selector = rawTarget;
+    }
+
     const options: ClickOptions = {
-      selector: action.parameters.selector,
-      description: action.parameters.description ?? action.description,
+      selector,
+      description: rawTarget,
       button: (action.parameters.button as ClickOptions['button']) ?? 'left',
       clickCount: parseInt(action.parameters.clickCount ?? '1', 10),
     };
@@ -139,6 +152,7 @@ export class ActionExecutor {
       };
     }
 
+    console.log('🎯 ActionExecutor calling DOMActions.click with options:', options);
     return this._domActions.click(options);
   }
 
@@ -152,9 +166,20 @@ export class ActionExecutor {
       );
     }
 
+    // Backward compatibility: accept `target` when `description` is absent
+    const rawTarget = action.parameters.description 
+      ?? action.description 
+      ?? action.parameters.target;
+
+    // If no explicit selector provided, but target looks like CSS, treat as selector
+    let selector = action.parameters.selector;
+    if (!selector && rawTarget && (rawTarget.includes('#') || rawTarget.includes('.') || rawTarget.includes('['))) {
+      selector = rawTarget;
+    }
+
     const options: FillOptions = {
-      selector: action.parameters.selector,
-      description: action.parameters.description ?? action.description,
+      selector,
+      description: rawTarget,
       value,
       clearFirst: action.parameters.clearFirst === 'true',
       triggerEvents: action.parameters.triggerEvents !== 'false',
