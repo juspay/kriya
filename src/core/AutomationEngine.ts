@@ -46,6 +46,10 @@ export class AutomationEngine {
     try {
       this._contextCapture.initialize();
       this._formRegistry.initialize(formLibrary);
+      
+      // Connect FormRegistry to ContextCapture for proper form detection
+      this._contextCapture.setFormRegistry(this._formRegistry);
+      
       this._actionExecutor.initialize(this._formRegistry, this._contextCapture);
 
       this._initialized = true;

@@ -16,6 +16,7 @@ export class ContextCapture {
   private readonly _config: AutomationConfig;
   private readonly _captureConfig: ContextCaptureConfig;
   private _initialized: boolean;
+  private _formRegistry: any = null; // FormRegistry instance will be injected
   public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
 
   constructor(config: AutomationConfig) {
@@ -23,6 +24,10 @@ export class ContextCapture {
     this._captureConfig = { ...DEFAULT_CONTEXT_CAPTURE_CONFIG };
     this._initialized = false;
     this.addEventListener = null;
+  }
+
+  public setFormRegistry(formRegistry: any): void {
+    this._formRegistry = formRegistry;
   }
 
   public initialize(): void {
@@ -46,12 +51,23 @@ export class ContextCapture {
         ? this._extractElementContext() 
         : [];
 
+      // Get forms from FormRegistry if available
+      let forms: any[] = [];
+      if (this._formRegistry && typeof this._formRegistry.getFormContext === 'function') {
+        try {
+          forms = this._formRegistry.getFormContext();
+        } catch (error) {
+          // If FormRegistry fails, continue without forms data
+          console.warn('Failed to get form context from FormRegistry:', error);
+        }
+      }
+
       const context: PageContext = {
         pageUrl: window.location.href,
         title: document.title,
         timestamp: Date.now(),
         totalFormsFound: document.querySelectorAll('form').length,
-        forms: [], // Will be populated by FormRegistry
+        forms, // Now populated from FormRegistry
         elements,
         viewport,
       };

@@ -86,6 +86,8 @@ export interface FormFieldContext {
   readonly required: boolean;
   readonly disabled: boolean;
   readonly label?: string;
+  readonly options?: readonly string[];
+  readonly multiselect?: boolean;
 }
 
 export interface ElementContext {
