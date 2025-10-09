@@ -3,6 +3,8 @@ import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 import terser from '@rollup/plugin-terser';
 import dts from 'rollup-plugin-dts';
+import alias from '@rollup/plugin-alias';
+import path from 'path';
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -40,6 +42,17 @@ const buildConfig = {
     },
   ],
   plugins: [
+    alias({
+      entries: [
+        { find: '@', replacement: path.resolve('./src') },
+        { find: '@/types', replacement: path.resolve('./src/types') },
+        { find: '@/core', replacement: path.resolve('./src/core') },
+        { find: '@/actions', replacement: path.resolve('./src/actions') },
+        { find: '@/forms', replacement: path.resolve('./src/forms') },
+        { find: '@/context', replacement: path.resolve('./src/context') },
+        { find: '@/utils', replacement: path.resolve('./src/utils') },
+      ],
+    }),
     resolve({
       browser: true,
       preferBuiltins: false,
@@ -69,6 +82,17 @@ const typesConfig = {
     format: 'es',
   },
   plugins: [
+    alias({
+      entries: [
+        { find: '@', replacement: path.resolve('./src') },
+        { find: '@/types', replacement: path.resolve('./src/types') },
+        { find: '@/core', replacement: path.resolve('./src/core') },
+        { find: '@/actions', replacement: path.resolve('./src/actions') },
+        { find: '@/forms', replacement: path.resolve('./src/forms') },
+        { find: '@/context', replacement: path.resolve('./src/context') },
+        { find: '@/utils', replacement: path.resolve('./src/utils') },
+      ],
+    }),
     dts(),
   ],
 };

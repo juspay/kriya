@@ -198,18 +198,47 @@ export class DOMActions {
     const textContent = element.textContent?.toLowerCase() ?? '';
     const placeholder = (element as HTMLInputElement).placeholder?.toLowerCase() ?? '';
     const label = element.getAttribute('aria-label')?.toLowerCase() ?? '';
+    const title = element.getAttribute('title')?.toLowerCase() ?? '';
     const id = element.id?.toLowerCase() ?? '';
     const className = String(element.className || '').toLowerCase();
+    
+    // Check data attributes for button text and other descriptive content
+    const dataButtonText = element.getAttribute('data-button-text')?.toLowerCase() ?? '';
+    const dataLabel = element.getAttribute('data-label')?.toLowerCase() ?? '';
+    const dataTitle = element.getAttribute('data-title')?.toLowerCase() ?? '';
+    const dataName = element.getAttribute('data-name')?.toLowerCase() ?? '';
+    const dataTestId = element.getAttribute('data-testid')?.toLowerCase() ?? '';
+    const dataButtonFor = element.getAttribute('data-button-for')?.toLowerCase() ?? '';
 
-    if (textContent.includes(description)) score += 3;
-    if (placeholder.includes(description)) score += 3;
-    if (label.includes(description)) score += 3;
+    // High priority matches (exact text content)
+    if (textContent.includes(description)) score += 5;
+    if (dataButtonText.includes(description)) score += 5;
+    if (placeholder.includes(description)) score += 4;
+    if (label.includes(description)) score += 4;
+    if (title.includes(description)) score += 4;
+    
+    // Medium priority matches (descriptive attributes)
+    if (dataLabel.includes(description)) score += 3;
+    if (dataTitle.includes(description)) score += 3;
+    if (dataName.includes(description)) score += 3;
+    if (dataTestId.includes(description)) score += 3;
+    
+    // Lower priority matches (structural identifiers)
     if (id.includes(description)) score += 2;
+    if (dataButtonFor.includes(description)) score += 2;
     if (className.includes(description)) score += 1;
 
+    // Exact matches get bonus points
+    if (textContent.trim() === description) score += 10;
+    if (dataButtonText.trim() === description) score += 10;
+    if (placeholder.trim() === description) score += 8;
+    if (label.trim() === description) score += 8;
+
+    // Penalize hidden or disabled elements
     if (element.getAttribute('aria-hidden') === 'true') score -= 5;
     if (element.style.display === 'none') score -= 5;
     if (element.style.visibility === 'hidden') score -= 5;
+    if ((element as HTMLButtonElement).disabled) score -= 3;
 
     return score;
   }
