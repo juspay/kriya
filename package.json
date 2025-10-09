@@ -2,6 +2,7 @@
   "name": "@juspay/kriya",
   "version": "1.0.0",
   "description": "Pure automation execution engine for web actions - no AI, no UI. Execute action commands from any AI.",
+  "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",

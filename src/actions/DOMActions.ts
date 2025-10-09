@@ -199,7 +199,7 @@ export class DOMActions {
     const placeholder = (element as HTMLInputElement).placeholder?.toLowerCase() ?? '';
     const label = element.getAttribute('aria-label')?.toLowerCase() ?? '';
     const id = element.id?.toLowerCase() ?? '';
-    const className = element.className?.toLowerCase() ?? '';
+    const className = String(element.className || '').toLowerCase();
 
     if (textContent.includes(description)) score += 3;
     if (placeholder.includes(description)) score += 3;

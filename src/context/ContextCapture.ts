@@ -16,6 +16,7 @@ export class ContextCapture {
   private readonly _config: AutomationConfig;
   private readonly _captureConfig: ContextCaptureConfig;
   private _initialized: boolean;
+  private _formRegistry: any = null;
   public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
 
   constructor(config: AutomationConfig) {
@@ -23,6 +24,10 @@ export class ContextCapture {
     this._captureConfig = { ...DEFAULT_CONTEXT_CAPTURE_CONFIG };
     this._initialized = false;
     this.addEventListener = null;
+  }
+
+  public setFormRegistry(formRegistry: any): void {
+    this._formRegistry = formRegistry;
   }
 
   public initialize(): void {
@@ -46,12 +51,32 @@ export class ContextCapture {
         ? this._extractElementContext() 
         : [];
 
+      // Enhanced form detection for both FormRegistry and custom design system
+      let forms: any[] = [];
+      
+      // First, try to get forms from FormRegistry
+      if (this._formRegistry && typeof this._formRegistry.getFormContext === 'function') {
+        try {
+          forms = this._formRegistry.getFormContext();
+          console.log(`📋 Kriya: Found ${forms.length} forms from FormRegistry`);
+        } catch (error) {
+          console.warn('📋 Kriya: Failed to get forms from FormRegistry:', error);
+        }
+      }
+      
+      // Always also detect custom design system components (whether or not FormRegistry found forms)
+      const customForms = this._detectCustomDesignSystemForms();
+      console.log(`📋 Kriya: Detected ${customForms.length} custom design system forms`);
+      
+      // Combine forms from both sources
+      forms = forms.concat(customForms);
+
       const context: PageContext = {
         pageUrl: window.location.href,
         title: document.title,
         timestamp: Date.now(),
-        totalFormsFound: document.querySelectorAll('form').length,
-        forms: [], // Will be populated by FormRegistry
+        totalFormsFound: Math.max(document.querySelectorAll('form').length, forms.length),
+        forms: forms,
         elements,
         viewport,
       };
@@ -291,5 +316,258 @@ export class ContextCapture {
     }
 
     return false;
+  }
+
+  private _detectCustomDesignSystemForms(): any[] {
+    console.log('📋 Kriya: Starting custom design system form detection...');
+    
+    const forms: any[] = [];
+    
+    // Find all field wrappers (form containers)
+    const fieldWrappers = document.querySelectorAll('[data-component-field-wrapper]');
+    
+    if (fieldWrappers.length > 0) {
+      console.log(`📋 Kriya: Found ${fieldWrappers.length} field wrappers`);
+      
+      // Debug: Log each wrapper found
+      fieldWrappers.forEach((wrapper, index) => {
+        const wrapperName = wrapper.getAttribute('data-component-field-wrapper');
+        console.log(`📋 Kriya: Wrapper ${index}: ${wrapperName}`);
+      });
+      
+      // Group field wrappers into logical forms
+      const detectedFields = Array.from(fieldWrappers).map((wrapper, index) => {
+        const field = this._extractCustomFieldInfo(wrapper as HTMLElement, index);
+        if (!field) {
+          console.log(`📋 Kriya: Failed to extract field from wrapper ${index}`);
+        }
+        return field;
+      }).filter(field => field !== null);
+      
+      console.log(`📋 Kriya: Successfully extracted ${detectedFields.length} fields from wrappers`);
+      
+      if (detectedFields.length > 0) {
+        // Create a single form containing all detected fields
+        forms.push({
+          formId: 'custom-design-system-form',
+          action: window.location.href,
+          method: 'POST',
+          fields: detectedFields,
+          isRegistered: false,
+          hasSubmitButton: this._hasCustomSubmitButton(),
+        });
+      }
+    }
+    
+    // Always also check for additional fallback fields that might not be in wrappers
+    const fallbackFields = this._detectFallbackFields();
+    console.log(`📋 Kriya: Found ${fallbackFields.length} fallback fields`);
+    
+    if (fallbackFields.length > 0) {
+      // Only add fallback fields that weren't already captured in wrappers
+      const existingFieldNames = forms.flatMap(form => form.fields.map((field: any) => field.name));
+      const uniqueFallbackFields = fallbackFields.filter((field: any) => 
+        !existingFieldNames.includes(field.name)
+      );
+      
+      console.log(`📋 Kriya: ${uniqueFallbackFields.length} unique fallback fields after deduplication`);
+      
+      if (uniqueFallbackFields.length > 0) {
+        forms.push({
+          formId: 'fallback-design-system-form',
+          action: window.location.href,
+          method: 'POST',
+          fields: uniqueFallbackFields,
+          isRegistered: false,
+          hasSubmitButton: this._hasCustomSubmitButton(),
+        });
+      }
+    }
+    
+    console.log(`📋 Kriya: Custom detection complete - found ${forms.length} forms with ${forms.reduce((total, form) => total + form.fields.length, 0)} total fields`);
+    return forms;
+  }
+
+  private _extractCustomFieldInfo(wrapper: HTMLElement, index: number): any | null {
+    const fieldName = wrapper.getAttribute('data-component-field-wrapper') || `field-${index}`;
+    
+    // Find label
+    const labelElement = wrapper.querySelector('[data-form-label]');
+    const label = labelElement?.getAttribute('data-form-label') || 
+                  labelElement?.textContent?.trim() || 
+                  undefined;
+    
+    // Detect field type and extract value
+    const fieldInfo = this._detectFieldTypeAndValue(wrapper);
+    
+    if (!fieldInfo) {
+      console.log(`📋 Kriya: Could not determine field type for ${fieldName}`);
+      return null;
+    }
+    
+    console.log(`📋 Kriya: Extracted field "${fieldName}" - type: ${fieldInfo.type}, value: "${fieldInfo.value}"`);
+    
+    return {
+      name: fieldName,
+      type: fieldInfo.type,
+      value: fieldInfo.value,
+      placeholder: fieldInfo.placeholder,
+      required: fieldInfo.required || false,
+      disabled: fieldInfo.disabled || false,
+      label: label,
+      options: fieldInfo.options || undefined,
+    };
+  }
+
+  private _detectFieldTypeAndValue(wrapper: HTMLElement): any | null {
+    // Check for SelectBox/Dropdown
+    const selectboxValue = wrapper.querySelector('[data-selectbox-value]');
+    if (selectboxValue) {
+      const buttonText = selectboxValue.getAttribute('data-selectbox-value') || '';
+      
+      // Find the actual selected value from the button
+      const selectedButton = wrapper.querySelector('button[data-value]');
+      const currentValue = selectedButton?.getAttribute('data-value') || '';
+      const displayText = wrapper.querySelector('[data-button-text]')?.textContent?.trim() || '';
+      
+      // Look for dropdown options when dropdown is expanded
+      const dropdown = wrapper.querySelector('[data-dropdown="dropdown"]');
+      const options: string[] = [];
+      
+      if (dropdown) {
+        const optionElements = dropdown.querySelectorAll('[data-dropdown-value]');
+        optionElements.forEach(option => {
+          const value = option.getAttribute('data-dropdown-value');
+          if (value) options.push(value);
+        });
+      } else {
+        // If dropdown is not expanded, try to find options from static elements
+        const allButtons = wrapper.querySelectorAll('button[data-value]');
+        allButtons.forEach(button => {
+          const value = button.getAttribute('data-value');
+          if (value) options.push(value);
+        });
+      }
+      
+      return {
+        type: 'select',
+        value: currentValue,
+        displayText: displayText,
+        buttonText: buttonText,
+        placeholder: buttonText,
+        options: options.length > 0 ? options : undefined,
+      };
+    }
+    
+    // Check for standard input elements within the wrapper
+    const inputElement = wrapper.querySelector('input, textarea');
+    if (inputElement) {
+      const input = inputElement as HTMLInputElement | HTMLTextAreaElement;
+      return {
+        type: input.type || 'text',
+        value: input.value || '',
+        placeholder: (input as HTMLInputElement).placeholder || undefined,
+        required: input.required,
+        disabled: input.disabled,
+      };
+    }
+    
+    // Check for button-based inputs (like date pickers, file uploads)
+    const buttonInput = wrapper.querySelector('button[data-value]');
+    if (buttonInput) {
+      const value = buttonInput.getAttribute('data-value') || '';
+      const buttonText = buttonInput.querySelector('[data-button-text]')?.textContent?.trim() || '';
+      
+      return {
+        type: 'button',
+        value: value,
+        placeholder: buttonText,
+      };
+    }
+    
+    // Check for numeric inputs or specialized inputs
+    const numericInput = wrapper.querySelector('[inputmode="numeric"], [type="number"]');
+    if (numericInput) {
+      const input = numericInput as HTMLInputElement;
+      return {
+        type: 'number',
+        value: input.value || '',
+        placeholder: input.placeholder || undefined,
+        required: input.required,
+        disabled: input.disabled,
+      };
+    }
+    
+    return null;
+  }
+
+  private _detectFallbackFields(): any[] {
+    const fields: any[] = [];
+    
+    // Look for SelectBox components with proper value extraction
+    const selectBoxElements = document.querySelectorAll('[data-selectbox-value]');
+    selectBoxElements.forEach((element, index) => {
+      const buttonText = element.getAttribute('data-selectbox-value') || '';
+      
+      // Find the actual selected value
+      const selectedButton = element.querySelector('button[data-value]');
+      const currentValue = selectedButton?.getAttribute('data-value') || '';
+      const displayText = element.querySelector('[data-button-text]')?.textContent?.trim() || '';
+      
+      // Try to find a meaningful field name from the wrapper or label
+      const wrapper = element.closest('[data-component-field-wrapper]');
+      const label = element.querySelector('[data-form-label]');
+      const fieldName = wrapper?.getAttribute('data-component-field-wrapper') || 
+                       label?.getAttribute('data-form-label') || 
+                       `selectbox-${index}`;
+      
+      fields.push({
+        name: fieldName,
+        type: 'select',
+        value: currentValue,
+        displayText: displayText,
+        buttonText: buttonText,
+        placeholder: buttonText,
+        required: false,
+        disabled: selectedButton?.hasAttribute('disabled') || false,
+        label: label?.textContent?.trim() || undefined,
+      });
+    });
+    
+    // Look for other design system inputs
+    const inputs = document.querySelectorAll('[data-design-system="true"] input, [data-design-system="true"] textarea');
+    inputs.forEach((element, index) => {
+      const input = element as HTMLInputElement | HTMLTextAreaElement;
+      
+      // Try to find a meaningful field name from the wrapper or nearby label
+      const wrapper = input.closest('[data-component-field-wrapper]');
+      const label = wrapper?.querySelector('[data-form-label]') || 
+                   document.querySelector(`label[for="${input.id}"]`);
+      const fieldName = wrapper?.getAttribute('data-component-field-wrapper') || 
+                       input.name || 
+                       input.id || 
+                       label?.getAttribute('data-form-label') ||
+                       `input-${index}`;
+      
+      fields.push({
+        name: fieldName,
+        type: input.type || 'text',
+        value: input.value || '',
+        placeholder: (input as HTMLInputElement).placeholder || undefined,
+        required: input.required,
+        disabled: input.disabled,
+        label: label?.textContent?.trim() || undefined,
+      });
+    });
+    
+    return fields;
+  }
+
+  private _hasCustomSubmitButton(): boolean {
+    // Look for common submit button patterns
+    const submitButtons = document.querySelectorAll(
+      'button[type="submit"], [data-button-type="submit"], button:contains("Submit"), button:contains("Save"), button:contains("Apply")'
+    );
+    return submitButtons.length > 0;
   }
 }
