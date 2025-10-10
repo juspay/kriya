@@ -64,14 +64,20 @@ export class DOMActions {
   public async click(options: ClickOptions): Promise<void> {
     this._ensureInitialized();
 
-    const element = await this._findElement(options.selector, options.description);
+    let element = await this._findElement(options.selector, options.description);
 
+    // If the found element is not directly clickable, try to find a clickable child
     if (!this._isElementClickable(element)) {
-      throw new AutomationError(
-        'Element is not clickable',
-        'ELEMENT_NOT_FOUND',
-        { selector: options.selector, description: options.description }
-      );
+      const clickableChild = this._findClickableChild(element);
+      if (clickableChild) {
+        element = clickableChild;
+      } else {
+        throw new AutomationError(
+          'Element is not clickable',
+          'ELEMENT_NOT_FOUND',
+          { selector: options.selector, description: options.description }
+        );
+      }
     }
 
     try {
@@ -190,6 +196,48 @@ export class DOMActions {
 
     const bestMatch = scores[0];
     return bestMatch && bestMatch.score > 0 ? bestMatch.element : null;
+  }
+
+  private _findClickableChild(element: HTMLElement): HTMLElement | null {
+    // Look for clickable child elements in order of preference
+    const clickableSelectors = [
+      'a[href]',           // Links with href
+      'button',            // Buttons
+      'input[type="button"]', // Button inputs
+      'input[type="submit"]', // Submit inputs
+      '[role="button"]',   // Elements with button role
+      '[onclick]',         // Elements with onclick handlers
+      '[data-testid*="button"]', // Test ID buttons
+      '[data-button-text]' // Elements with button text data attribute
+    ];
+
+    for (const selector of clickableSelectors) {
+      const clickableChild = element.querySelector(selector) as HTMLElement;
+      if (clickableChild && this._isElementClickable(clickableChild)) {
+        return clickableChild;
+      }
+    }
+
+    // Check direct children for clickable elements
+    const children = Array.from(element.children) as HTMLElement[];
+    for (const child of children) {
+      if (this._isElementClickable(child)) {
+        // Prefer elements that are semantically clickable
+        const tagName = child.tagName.toLowerCase();
+        if (['a', 'button', 'input'].includes(tagName)) {
+          return child;
+        }
+      }
+    }
+
+    // As a last resort, return any clickable child
+    for (const child of children) {
+      if (this._isElementClickable(child)) {
+        return child;
+      }
+    }
+
+    return null;
   }
 
   private _calculateElementScore(element: HTMLElement, description: string): number {
