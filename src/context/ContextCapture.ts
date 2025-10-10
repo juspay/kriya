@@ -319,72 +319,73 @@ export class ContextCapture {
   }
 
   private _detectCustomDesignSystemForms(): any[] {
-    console.log('📋 Kriya: Starting custom design system form detection...');
+    console.log('📋 Kriya: Starting ReScript Euler dashboard form detection...');
     
     const forms: any[] = [];
     
-    // Find all field wrappers (form containers)
-    const fieldWrappers = document.querySelectorAll('[data-component-field-wrapper]');
+    // Detect ReScript FormRenderer fields - this is the primary pattern
+    const rescriptFields = this._detectReScriptFormRendererFields();
+    console.log(`📋 Kriya: Found ${rescriptFields.length} ReScript FormRenderer fields`);
     
-    if (fieldWrappers.length > 0) {
-      console.log(`📋 Kriya: Found ${fieldWrappers.length} field wrappers`);
-      
-      // Debug: Log each wrapper found
-      fieldWrappers.forEach((wrapper, index) => {
-        const wrapperName = wrapper.getAttribute('data-component-field-wrapper');
-        console.log(`📋 Kriya: Wrapper ${index}: ${wrapperName}`);
+    if (rescriptFields.length > 0) {
+      forms.push({
+        formId: 'rescript-form-renderer-form',
+        action: window.location.href,
+        method: 'POST',
+        fields: rescriptFields,
+        isRegistered: false,
+        hasSubmitButton: this._hasReScriptSubmitButton(),
+        framework: 'ReScript + React Final Form',
       });
-      
-      // Group field wrappers into logical forms
-      const detectedFields = Array.from(fieldWrappers).map((wrapper, index) => {
-        const field = this._extractCustomFieldInfo(wrapper as HTMLElement, index);
-        if (!field) {
-          console.log(`📋 Kriya: Failed to extract field from wrapper ${index}`);
-        }
-        return field;
-      }).filter(field => field !== null);
-      
-      console.log(`📋 Kriya: Successfully extracted ${detectedFields.length} fields from wrappers`);
-      
-      if (detectedFields.length > 0) {
-        // Create a single form containing all detected fields
-        forms.push({
-          formId: 'custom-design-system-form',
-          action: window.location.href,
-          method: 'POST',
-          fields: detectedFields,
-          isRegistered: false,
-          hasSubmitButton: this._hasCustomSubmitButton(),
-        });
-      }
     }
     
-    // Always also check for additional fallback fields that might not be in wrappers
-    const fallbackFields = this._detectFallbackFields();
-    console.log(`📋 Kriya: Found ${fallbackFields.length} fallback fields`);
+    // Detect standalone SelectBox components
+    const selectBoxFields = this._detectReScriptSelectBoxFields();
+    console.log(`📋 Kriya: Found ${selectBoxFields.length} standalone SelectBox fields`);
     
-    if (fallbackFields.length > 0) {
-      // Only add fallback fields that weren't already captured in wrappers
+    if (selectBoxFields.length > 0) {
       const existingFieldNames = forms.flatMap(form => form.fields.map((field: any) => field.name));
-      const uniqueFallbackFields = fallbackFields.filter((field: any) => 
+      const uniqueSelectBoxFields = selectBoxFields.filter((field: any) => 
         !existingFieldNames.includes(field.name)
       );
       
-      console.log(`📋 Kriya: ${uniqueFallbackFields.length} unique fallback fields after deduplication`);
-      
-      if (uniqueFallbackFields.length > 0) {
+      if (uniqueSelectBoxFields.length > 0) {
         forms.push({
-          formId: 'fallback-design-system-form',
+          formId: 'rescript-selectbox-form',
           action: window.location.href,
           method: 'POST',
-          fields: uniqueFallbackFields,
+          fields: uniqueSelectBoxFields,
           isRegistered: false,
-          hasSubmitButton: this._hasCustomSubmitButton(),
+          hasSubmitButton: this._hasReScriptSubmitButton(),
+          framework: 'ReScript SelectBox Components',
         });
       }
     }
     
-    console.log(`📋 Kriya: Custom detection complete - found ${forms.length} forms with ${forms.reduce((total, form) => total + form.fields.length, 0)} total fields`);
+    // Fallback: Detect any other React Final Form inputs
+    const reactFinalFormFields = this._detectReactFinalFormFields();
+    console.log(`📋 Kriya: Found ${reactFinalFormFields.length} React Final Form fields`);
+    
+    if (reactFinalFormFields.length > 0) {
+      const existingFieldNames = forms.flatMap(form => form.fields.map((field: any) => field.name));
+      const uniqueFormFields = reactFinalFormFields.filter((field: any) => 
+        !existingFieldNames.includes(field.name)
+      );
+      
+      if (uniqueFormFields.length > 0) {
+        forms.push({
+          formId: 'react-final-form-fields',
+          action: window.location.href,
+          method: 'POST',
+          fields: uniqueFormFields,
+          isRegistered: false,
+          hasSubmitButton: this._hasReScriptSubmitButton(),
+          framework: 'React Final Form',
+        });
+      }
+    }
+    
+    console.log(`📋 Kriya: ReScript detection complete - found ${forms.length} forms with ${forms.reduce((total, form) => total + form.fields.length, 0)} total fields`);
     return forms;
   }
 
@@ -569,5 +570,746 @@ export class ContextCapture {
       'button[type="submit"], [data-button-type="submit"], button:contains("Submit"), button:contains("Save"), button:contains("Apply")'
     );
     return submitButtons.length > 0;
+  }
+
+  // ReScript-specific form detection methods
+  private _detectReScriptFormRendererFields(): any[] {
+    const fields: any[] = [];
+    console.log('📋 Kriya: Starting comprehensive ReScript InputFields detection...');
+    
+    // Comprehensive detection for all InputFields.res patterns
+    
+    // 1. Detect Euler Dashboard Field Wrappers (Primary Pattern)
+    const fieldWrappers = document.querySelectorAll('[data-component-field-wrapper]');
+    console.log(`📋 Kriya: Found ${fieldWrappers.length} field wrappers`);
+    
+    fieldWrappers.forEach((wrapper, index) => {
+      const fieldName = wrapper.getAttribute('data-component-field-wrapper') || `wrapper-field-${index}`;
+      const labelElement = wrapper.querySelector('[data-form-label]');
+      const label = labelElement?.getAttribute('data-form-label') || labelElement?.textContent?.trim() || '';
+      
+      // Detect field type and extract comprehensive information
+      const fieldInfo = this._detectComprehensiveFieldType(wrapper as HTMLElement, fieldName, label);
+      if (fieldInfo) {
+        fields.push(fieldInfo);
+        console.log(`📋 Kriya: Detected field "${fieldName}" - ${fieldInfo.type}`);
+      }
+    });
+    
+    // 2. Detect standalone React Final Form inputs
+    const formInputs = document.querySelectorAll('input[name], select[name], textarea[name]');
+    console.log(`📋 Kriya: Found ${formInputs.length} standard form inputs`);
+    
+    formInputs.forEach((element, index) => {
+      const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+      
+      // Skip if already detected in field wrapper
+      if (input.closest('[data-component-field-wrapper]')) {
+        return;
+      }
+      
+      // Check if this is part of a React Final Form
+      const formContainer = input.closest('form') || input.closest('[data-rff-ui]') || input.closest('[class*="form"]');
+      
+      if (formContainer && input.name) {
+        const fieldInfo = this._extractStandardFieldInfo(input, index);
+        if (fieldInfo) {
+          fields.push(fieldInfo);
+          console.log(`📋 Kriya: Detected standard field "${fieldInfo.name}" - ${fieldInfo.type}`);
+        }
+      }
+    });
+    
+    // 3. Detect specialized ReScript components that don't use standard HTML inputs
+    const specializedFields = this._detectSpecializedReScriptComponents();
+    fields.push(...specializedFields);
+    
+    console.log(`📋 Kriya: Total ReScript fields detected: ${fields.length}`);
+    return fields;
+  }
+
+  private _detectReScriptSelectBoxFields(): any[] {
+    const fields: any[] = [];
+    
+    // Primary detection: Look for Euler dashboard SelectBox pattern with data attributes
+    const eulerSelectBoxes = document.querySelectorAll('[data-selectbox-value]');
+    
+    eulerSelectBoxes.forEach((element, index) => {
+      console.log(`📋 Kriya: Found Euler selectbox ${index}:`, element);
+      
+      // Get field wrapper for field name
+      const fieldWrapper = element.closest('[data-component-field-wrapper]');
+      const fieldName = fieldWrapper?.getAttribute('data-component-field-wrapper') || `euler-selectbox-${index}`;
+      
+      // Get label from data-form-label
+      const labelElement = fieldWrapper?.querySelector('[data-form-label]');
+      const label = labelElement?.getAttribute('data-form-label') || labelElement?.textContent?.trim() || '';
+      
+      // Get button and current value
+      const button = element.querySelector('button[data-value]') as HTMLButtonElement;
+      if (button) {
+        const currentValue = button.getAttribute('data-value') || '';
+        
+        // Get button text (displayed value)
+        const buttonTextElement = button.querySelector('[data-button-text]');
+        const displayText = buttonTextElement?.getAttribute('data-button-text') || 
+                           buttonTextElement?.textContent?.trim() || '';
+        
+        // Get selectbox placeholder/title
+        const selectboxTitle = element.getAttribute('data-selectbox-value') || '';
+        
+        // Check if required (look for red asterisk)
+        const isRequired = fieldWrapper?.querySelector('.text-red-950') !== null;
+        
+        console.log(`📋 Kriya: Euler selectbox details - Name: ${fieldName}, Label: ${label}, Value: ${currentValue}, Display: ${displayText}`);
+        
+        fields.push({
+          name: fieldName,
+          type: 'euler-selectbox',
+          value: currentValue,
+          displayText: displayText,
+          label: label || undefined,
+          placeholder: selectboxTitle,
+          required: isRequired,
+          disabled: button.disabled || button.getAttribute('data-button-status') === 'disabled',
+          framework: 'Euler ReScript SelectBox',
+          dataAttributes: {
+            'data-selectbox-value': selectboxTitle,
+            'data-component-field-wrapper': fieldName,
+            'data-form-label': label,
+          }
+        });
+      }
+    });
+    
+    // Fallback: Look for SelectBox components by class patterns (for other implementations)
+    const classBasedSelectBoxes = document.querySelectorAll(
+      '[class*="selectbox"], [class*="dropdown"], [class*="select-box"], button[role="combobox"], [aria-haspopup="listbox"]'
+    );
+    
+    classBasedSelectBoxes.forEach((element, index) => {
+      // Skip if already detected by data attribute method
+      if (element.closest('[data-selectbox-value]')) {
+        return;
+      }
+      
+      const button = element.tagName.toLowerCase() === 'button' ? element as HTMLButtonElement : 
+                    element.querySelector('button') as HTMLButtonElement;
+      
+      if (button) {
+        const buttonText = button.textContent?.trim() || '';
+        const fieldName = element.getAttribute('data-name') || 
+                         element.id || 
+                         button.getAttribute('aria-label') ||
+                         `class-selectbox-${index}`;
+        
+        // Look for current value in data attributes
+        let currentValue = button.getAttribute('data-value') || 
+                          button.getAttribute('value') || 
+                          '';
+        
+        // If no data-value, use button text as current value (but exclude placeholder-like text)
+        if (!currentValue && buttonText && 
+            !buttonText.toLowerCase().includes('select') && 
+            !buttonText.toLowerCase().includes('choose')) {
+          currentValue = buttonText;
+        }
+        
+        // Find dropdown options
+        const options: string[] = [];
+        const dropdownContainer = element.querySelector('[role="listbox"], [class*="dropdown"], [class*="options"]');
+        
+        if (dropdownContainer) {
+          const optionElements = dropdownContainer.querySelectorAll('[role="option"], [data-value], li, div[class*="option"]');
+          optionElements.forEach(option => {
+            const optionValue = option.getAttribute('data-value') || 
+                               option.textContent?.trim() || 
+                               '';
+            if (optionValue && !options.includes(optionValue)) {
+              options.push(optionValue);
+            }
+          });
+        }
+        
+        // Try to find label
+        const label = element.querySelector('label')?.textContent?.trim() ||
+                     element.getAttribute('aria-label') ||
+                     '';
+        
+        fields.push({
+          name: fieldName,
+          type: 'class-selectbox',
+          value: currentValue,
+          label: label || undefined,
+          placeholder: buttonText,
+          required: false,
+          disabled: button.disabled,
+          options: options.length > 0 ? options : undefined,
+          framework: 'Generic ReScript SelectBox',
+        });
+      }
+    });
+    
+    return fields;
+  }
+
+  private _detectReactFinalFormFields(): any[] {
+    const fields: any[] = [];
+    
+    // Look for React Final Form field patterns
+    const formElements = document.querySelectorAll('input, select, textarea');
+    
+    formElements.forEach((element, index) => {
+      const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+      
+      // Check if this element has React Final Form characteristics
+      const hasRFFCharacteristics = input.name || // Has name attribute (required for RFF)
+                                   input.closest('[data-rff-ui]') || // Explicit RFF marker
+                                   input.closest('form') || // Inside a form
+                                   input.hasAttribute('data-rff-field'); // Explicit field marker
+      
+      if (hasRFFCharacteristics) {
+        const fieldName = input.name || input.id || `rff-field-${index}`;
+        let fieldType = 'text';
+        let currentValue = '';
+        let options: string[] = [];
+        
+        if (input.tagName.toLowerCase() === 'select') {
+          fieldType = 'select';
+          const selectElement = input as HTMLSelectElement;
+          currentValue = selectElement.value;
+          
+          Array.from(selectElement.options).forEach(option => {
+            if (option.value) {
+              options.push(option.value);
+            }
+          });
+          
+        } else if (input.tagName.toLowerCase() === 'textarea') {
+          fieldType = 'textarea';
+          currentValue = input.value;
+          
+        } else {
+          const inputElement = input as HTMLInputElement;
+          fieldType = inputElement.type || 'text';
+          currentValue = inputElement.value;
+        }
+        
+        // Find label
+        const labelElement = document.querySelector(`label[for="${input.id}"]`) ||
+                           input.closest('label') ||
+                           input.parentElement?.querySelector('label');
+        
+        const label = labelElement?.textContent?.trim() || '';
+        
+        fields.push({
+          name: fieldName,
+          type: fieldType,
+          value: currentValue,
+          label: label || undefined,
+          placeholder: (input as HTMLInputElement).placeholder || undefined,
+          required: input.required || false,
+          disabled: input.disabled || false,
+          options: options.length > 0 ? options : undefined,
+          framework: 'React Final Form',
+        });
+      }
+    });
+    
+    return fields;
+  }
+
+  private _hasReScriptSubmitButton(): boolean {
+    // Look for submit buttons with ReScript/React patterns
+    const submitButtons = document.querySelectorAll(
+      'button[type="submit"],' +
+      'button[class*="submit"],' +
+      'button[class*="primary"],' +
+      'input[type="submit"],' +
+      'button:contains("Submit"),' +
+      'button:contains("Save"),' +
+      'button:contains("Apply"),' +
+      'button:contains("Create"),' +
+      'button:contains("Update"),' +
+      '[data-button-type="submit"]'
+    );
+    
+    return submitButtons.length > 0;
+  }
+
+  // Comprehensive field type detection for all InputFields.res patterns
+  private _detectComprehensiveFieldType(wrapper: HTMLElement, fieldName: string, label: string): any | null {
+    // Check for SelectBox/MultiSelectBox (most common in Euler dashboard)
+    const selectboxValue = wrapper.querySelector('[data-selectbox-value]');
+    if (selectboxValue) {
+      return this._extractSelectBoxInfo(wrapper, fieldName, label, false);
+    }
+
+    // Check for MultiSelectBox with chips
+    const multiSelectWithChips = wrapper.querySelector('.selectbox-chips, [data-multiselect="true"]');
+    if (multiSelectWithChips) {
+      return this._extractSelectBoxInfo(wrapper, fieldName, label, true);
+    }
+
+    // Check for TextInput
+    const textInput = wrapper.querySelector('input[type="text"], input:not([type])');
+    if (textInput) {
+      return this._extractTextInputInfo(textInput as HTMLInputElement, fieldName, label);
+    }
+
+    // Check for NumericTextInput
+    const numericInput = wrapper.querySelector('input[type="number"], input[inputmode="numeric"]');
+    if (numericInput) {
+      return this._extractNumericInputInfo(numericInput as HTMLInputElement, fieldName, label);
+    }
+
+    // Check for MultiLineTextInput (TextArea)
+    const textArea = wrapper.querySelector('textarea');
+    if (textArea) {
+      return this._extractTextAreaInfo(textArea as HTMLTextAreaElement, fieldName, label);
+    }
+
+    // Check for DatePicker/DateRangePicker
+    const datePicker = wrapper.querySelector('button[data-date-picker], .date-picker');
+    if (datePicker) {
+      return this._extractDatePickerInfo(wrapper, fieldName, label);
+    }
+
+    // Check for FileInput/CsvInput
+    const fileInput = wrapper.querySelector('input[type="file"], .file-upload');
+    if (fileInput) {
+      return this._extractFileInputInfo(wrapper, fieldName, label);
+    }
+
+    // Check for BoolInput/Checkbox
+    const boolInput = wrapper.querySelector('input[type="checkbox"], input[type="radio"]');
+    if (boolInput) {
+      return this._extractBoolInputInfo(boolInput as HTMLInputElement, fieldName, label);
+    }
+
+    // Check for Button Group Input
+    const buttonGroup = wrapper.querySelector('.button-group, [data-button-group]');
+    if (buttonGroup) {
+      return this._extractButtonGroupInfo(wrapper, fieldName, label);
+    }
+
+    // Check for Range/Slider Input
+    const rangeInput = wrapper.querySelector('input[type="range"], .range-slider');
+    if (rangeInput) {
+      return this._extractRangeInputInfo(wrapper, fieldName, label);
+    }
+
+    // Check for Color Picker
+    const colorPicker = wrapper.querySelector('input[type="color"], .color-picker');
+    if (colorPicker) {
+      return this._extractColorPickerInfo(wrapper, fieldName, label);
+    }
+
+    // Check for MultiTextInput (Tag Input)
+    const tagInput = wrapper.querySelector('.tag-input, .chip-input, [data-tag-input]');
+    if (tagInput) {
+      return this._extractTagInputInfo(wrapper, fieldName, label);
+    }
+
+    // Generic button-based input
+    const buttonInput = wrapper.querySelector('button[data-value]');
+    if (buttonInput) {
+      return this._extractButtonInputInfo(wrapper, fieldName, label);
+    }
+
+    console.log(`📋 Kriya: Could not determine field type for wrapper "${fieldName}"`);
+    return null;
+  }
+
+  private _extractSelectBoxInfo(wrapper: HTMLElement, fieldName: string, label: string, isMultiSelect: boolean): any {
+    const selectboxElement = wrapper.querySelector('[data-selectbox-value]');
+    const selectboxTitle = selectboxElement?.getAttribute('data-selectbox-value') || '';
+    
+    const button = wrapper.querySelector('button[data-value]') as HTMLButtonElement;
+    const currentValue = button?.getAttribute('data-value') || '';
+    
+    const buttonTextElement = button?.querySelector('[data-button-text]');
+    const displayText = buttonTextElement?.getAttribute('data-button-text') || 
+                       buttonTextElement?.textContent?.trim() || '';
+    
+    // Check if required
+    const isRequired = wrapper.querySelector('.text-red-950') !== null;
+    
+    // Look for options in expanded dropdown
+    const options: string[] = [];
+    const dropdown = wrapper.querySelector('[data-dropdown="dropdown"]');
+    if (dropdown) {
+      const optionElements = dropdown.querySelectorAll('[data-dropdown-value]');
+      optionElements.forEach(option => {
+        const value = option.getAttribute('data-dropdown-value');
+        if (value) options.push(value);
+      });
+    }
+
+    // For MultiSelect, check for selected chips
+    let selectedValues: string[] = [];
+    if (isMultiSelect) {
+      const chips = wrapper.querySelectorAll('.chip, .tag, [data-chip-value]');
+      chips.forEach(chip => {
+        const chipValue = chip.getAttribute('data-chip-value') || chip.textContent?.trim();
+        if (chipValue) selectedValues.push(chipValue);
+      });
+    }
+
+    return {
+      name: fieldName,
+      type: isMultiSelect ? 'multiselect' : 'select',
+      value: isMultiSelect ? selectedValues : currentValue,
+      displayText: displayText,
+      label: label || undefined,
+      placeholder: selectboxTitle,
+      required: isRequired,
+      disabled: button?.disabled || button?.getAttribute('data-button-status') === 'disabled',
+      options: options.length > 0 ? options : undefined,
+      framework: 'Euler ReScript SelectBox',
+      inputType: 'selectInput',
+    };
+  }
+
+  private _extractTextInputInfo(input: HTMLInputElement, fieldName: string, label: string): any {
+    return {
+      name: fieldName,
+      type: 'text',
+      value: input.value || '',
+      label: label || undefined,
+      placeholder: input.placeholder || undefined,
+      required: input.required,
+      disabled: input.disabled,
+      maxLength: input.maxLength > 0 ? input.maxLength : undefined,
+      framework: 'Euler ReScript TextInput',
+      inputType: 'textInput',
+    };
+  }
+
+  private _extractNumericInputInfo(input: HTMLInputElement, fieldName: string, label: string): any {
+    return {
+      name: fieldName,
+      type: 'number',
+      value: input.value || '',
+      label: label || undefined,
+      placeholder: input.placeholder || undefined,
+      required: input.required,
+      disabled: input.disabled,
+      min: input.min || undefined,
+      max: input.max || undefined,
+      step: input.step || undefined,
+      framework: 'Euler ReScript NumericTextInput',
+      inputType: 'numericTextInput',
+    };
+  }
+
+  private _extractTextAreaInfo(textarea: HTMLTextAreaElement, fieldName: string, label: string): any {
+    return {
+      name: fieldName,
+      type: 'textarea',
+      value: textarea.value || '',
+      label: label || undefined,
+      placeholder: textarea.placeholder || undefined,
+      required: textarea.required,
+      disabled: textarea.disabled,
+      rows: textarea.rows || undefined,
+      cols: textarea.cols || undefined,
+      maxLength: textarea.maxLength > 0 ? textarea.maxLength : undefined,
+      framework: 'Euler ReScript MultiLineTextInput',
+      inputType: 'multiLineTextInput',
+    };
+  }
+
+  private _extractDatePickerInfo(wrapper: HTMLElement, fieldName: string, label: string): any {
+    const button = wrapper.querySelector('button') as HTMLButtonElement;
+    const currentValue = button?.getAttribute('data-value') || button?.textContent?.trim() || '';
+    
+    // Check if it's a date range picker
+    const isDateRange = wrapper.querySelector('[data-start-date], [data-end-date]') !== null;
+    
+    return {
+      name: fieldName,
+      type: isDateRange ? 'daterange' : 'date',
+      value: currentValue,
+      label: label || undefined,
+      placeholder: button?.textContent?.trim() || 'Select Date',
+      required: wrapper.querySelector('.text-red-950') !== null,
+      disabled: button?.disabled || false,
+      framework: 'Euler ReScript DatePicker',
+      inputType: isDateRange ? 'dateRangeField' : 'datePickerInput',
+    };
+  }
+
+  private _extractFileInputInfo(wrapper: HTMLElement, fieldName: string, label: string): any {
+    const fileInput = wrapper.querySelector('input[type="file"]') as HTMLInputElement;
+    const button = wrapper.querySelector('button');
+    
+    return {
+      name: fieldName,
+      type: 'file',
+      value: fileInput?.files?.[0]?.name || '',
+      label: label || undefined,
+      placeholder: button?.textContent?.trim() || 'Choose File',
+      required: wrapper.querySelector('.text-red-950') !== null,
+      disabled: fileInput?.disabled || button?.disabled || false,
+      accept: fileInput?.accept || undefined,
+      multiple: fileInput?.multiple || false,
+      framework: 'Euler ReScript FileInput',
+      inputType: 'fileInput',
+    };
+  }
+
+  private _extractBoolInputInfo(input: HTMLInputElement, fieldName: string, label: string): any {
+    return {
+      name: fieldName,
+      type: input.type === 'radio' ? 'radio' : 'checkbox',
+      value: input.checked,
+      label: label || undefined,
+      required: input.required,
+      disabled: input.disabled,
+      framework: 'Euler ReScript BoolInput',
+      inputType: input.type === 'radio' ? 'radioInput' : 'boolInput',
+    };
+  }
+
+  private _extractButtonGroupInfo(wrapper: HTMLElement, fieldName: string, label: string): any {
+    const buttons = wrapper.querySelectorAll('button');
+    const selectedButton = wrapper.querySelector('button.selected, button[data-selected="true"]');
+    const currentValue = selectedButton?.getAttribute('data-value') || 
+                        selectedButton?.textContent?.trim() || '';
+    
+    const options: string[] = [];
+    buttons.forEach(button => {
+      const value = button.getAttribute('data-value') || button.textContent?.trim();
+      if (value) options.push(value);
+    });
+
+    return {
+      name: fieldName,
+      type: 'buttongroup',
+      value: currentValue,
+      label: label || undefined,
+      required: wrapper.querySelector('.text-red-950') !== null,
+      disabled: Array.from(buttons).every(btn => btn.disabled),
+      options: options,
+      framework: 'Euler ReScript ButtonGroup',
+      inputType: 'btnGroupInput',
+    };
+  }
+
+  private _extractRangeInputInfo(wrapper: HTMLElement, fieldName: string, label: string): any {
+    const rangeInput = wrapper.querySelector('input[type="range"]') as HTMLInputElement;
+    
+    return {
+      name: fieldName,
+      type: 'range',
+      value: rangeInput?.value || '',
+      label: label || undefined,
+      required: wrapper.querySelector('.text-red-950') !== null,
+      disabled: rangeInput?.disabled || false,
+      min: rangeInput?.min || undefined,
+      max: rangeInput?.max || undefined,
+      step: rangeInput?.step || undefined,
+      framework: 'Euler ReScript RangeInput',
+      inputType: 'rangeInput',
+    };
+  }
+
+  private _extractColorPickerInfo(wrapper: HTMLElement, fieldName: string, label: string): any {
+    const colorInput = wrapper.querySelector('input[type="color"]') as HTMLInputElement;
+    
+    return {
+      name: fieldName,
+      type: 'color',
+      value: colorInput?.value || '#000000',
+      label: label || undefined,
+      required: wrapper.querySelector('.text-red-950') !== null,
+      disabled: colorInput?.disabled || false,
+      framework: 'Euler ReScript ColorPicker',
+      inputType: 'colorPickerInput',
+    };
+  }
+
+  private _extractTagInputInfo(wrapper: HTMLElement, fieldName: string, label: string): any {
+    const tags: string[] = [];
+    const tagElements = wrapper.querySelectorAll('.tag, .chip, [data-tag]');
+    
+    tagElements.forEach(tag => {
+      const tagValue = tag.getAttribute('data-tag') || tag.textContent?.trim();
+      if (tagValue) tags.push(tagValue);
+    });
+
+    return {
+      name: fieldName,
+      type: 'tags',
+      value: tags,
+      label: label || undefined,
+      placeholder: wrapper.querySelector('input')?.placeholder || 'Add tags',
+      required: wrapper.querySelector('.text-red-950') !== null,
+      disabled: wrapper.querySelector('input')?.disabled || false,
+      framework: 'Euler ReScript MultiTextInput',
+      inputType: 'textTagInput',
+    };
+  }
+
+  private _extractButtonInputInfo(wrapper: HTMLElement, fieldName: string, label: string): any {
+    const button = wrapper.querySelector('button[data-value]') as HTMLButtonElement;
+    const currentValue = button?.getAttribute('data-value') || '';
+    const displayText = button?.textContent?.trim() || '';
+
+    return {
+      name: fieldName,
+      type: 'button',
+      value: currentValue,
+      displayText: displayText,
+      label: label || undefined,
+      placeholder: displayText,
+      required: wrapper.querySelector('.text-red-950') !== null,
+      disabled: button?.disabled || false,
+      framework: 'Euler ReScript ButtonInput',
+      inputType: 'buttonInput',
+    };
+  }
+
+  private _extractStandardFieldInfo(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, index: number): any | null {
+    const fieldName = input.name || input.id || `rff-field-${index}`;
+    let fieldType = 'text';
+    let currentValue = '';
+    let options: string[] = [];
+
+    if (input.tagName.toLowerCase() === 'select') {
+      fieldType = 'select';
+      const selectElement = input as HTMLSelectElement;
+      currentValue = selectElement.value;
+      
+      Array.from(selectElement.options).forEach(option => {
+        if (option.value) {
+          options.push(option.value);
+        }
+      });
+      
+    } else if (input.tagName.toLowerCase() === 'textarea') {
+      fieldType = 'textarea';
+      currentValue = input.value;
+      
+    } else {
+      const inputElement = input as HTMLInputElement;
+      fieldType = inputElement.type || 'text';
+      currentValue = inputElement.value;
+    }
+
+    // Find associated label
+    const labelElement = document.querySelector(`label[for="${input.id}"]`) ||
+                       input.closest('label') ||
+                       input.parentElement?.querySelector('label');
+
+    const label = labelElement?.textContent?.trim() || '';
+
+    return {
+      name: fieldName,
+      type: fieldType,
+      value: currentValue,
+      label: label || undefined,
+      placeholder: (input as HTMLInputElement).placeholder || undefined,
+      required: input.required || false,
+      disabled: input.disabled || false,
+      options: options.length > 0 ? options : undefined,
+      framework: 'React Final Form',
+      inputType: 'standardInput',
+    };
+  }
+
+  private _detectSpecializedReScriptComponents(): any[] {
+    const fields: any[] = [];
+    console.log('📋 Kriya: Detecting specialized ReScript components...');
+
+    // 1. Detect Monaco Editor (Code Input)
+    const monacoEditors = document.querySelectorAll('.monaco-editor, [data-monaco-editor]');
+    monacoEditors.forEach((editor, index) => {
+      const fieldName = editor.getAttribute('data-field-name') || `monaco-editor-${index}`;
+      fields.push({
+        name: fieldName,
+        type: 'code',
+        value: '', // Monaco editor value would need special extraction
+        label: 'Code Editor',
+        framework: 'Monaco Editor',
+        inputType: 'monacoInput',
+      });
+    });
+
+    // 2. Detect Draft.js Rich Text Editors
+    const draftEditors = document.querySelectorAll('.DraftEditor-root, [data-draft-editor]');
+    draftEditors.forEach((editor, index) => {
+      const fieldName = editor.getAttribute('data-field-name') || `draft-editor-${index}`;
+      fields.push({
+        name: fieldName,
+        type: 'richtext',
+        value: '', // Draft.js content would need special extraction
+        label: 'Rich Text Editor',
+        framework: 'Draft.js',
+        inputType: 'draftPreviewInput',
+      });
+    });
+
+    // 3. Detect Async SelectBoxes (with loading states)
+    const asyncSelects = document.querySelectorAll('[data-async-select], .async-selectbox');
+    asyncSelects.forEach((select, index) => {
+      const fieldName = select.getAttribute('data-field-name') || `async-select-${index}`;
+      const button = select.querySelector('button');
+      fields.push({
+        name: fieldName,
+        type: 'async-select',
+        value: button?.getAttribute('data-value') || '',
+        label: 'Async Select',
+        placeholder: button?.textContent?.trim() || 'Loading...',
+        framework: 'Async SelectBox',
+        inputType: 'asyncSelectInput',
+      });
+    });
+
+    // 4. Detect Nested Dropdowns
+    const nestedDropdowns = document.querySelectorAll('[data-nested-dropdown]');
+    nestedDropdowns.forEach((dropdown, index) => {
+      const fieldName = dropdown.getAttribute('data-field-name') || `nested-dropdown-${index}`;
+      fields.push({
+        name: fieldName,
+        type: 'nested-select',
+        value: '', // Would need special extraction for nested values
+        label: 'Nested Dropdown',
+        framework: 'Nested Dropdown',
+        inputType: 'nestedDropdown',
+      });
+    });
+
+    // 5. Detect Calendar Inputs with highlighting
+    const calendarInputs = document.querySelectorAll('[data-calendar-input], .calendar-highlighter');
+    calendarInputs.forEach((calendar, index) => {
+      const fieldName = calendar.getAttribute('data-field-name') || `calendar-${index}`;
+      fields.push({
+        name: fieldName,
+        type: 'calendar',
+        value: '', // Calendar selection would need special extraction
+        label: 'Calendar Input',
+        framework: 'Calendar Input',
+        inputType: 'calendarInputHighlighted',
+      });
+    });
+
+    // 6. Detect Time Range Inputs
+    const timeRanges = document.querySelectorAll('[data-time-range]');
+    timeRanges.forEach((timeRange, index) => {
+      const fieldName = timeRange.getAttribute('data-field-name') || `time-range-${index}`;
+      fields.push({
+        name: fieldName,
+        type: 'timerange',
+        value: '', // Time range would need special extraction
+        label: 'Time Range',
+        framework: 'Time Range Input',
+        inputType: 'timeRangeFields',
+      });
+    });
+
+    console.log(`📋 Kriya: Found ${fields.length} specialized components`);
+    return fields;
   }
 }

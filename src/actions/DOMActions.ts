@@ -209,19 +209,43 @@ export class DOMActions {
     const dataName = element.getAttribute('data-name')?.toLowerCase() ?? '';
     const dataTestId = element.getAttribute('data-testid')?.toLowerCase() ?? '';
     const dataButtonFor = element.getAttribute('data-button-for')?.toLowerCase() ?? '';
+    const dataBreadcrumb = element.getAttribute('data-breadcrumb')?.toLowerCase() ?? '';
+    const dataDesignSystem = element.getAttribute('data-design-system')?.toLowerCase() ?? '';
+
+    // Enhanced ReScript SelectBox detection
+    const isSelectBoxComponent = this._detectSelectBoxComponent(element);
+    const isFormRendererField = this._detectFormRendererField(element);
+    const selectBoxButtonText = this._extractSelectBoxButtonText(element);
+    const formFieldName = this._extractFormFieldName(element);
 
     // High priority matches (exact text content)
     if (textContent.includes(description)) score += 5;
     if (dataButtonText.includes(description)) score += 5;
+    if (dataBreadcrumb.includes(description)) score += 6; // High priority for breadcrumb navigation
     if (placeholder.includes(description)) score += 4;
     if (label.includes(description)) score += 4;
     if (title.includes(description)) score += 4;
+    
+    // Enhanced SelectBox component scoring
+    if (isSelectBoxComponent) {
+      score += 3; // Bonus for being a SelectBox component
+      if (selectBoxButtonText.includes(description)) score += 8;
+      if (selectBoxButtonText.trim() === description) score += 12;
+    }
+    
+    // Enhanced FormRenderer field scoring
+    if (isFormRendererField) {
+      score += 2; // Bonus for being a FormRenderer field
+      if (formFieldName.includes(description)) score += 6;
+      if (formFieldName.trim() === description) score += 10;
+    }
     
     // Medium priority matches (descriptive attributes)
     if (dataLabel.includes(description)) score += 3;
     if (dataTitle.includes(description)) score += 3;
     if (dataName.includes(description)) score += 3;
     if (dataTestId.includes(description)) score += 3;
+    if (dataDesignSystem.includes(description) && dataDesignSystem !== 'true') score += 3; // Avoid generic 'true' values
     
     // Lower priority matches (structural identifiers)
     if (id.includes(description)) score += 2;
@@ -231,8 +255,15 @@ export class DOMActions {
     // Exact matches get bonus points
     if (textContent.trim() === description) score += 10;
     if (dataButtonText.trim() === description) score += 10;
+    if (dataBreadcrumb.trim() === description) score += 12; // Highest priority for exact breadcrumb matches
     if (placeholder.trim() === description) score += 8;
     if (label.trim() === description) score += 8;
+    if (dataDesignSystem.trim() === description) score += 8;
+
+    // ReScript-specific class name matching
+    if (className.includes('selectbox') || className.includes('select-box')) score += 2;
+    if (className.includes('dropdown') || className.includes('combobox')) score += 2;
+    if (className.includes('field-renderer') || className.includes('form-field')) score += 1;
 
     // Penalize hidden or disabled elements
     if (element.getAttribute('aria-hidden') === 'true') score -= 5;
@@ -404,5 +435,189 @@ export class DOMActions {
       default:
         return false;
     }
+  }
+
+  // ReScript SelectBox component detection methods
+  private _detectSelectBoxComponent(element: HTMLElement): boolean {
+    const className = String(element.className || '').toLowerCase();
+    const tagName = element.tagName.toLowerCase();
+    
+    // PRIMARY: Check for Euler dashboard SelectBox data attributes (highest priority)
+    if (element.hasAttribute('data-selectbox-value')) return true;
+    if (element.closest('[data-selectbox-value]')) return true;
+    
+    // Check for button elements with Euler SelectBox patterns
+    if (tagName === 'button') {
+      if (element.hasAttribute('data-value') && element.querySelector('[data-button-text]')) return true;
+      if (element.hasAttribute('data-value') && element.closest('[data-selectbox-value]')) return true;
+    }
+    
+    // Check for common SelectBox patterns in ReScript components
+    if (className.includes('selectbox') || className.includes('select-box')) return true;
+    if (className.includes('dropdown') || className.includes('combobox')) return true;
+    
+    // Check for button elements that might be SelectBox triggers
+    if (tagName === 'button') {
+      // Look for dropdown-related classes or attributes
+      if (element.getAttribute('aria-haspopup') === 'listbox') return true;
+      if (element.getAttribute('role') === 'combobox') return true;
+      if (className.includes('dropdown') || className.includes('select')) return true;
+    }
+    
+    // Check if parent container has SelectBox patterns
+    const parent = element.parentElement;
+    if (parent) {
+      const parentClass = String(parent.className || '').toLowerCase();
+      if (parentClass.includes('selectbox') || parentClass.includes('select-box')) return true;
+      if (parentClass.includes('dropdown') || parentClass.includes('combobox')) return true;
+    }
+    
+    // Check for ReScript compiled class patterns (typically have BS prefix)
+    if (className.includes('bs-') && (className.includes('select') || className.includes('dropdown'))) return true;
+    
+    return false;
+  }
+
+  private _detectFormRendererField(element: HTMLElement): boolean {
+    const className = String(element.className || '').toLowerCase();
+    
+    // PRIMARY: Check for Euler dashboard form field data attributes (highest priority)
+    if (element.hasAttribute('data-component-field-wrapper')) return true;
+    if (element.closest('[data-component-field-wrapper]')) return true;
+    if (element.hasAttribute('data-form-label')) return true;
+    if (element.hasAttribute('data-design-system')) return true;
+    
+    // Check for FormRenderer field patterns
+    if (className.includes('field-renderer') || className.includes('form-field')) return true;
+    if (className.includes('field-container') || className.includes('form-container')) return true;
+    
+    // Check parent elements for FormRenderer patterns
+    let current = element.parentElement;
+    let depth = 0;
+    while (current && depth < 5) { // Check up to 5 levels up
+      const parentClass = String(current.className || '').toLowerCase();
+      if (parentClass.includes('field-renderer') || parentClass.includes('form-field')) return true;
+      if (parentClass.includes('field-container') || parentClass.includes('form-container')) return true;
+      
+      current = current.parentElement;
+      depth++;
+    }
+    
+    return false;
+  }
+
+  private _extractSelectBoxButtonText(element: HTMLElement): string {
+    // Try to extract button text from Euler dashboard SelectBox components
+    let text = '';
+    
+    // PRIMARY: Check for Euler-specific data-button-text attribute
+    text = element.getAttribute('data-button-text') || '';
+    if (text) return text.toLowerCase();
+    
+    // Look for data-button-text in children
+    const buttonTextElement = element.querySelector('[data-button-text]');
+    if (buttonTextElement) {
+      text = buttonTextElement.getAttribute('data-button-text') || 
+             buttonTextElement.textContent?.trim() || '';
+      if (text) return text.toLowerCase();
+    }
+    
+    // Check for selectbox value attribute
+    text = element.getAttribute('data-selectbox-value') || '';
+    if (text) return text.toLowerCase();
+    
+    // Look for selectbox value in parents
+    const selectboxContainer = element.closest('[data-selectbox-value]');
+    if (selectboxContainer) {
+      text = selectboxContainer.getAttribute('data-selectbox-value') || '';
+      if (text) return text.toLowerCase();
+    }
+    
+    // Direct text content
+    text = element.textContent?.trim() || '';
+    if (text) return text.toLowerCase();
+    
+    // Check for button elements within or as the element
+    if (element.tagName.toLowerCase() === 'button') {
+      text = element.textContent?.trim() || '';
+      if (text) return text.toLowerCase();
+    }
+    
+    // Look for button children
+    const button = element.querySelector('button');
+    if (button) {
+      text = button.textContent?.trim() || '';
+      if (text) return text.toLowerCase();
+    }
+    
+    // Check standard data attributes as fallback
+    text = element.getAttribute('aria-label') || 
+           element.getAttribute('title') || '';
+    
+    return text.toLowerCase();
+  }
+
+  private _extractFormFieldName(element: HTMLElement): string {
+    // Extract field name from Euler dashboard FormRenderer fields
+    let name = '';
+    
+    // PRIMARY: Check for Euler-specific data attributes
+    name = element.getAttribute('data-component-field-wrapper') || '';
+    if (name) return name.toLowerCase();
+    
+    // Look for field wrapper in parents
+    const fieldWrapper = element.closest('[data-component-field-wrapper]');
+    if (fieldWrapper) {
+      name = fieldWrapper.getAttribute('data-component-field-wrapper') || '';
+      if (name) return name.toLowerCase();
+    }
+    
+    // Check for form label data attribute
+    name = element.getAttribute('data-form-label') || '';
+    if (name) return name.toLowerCase();
+    
+    // Look for form label in the field
+    const labelElement = element.querySelector('[data-form-label]') || 
+                        element.closest('[data-component-field-wrapper]')?.querySelector('[data-form-label]');
+    if (labelElement) {
+      name = labelElement.getAttribute('data-form-label') || 
+             labelElement.textContent?.trim() || '';
+      if (name) return name.toLowerCase();
+    }
+    
+    // Standard name attribute
+    name = element.getAttribute('name') || '';
+    if (name) return name.toLowerCase();
+    
+    // Check data-name attribute
+    name = element.getAttribute('data-name') || '';
+    if (name) return name.toLowerCase();
+    
+    // Look for input elements within the field
+    const input = element.querySelector('input, select, textarea');
+    if (input) {
+      name = input.getAttribute('name') || '';
+      if (name) return name.toLowerCase();
+    }
+    
+    // Check parent elements for name attributes
+    let current = element.parentElement;
+    let depth = 0;
+    while (current && depth < 3) { // Check up to 3 levels up
+      name = current.getAttribute('name') || current.getAttribute('data-name') || '';
+      if (name) return name.toLowerCase();
+      
+      current = current.parentElement;
+      depth++;
+    }
+    
+    // Look for label text as fallback
+    const label = element.querySelector('label');
+    if (label) {
+      name = label.textContent?.trim() || '';
+      if (name) return name.toLowerCase();
+    }
+    
+    return '';
   }
 }
