@@ -567,9 +567,19 @@ export class ContextCapture {
   private _hasCustomSubmitButton(): boolean {
     // Look for common submit button patterns
     const submitButtons = document.querySelectorAll(
-      'button[type="submit"], [data-button-type="submit"], button:contains("Submit"), button:contains("Save"), button:contains("Apply")'
+      'button[type="submit"], [data-button-type="submit"]'
     );
-    return submitButtons.length > 0;
+    
+    // Also check for buttons with submit-related text content
+    const allButtons = document.querySelectorAll('button');
+    const textBasedSubmitButtons = Array.from(allButtons).filter(button => {
+      const text = button.textContent?.toLowerCase() || '';
+      return text.includes('submit') || 
+             text.includes('save') || 
+             text.includes('apply');
+    });
+    
+    return submitButtons.length > 0 || textBasedSubmitButtons.length > 0;
   }
 
   // ReScript-specific form detection methods
@@ -826,15 +836,21 @@ export class ContextCapture {
       'button[class*="submit"],' +
       'button[class*="primary"],' +
       'input[type="submit"],' +
-      'button:contains("Submit"),' +
-      'button:contains("Save"),' +
-      'button:contains("Apply"),' +
-      'button:contains("Create"),' +
-      'button:contains("Update"),' +
       '[data-button-type="submit"]'
     );
     
-    return submitButtons.length > 0;
+    // Also check for buttons with submit-related text content
+    const allButtons = document.querySelectorAll('button');
+    const textBasedSubmitButtons = Array.from(allButtons).filter(button => {
+      const text = button.textContent?.toLowerCase() || '';
+      return text.includes('submit') || 
+             text.includes('save') || 
+             text.includes('apply') || 
+             text.includes('create') || 
+             text.includes('update');
+    });
+    
+    return submitButtons.length > 0 || textBasedSubmitButtons.length > 0;
   }
 
   // Comprehensive field type detection for all InputFields.res patterns

@@ -201,7 +201,7 @@ export class DOMActions {
   private _findClickableChild(element: HTMLElement): HTMLElement | null {
     // Look for clickable child elements in order of preference
     const clickableSelectors = [
-      'a[href]',           // Links with href
+      'a[href]',           // Links with href (highest priority)
       'button',            // Buttons
       'input[type="button"]', // Button inputs
       'input[type="submit"]', // Submit inputs
@@ -211,21 +211,45 @@ export class DOMActions {
       '[data-button-text]' // Elements with button text data attribute
     ];
 
+    // First, try to find direct children that match selectors
     for (const selector of clickableSelectors) {
       const clickableChild = element.querySelector(selector) as HTMLElement;
       if (clickableChild && this._isElementClickable(clickableChild)) {
+        // Additional check: ensure the clickable child is a direct or close descendant
         return clickableChild;
       }
     }
 
-    // Check direct children for clickable elements
+    // Check direct children for clickable elements (prioritize semantic elements)
     const children = Array.from(element.children) as HTMLElement[];
     for (const child of children) {
       if (this._isElementClickable(child)) {
-        // Prefer elements that are semantically clickable
         const tagName = child.tagName.toLowerCase();
-        if (['a', 'button', 'input'].includes(tagName)) {
+        // Prioritize semantically clickable elements
+        if (tagName === 'a' && child.getAttribute('href')) {
           return child;
+        }
+        if (tagName === 'button') {
+          return child;
+        }
+        if (tagName === 'input' && ['button', 'submit'].includes((child as HTMLInputElement).type)) {
+          return child;
+        }
+      }
+    }
+
+    // Recursively check children of children (up to 2 levels deep)
+    for (const child of children) {
+      const grandchildren = Array.from(child.children) as HTMLElement[];
+      for (const grandchild of grandchildren) {
+        if (this._isElementClickable(grandchild)) {
+          const tagName = grandchild.tagName.toLowerCase();
+          if (tagName === 'a' && grandchild.getAttribute('href')) {
+            return grandchild;
+          }
+          if (tagName === 'button') {
+            return grandchild;
+          }
         }
       }
     }
@@ -266,71 +290,112 @@ export class DOMActions {
     const selectBoxButtonText = this._extractSelectBoxButtonText(element);
     const formFieldName = this._extractFormFieldName(element);
 
+    // HIGHEST Priority: Exact breadcrumb matches (navigation elements)
+    if (dataBreadcrumb.trim() === description) score += 20; // Highest priority for exact breadcrumb matches
+    if (dataBreadcrumb.includes(description)) score += 15; // High priority for breadcrumb navigation
+
     // High priority matches (exact text content)
-    if (textContent.includes(description)) score += 5;
-    if (dataButtonText.includes(description)) score += 5;
-    if (dataBreadcrumb.includes(description)) score += 6; // High priority for breadcrumb navigation
-    if (placeholder.includes(description)) score += 4;
-    if (label.includes(description)) score += 4;
-    if (title.includes(description)) score += 4;
+    if (textContent.trim() === description) score += 12;
+    if (textContent.includes(description)) score += 8;
+    if (dataButtonText.trim() === description) score += 12;
+    if (dataButtonText.includes(description)) score += 8;
+    
+    // Exact matches for other descriptive attributes
+    if (placeholder.trim() === description) score += 10;
+    if (label.trim() === description) score += 10;
+    if (title.trim() === description) score += 10;
+    if (dataDesignSystem.trim() === description && dataDesignSystem !== 'true') score += 10;
+    
+    // Partial matches for descriptive attributes
+    if (placeholder.includes(description)) score += 6;
+    if (label.includes(description)) score += 6;
+    if (title.includes(description)) score += 6;
     
     // Enhanced SelectBox component scoring
     if (isSelectBoxComponent) {
       score += 3; // Bonus for being a SelectBox component
-      if (selectBoxButtonText.includes(description)) score += 8;
-      if (selectBoxButtonText.trim() === description) score += 12;
+      if (selectBoxButtonText.trim() === description) score += 15;
+      if (selectBoxButtonText.includes(description)) score += 10;
     }
     
     // Enhanced FormRenderer field scoring
     if (isFormRendererField) {
       score += 2; // Bonus for being a FormRenderer field
-      if (formFieldName.includes(description)) score += 6;
-      if (formFieldName.trim() === description) score += 10;
+      if (formFieldName.trim() === description) score += 12;
+      if (formFieldName.includes(description)) score += 8;
     }
     
     // Medium priority matches (descriptive attributes)
-    if (dataLabel.includes(description)) score += 3;
-    if (dataTitle.includes(description)) score += 3;
-    if (dataName.includes(description)) score += 3;
-    if (dataTestId.includes(description)) score += 3;
-    if (dataDesignSystem.includes(description) && dataDesignSystem !== 'true') score += 3; // Avoid generic 'true' values
+    if (dataLabel.includes(description)) score += 5;
+    if (dataTitle.includes(description)) score += 5;
+    if (dataName.includes(description)) score += 5;
+    if (dataTestId.includes(description)) score += 5;
+    if (dataDesignSystem.includes(description) && dataDesignSystem !== 'true') score += 5; // Avoid generic 'true' values
     
     // Lower priority matches (structural identifiers)
-    if (id.includes(description)) score += 2;
-    if (dataButtonFor.includes(description)) score += 2;
-    if (className.includes(description)) score += 1;
-
-    // Exact matches get bonus points
-    if (textContent.trim() === description) score += 10;
-    if (dataButtonText.trim() === description) score += 10;
-    if (dataBreadcrumb.trim() === description) score += 12; // Highest priority for exact breadcrumb matches
-    if (placeholder.trim() === description) score += 8;
-    if (label.trim() === description) score += 8;
-    if (dataDesignSystem.trim() === description) score += 8;
+    if (id.includes(description)) score += 3;
+    if (dataButtonFor.includes(description)) score += 3;
+    if (className.includes(description)) score += 2;
 
     // ReScript-specific class name matching
     if (className.includes('selectbox') || className.includes('select-box')) score += 2;
     if (className.includes('dropdown') || className.includes('combobox')) score += 2;
     if (className.includes('field-renderer') || className.includes('form-field')) score += 1;
 
+    // Bonus for clickable elements (prefer directly clickable elements)
+    const tagName = element.tagName.toLowerCase();
+    if (tagName === 'a' && element.getAttribute('href')) score += 5;
+    if (tagName === 'button') score += 5;
+    if (element.getAttribute('onclick')) score += 3;
+    if (element.getAttribute('role') === 'button') score += 3;
+
     // Penalize hidden or disabled elements
-    if (element.getAttribute('aria-hidden') === 'true') score -= 5;
-    if (element.style.display === 'none') score -= 5;
-    if (element.style.visibility === 'hidden') score -= 5;
-    if ((element as HTMLButtonElement).disabled) score -= 3;
+    if (element.getAttribute('aria-hidden') === 'true') score -= 10;
+    if (element.style.display === 'none') score -= 10;
+    if (element.style.visibility === 'hidden') score -= 10;
+    if ((element as HTMLButtonElement).disabled) score -= 8;
 
     return score;
   }
 
   private _isElementClickable(element: HTMLElement): boolean {
+    // Check if element has zero dimensions
     const rect = element.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return false;
 
+    // Check computed styles
     const style = window.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden') return false;
     if (style.pointerEvents === 'none') return false;
 
-    return true;
+    // Check if element is actually visible in viewport (basic check)
+    if (rect.top < 0 && rect.bottom < 0) return false;
+    if (rect.left < 0 && rect.right < 0) return false;
+
+    // Check for semantic clickability
+    const tagName = element.tagName.toLowerCase();
+    const hasHref = element.getAttribute('href') !== null;
+    const hasOnClick = element.getAttribute('onclick') !== null;
+    const hasButtonRole = element.getAttribute('role') === 'button';
+    const isInputButton = tagName === 'input' && ['button', 'submit'].includes((element as HTMLInputElement).type || '');
+    
+    // Element is semantically clickable
+    if (tagName === 'button' || 
+        (tagName === 'a' && hasHref) || 
+        isInputButton || 
+        hasOnClick || 
+        hasButtonRole) {
+      return true;
+    }
+
+    // Check if element has cursor pointer (indicating clickability)
+    if (style.cursor === 'pointer') return true;
+
+    // For div and other generic elements, be more permissive if they have clickable styling
+    if (hasOnClick || hasButtonRole) return true;
+
+    // Default to false for generic elements without clear clickable indicators
+    return tagName === 'button' || (tagName === 'a' && hasHref);
   }
 
   private _isElementFillable(element: HTMLElement): boolean {
