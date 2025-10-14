@@ -322,9 +322,10 @@ export class ContextCapture {
     console.log('📋 Kriya: Starting ReScript Euler dashboard form detection...');
     
     const forms: any[] = [];
+    const processedElements = new Set<HTMLElement>();
     
     // Detect ReScript FormRenderer fields - this is the primary pattern
-    const rescriptFields = this._detectReScriptFormRendererFields();
+    const rescriptFields = this._detectReScriptFormRendererFields(processedElements);
     console.log(`📋 Kriya: Found ${rescriptFields.length} ReScript FormRenderer fields`);
     
     if (rescriptFields.length > 0) {
@@ -339,37 +340,15 @@ export class ContextCapture {
       });
     }
     
-    // Detect standalone SelectBox components
-    const selectBoxFields = this._detectReScriptSelectBoxFields();
-    console.log(`📋 Kriya: Found ${selectBoxFields.length} standalone SelectBox fields`);
-    
-    if (selectBoxFields.length > 0) {
-      const existingFieldNames = forms.flatMap(form => form.fields.map((field: any) => field.name));
-      const uniqueSelectBoxFields = selectBoxFields.filter((field: any) => 
-        !existingFieldNames.includes(field.name)
-      );
-      
-      if (uniqueSelectBoxFields.length > 0) {
-        forms.push({
-          formId: 'rescript-selectbox-form',
-          action: window.location.href,
-          method: 'POST',
-          fields: uniqueSelectBoxFields,
-          isRegistered: false,
-          hasSubmitButton: this._hasReScriptSubmitButton(),
-          framework: 'ReScript SelectBox Components',
-        });
-      }
-    }
-    
-    // Fallback: Detect any other React Final Form inputs
-    const reactFinalFormFields = this._detectReactFinalFormFields();
-    console.log(`📋 Kriya: Found ${reactFinalFormFields.length} React Final Form fields`);
+    // Detect standalone React Final Form inputs (only those NOT already detected in ReScript forms)
+    const reactFinalFormFields = this._detectReactFinalFormFields(processedElements);
+    console.log(`📋 Kriya: Found ${reactFinalFormFields.length} standalone React Final Form fields`);
     
     if (reactFinalFormFields.length > 0) {
       const existingFieldNames = forms.flatMap(form => form.fields.map((field: any) => field.name));
       const uniqueFormFields = reactFinalFormFields.filter((field: any) => 
-        !existingFieldNames.includes(field.name)
+        !existingFieldNames.includes(field.name) && 
+        !this._isFieldNameSimilar(field.name, existingFieldNames)
       );
       
       if (uniqueFormFields.length > 0) {
@@ -390,7 +369,8 @@ export class ContextCapture {
   }
 
   private _extractCustomFieldInfo(wrapper: HTMLElement, index: number): any | null {
-    const fieldName = wrapper.getAttribute('data-component-field-wrapper') || `field-${index}`;
+    // Try multiple strategies to get a meaningful field name
+    const fieldName = this._extractFieldName(wrapper, index);
     
     // Find label
     const labelElement = wrapper.querySelector('[data-form-label]');
@@ -583,7 +563,7 @@ export class ContextCapture {
   }
 
   // ReScript-specific form detection methods
-  private _detectReScriptFormRendererFields(): any[] {
+  private _detectReScriptFormRendererFields(processedElements: Set<HTMLElement> = new Set()): any[] {
     const fields: any[] = [];
     console.log('📋 Kriya: Starting comprehensive ReScript InputFields detection...');
     
@@ -594,7 +574,7 @@ export class ContextCapture {
     console.log(`📋 Kriya: Found ${fieldWrappers.length} field wrappers`);
     
     fieldWrappers.forEach((wrapper, index) => {
-      const fieldName = wrapper.getAttribute('data-component-field-wrapper') || `wrapper-field-${index}`;
+      const fieldName = this._extractFieldName(wrapper as HTMLElement, index);
       const labelElement = wrapper.querySelector('[data-form-label]');
       const label = labelElement?.getAttribute('data-form-label') || labelElement?.textContent?.trim() || '';
       
@@ -763,7 +743,7 @@ export class ContextCapture {
     return fields;
   }
 
-  private _detectReactFinalFormFields(): any[] {
+  private _detectReactFinalFormFields(processedElements: Set<HTMLElement> = new Set()): any[] {
     const fields: any[] = [];
     
     // Look for React Final Form field patterns
@@ -779,7 +759,7 @@ export class ContextCapture {
                                    input.hasAttribute('data-rff-field'); // Explicit field marker
       
       if (hasRFFCharacteristics) {
-        const fieldName = input.name || input.id || `rff-field-${index}`;
+        const fieldName = this._extractInputFieldName(input, index);
         let fieldType = 'text';
         let currentValue = '';
         let options: string[] = [];
@@ -1188,7 +1168,7 @@ export class ContextCapture {
   }
 
   private _extractStandardFieldInfo(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, index: number): any | null {
-    const fieldName = input.name || input.id || `rff-field-${index}`;
+    const fieldName = this._extractInputFieldName(input, index);
     let fieldType = 'text';
     let currentValue = '';
     let options: string[] = [];
@@ -1327,5 +1307,204 @@ export class ContextCapture {
 
     console.log(`📋 Kriya: Found ${fields.length} specialized components`);
     return fields;
+  }
+
+  // Helper methods for better field name extraction
+  private _extractFieldName(wrapper: HTMLElement, index: number): string {
+    // 1. HIGHEST PRIORITY: Try to find input element and get its name/id (actual form field names)
+    const inputElement = wrapper.querySelector('input, textarea, select, button[data-value]');
+    if (inputElement) {
+      const name = inputElement.getAttribute('name') || inputElement.id;
+      if (name && name.trim()) {
+        return this._stripFieldPrefix(name.trim());
+      }
+    }
+
+    // 2. Try data-component-field-wrapper but strip any prefixes
+    const fieldWrapper = wrapper.getAttribute('data-component-field-wrapper');
+    if (fieldWrapper && fieldWrapper.trim()) {
+      return this._stripFieldPrefix(fieldWrapper.trim());
+    }
+
+    // 3. Try to extract from label text
+    const labelElement = wrapper.querySelector('[data-form-label]');
+    const labelText = labelElement?.getAttribute('data-form-label') || 
+                     labelElement?.textContent?.trim();
+    if (labelText && labelText.trim()) {
+      // Convert label text to camelCase field name
+      return this._labelToFieldName(labelText.trim());
+    }
+
+    // 4. Try aria-label or other descriptive attributes
+    const ariaLabel = wrapper.getAttribute('aria-label');
+    if (ariaLabel && ariaLabel.trim()) {
+      return this._labelToFieldName(ariaLabel.trim());
+    }
+
+    // 5. Try to extract from placeholder text
+    const placeholderElement = wrapper.querySelector('[placeholder]');
+    const placeholder = placeholderElement?.getAttribute('placeholder');
+    if (placeholder && placeholder.trim()) {
+      return this._labelToFieldName(placeholder.trim());
+    }
+
+    // 6. Try to extract from button text for SelectBox components
+    const selectboxElement = wrapper.querySelector('[data-selectbox-value]');
+    if (selectboxElement) {
+      const selectboxTitle = selectboxElement.getAttribute('data-selectbox-value');
+      if (selectboxTitle && selectboxTitle.trim()) {
+        return this._labelToFieldName(selectboxTitle.trim());
+      }
+    }
+
+    // 7. Last resort: use a descriptive fallback based on field type (no "field-" prefix)
+    const fieldTypeHint = this._getFieldTypeHint(wrapper);
+    return `${fieldTypeHint}_${index}`;
+  }
+
+  private _extractInputFieldName(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, index: number): string {
+    // 1. Try name attribute first (highest priority for form inputs) - strip prefixes
+    if (input.name && input.name.trim()) {
+      return this._stripFieldPrefix(input.name.trim());
+    }
+
+    // 2. Try id attribute - strip prefixes
+    if (input.id && input.id.trim()) {
+      return this._stripFieldPrefix(input.id.trim());
+    }
+
+    // 3. Try to find associated label
+    const labelElement = document.querySelector(`label[for="${input.id}"]`) ||
+                        input.closest('label') ||
+                        input.parentElement?.querySelector('label');
+    
+    const labelText = labelElement?.textContent?.trim();
+    if (labelText) {
+      return this._labelToFieldName(labelText);
+    }
+
+    // 4. Try placeholder as field name
+    const placeholder = (input as HTMLInputElement).placeholder;
+    if (placeholder && placeholder.trim()) {
+      return this._labelToFieldName(placeholder.trim());
+    }
+
+    // 5. Try aria-label
+    const ariaLabel = input.getAttribute('aria-label');
+    if (ariaLabel && ariaLabel.trim()) {
+      return this._labelToFieldName(ariaLabel.trim());
+    }
+
+    // 6. Check if it's inside a field wrapper and extract from there - strip prefixes
+    const fieldWrapper = input.closest('[data-component-field-wrapper]');
+    if (fieldWrapper) {
+      const wrapperName = fieldWrapper.getAttribute('data-component-field-wrapper');
+      if (wrapperName && wrapperName.trim()) {
+        return this._stripFieldPrefix(wrapperName.trim());
+      }
+    }
+
+    // 7. Last resort: use input type + index (no "field-" prefix)
+    const inputType = input.tagName.toLowerCase();
+    const type = (input as HTMLInputElement).type || inputType;
+    return `${type}_${index}`;
+  }
+
+  private _stripFieldPrefix(fieldName: string): string {
+    // Remove common prefixes that are added by form frameworks
+    const prefixesToRemove = ['field-', 'form-', 'input-', 'rff-field-', 'wrapper-field-'];
+    
+    for (const prefix of prefixesToRemove) {
+      if (fieldName.startsWith(prefix)) {
+        const stripped = fieldName.substring(prefix.length);
+        // Only strip if there's still a meaningful name left
+        if (stripped && stripped.length > 0) {
+          return stripped;
+        }
+      }
+    }
+    
+    return fieldName;
+  }
+
+  private _labelToFieldName(label: string): string {
+    // Convert label text to a valid field name
+    return label
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+      .replace(/_+/g, '_') // Replace multiple underscores with single
+      || 'unknown_field';
+  }
+
+  private _getFieldTypeHint(wrapper: HTMLElement): string {
+    // Try to determine field type from wrapper content to create better fallback names
+    if (wrapper.querySelector('[data-selectbox-value]')) return 'selectbox';
+    if (wrapper.querySelector('input[type="text"]')) return 'text';
+    if (wrapper.querySelector('input[type="number"]')) return 'number';
+    if (wrapper.querySelector('input[type="email"]')) return 'email';
+    if (wrapper.querySelector('input[type="password"]')) return 'password';
+    if (wrapper.querySelector('input[type="checkbox"]')) return 'checkbox';
+    if (wrapper.querySelector('input[type="radio"]')) return 'radio';
+    if (wrapper.querySelector('input[type="file"]')) return 'file';
+    if (wrapper.querySelector('textarea')) return 'textarea';
+    if (wrapper.querySelector('button[data-value]')) return 'button';
+    if (wrapper.querySelector('input[type="date"]')) return 'date';
+    if (wrapper.querySelector('input[type="range"]')) return 'range';
+    
+    return 'field';
+  }
+
+  private _isFieldNameSimilar(fieldName: string, existingFieldNames: string[]): boolean {
+    // Check if a field name is similar to existing ones to avoid duplicates
+    // This handles cases like "task_name" vs "field-task_name"
+    
+    const normalizedFieldName = this._normalizeFieldName(fieldName);
+    
+    return existingFieldNames.some(existingName => {
+      const normalizedExistingName = this._normalizeFieldName(existingName);
+      
+      // Exact match after normalization
+      if (normalizedFieldName === normalizedExistingName) {
+        return true;
+      }
+      
+      // Check if one contains the other (for cases like "task_name" and "field-task_name")
+      if (normalizedFieldName.includes(normalizedExistingName) || 
+          normalizedExistingName.includes(normalizedFieldName)) {
+        // Only consider it similar if the longer name is just a prefixed/suffixed version
+        const longer = normalizedFieldName.length > normalizedExistingName.length ? normalizedFieldName : normalizedExistingName;
+        const shorter = normalizedFieldName.length > normalizedExistingName.length ? normalizedExistingName : normalizedFieldName;
+        
+        // Check if the longer name is just the shorter name with a common prefix/suffix
+        const commonPrefixes = ['field', 'input', 'form', 'rff', 'wrapper'];
+        const commonSuffixes = ['field', 'input', 'value'];
+        
+        for (const prefix of commonPrefixes) {
+          if (longer === `${prefix}_${shorter}` || longer === `${prefix}-${shorter}`) {
+            return true;
+          }
+        }
+        
+        for (const suffix of commonSuffixes) {
+          if (longer === `${shorter}_${suffix}` || longer === `${shorter}-${suffix}`) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    });
+  }
+
+  private _normalizeFieldName(fieldName: string): string {
+    // Normalize field name for comparison by removing common variations
+    return fieldName
+      .toLowerCase()
+      .replace(/[-_\s]+/g, '_') // Normalize separators to underscores
+      .replace(/^(field|input|form|rff|wrapper)_?/i, '') // Remove common prefixes
+      .replace(/_(field|input|value)$/i, '') // Remove common suffixes
+      .trim();
   }
 }

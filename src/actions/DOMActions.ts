@@ -66,17 +66,24 @@ export class DOMActions {
 
     let element = await this._findElement(options.selector, options.description);
 
-    // If the found element is not directly clickable, try to find a clickable child
+    // If the found element is not directly clickable, try to find a clickable child or parent
     if (!this._isElementClickable(element)) {
+      // First try to find a clickable child
       const clickableChild = this._findClickableChild(element);
       if (clickableChild) {
         element = clickableChild;
       } else {
-        throw new AutomationError(
-          'Element is not clickable',
-          'ELEMENT_NOT_FOUND',
-          { selector: options.selector, description: options.description }
-        );
+        // If no clickable child, try to find a clickable parent
+        const clickableParent = this._findClickableParent(element);
+        if (clickableParent) {
+          element = clickableParent;
+        } else {
+          throw new AutomationError(
+            'Element is not clickable and no clickable parent or child found',
+            'ELEMENT_NOT_FOUND',
+            { selector: options.selector, description: options.description }
+          );
+        }
       }
     }
 
@@ -259,6 +266,41 @@ export class DOMActions {
       if (this._isElementClickable(child)) {
         return child;
       }
+    }
+
+    return null;
+  }
+
+  private _findClickableParent(element: HTMLElement): HTMLElement | null {
+    // Look for clickable parent elements up the DOM tree (up to 5 levels)
+    let current = element.parentElement;
+    let depth = 0;
+    const maxDepth = 5;
+
+    while (current && depth < maxDepth) {
+      if (this._isElementClickable(current)) {
+        const tagName = current.tagName.toLowerCase();
+        
+        // Prioritize semantically clickable elements
+        if (tagName === 'a' && current.getAttribute('href')) {
+          return current;
+        }
+        if (tagName === 'button') {
+          return current;
+        }
+        if (current.getAttribute('role') === 'button') {
+          return current;
+        }
+        if (current.getAttribute('onclick')) {
+          return current;
+        }
+        
+        // Return any clickable parent as fallback
+        return current;
+      }
+      
+      current = current.parentElement;
+      depth++;
     }
 
     return null;
