@@ -444,6 +444,7 @@ export class DOMActions {
     const tagName = element.tagName.toLowerCase();
     const type = (element as HTMLInputElement).type?.toLowerCase();
 
+    // Standard HTML elements
     if (tagName === 'input') {
       const fillableTypes = ['text', 'email', 'password', 'tel', 'url', 'search', 'number'];
       return fillableTypes.includes(type ?? 'text');
@@ -451,8 +452,22 @@ export class DOMActions {
 
     if (tagName === 'textarea') return true;
     if (tagName === 'select') return true;
+    if (element.contentEditable === 'true') return true;
 
-    return element.contentEditable === 'true';
+    // ReScript SelectBox components (custom dropdowns)
+    if (this._detectSelectBoxComponent(element)) return true;
+    
+    // Check if element is within a SelectBox component
+    if (element.closest('[data-selectbox-value]')) return true;
+    
+    // Check if element is a button within a form field wrapper (could be a custom select)
+    if (tagName === 'button' && element.closest('[data-component-field-wrapper]')) {
+      const fieldWrapper = element.closest('[data-component-field-wrapper]');
+      // If the field wrapper contains selectbox indicators, this button is fillable
+      if (fieldWrapper?.querySelector('[data-selectbox-value]')) return true;
+    }
+
+    return false;
   }
 
   private _clickElement(
@@ -515,6 +530,13 @@ export class DOMActions {
     value: string,
     triggerEvents: boolean
   ): void {
+    // Handle ReScript SelectBox components (custom dropdowns)
+    if (this._detectSelectBoxComponent(element) || element.closest('[data-selectbox-value]')) {
+      this._fillReScriptSelectBox(element, value);
+      return;
+    }
+
+    // Handle standard HTML select elements
     if (element.tagName.toLowerCase() === 'select') {
       const selectElement = element as HTMLSelectElement;
       const option = Array.from(selectElement.options).find(opt => 
@@ -530,6 +552,7 @@ export class DOMActions {
         );
       }
     } else {
+      // Handle standard input/textarea elements
       element.value = value;
     }
 
@@ -538,6 +561,110 @@ export class DOMActions {
       element.dispatchEvent(new Event('change', { bubbles: true }));
       element.dispatchEvent(new Event('blur', { bubbles: true }));
     }
+  }
+
+  private _fillReScriptSelectBox(element: HTMLElement, value: string): void {
+    // Find the SelectBox container and button
+    const selectBoxContainer = element.closest('[data-selectbox-value]') || 
+                              (element.hasAttribute('data-selectbox-value') ? element : null);
+    
+    if (!selectBoxContainer) {
+      throw new AutomationError(
+        'SelectBox container not found',
+        'ELEMENT_NOT_FOUND'
+      );
+    }
+
+    // Find the trigger button for the dropdown
+    const triggerButton = selectBoxContainer.querySelector('button[data-value]') as HTMLButtonElement;
+    
+    if (!triggerButton) {
+      throw new AutomationError(
+        'SelectBox trigger button not found',
+        'ELEMENT_NOT_FOUND'
+      );
+    }
+
+    // Click the button to open the dropdown
+    this._clickElement(triggerButton, 'left', 1);
+
+    // Wait a moment for the dropdown to open
+    setTimeout(() => {
+      // Look for the dropdown options
+      const dropdown = document.querySelector('[data-dropdown="dropdown"]') ||
+                      selectBoxContainer.querySelector('[role="listbox"]') ||
+                      document.querySelector('[class*="dropdown"][class*="open"]') ||
+                      document.querySelector('[class*="options"]');
+
+      if (!dropdown) {
+        throw new AutomationError(
+          'SelectBox dropdown not found after opening',
+          'ELEMENT_NOT_FOUND'
+        );
+      }
+
+      // Find the option to select (try multiple strategies)
+      let optionToSelect: HTMLElement | null = null;
+
+      // Strategy 1: Look for exact data-dropdown-value match
+      optionToSelect = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
+
+      // Strategy 2: Look for exact text content match
+      if (!optionToSelect) {
+        const options = dropdown.querySelectorAll('[data-dropdown-value], [role="option"], li, div[class*="option"]');
+        optionToSelect = Array.from(options).find(option => {
+          const text = option.textContent?.trim().toLowerCase();
+          const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
+          const targetValue = value.toLowerCase();
+          
+          return text === targetValue || dataValue === targetValue;
+        }) as HTMLElement;
+      }
+
+      // Strategy 3: Look for partial text match
+      if (!optionToSelect) {
+        const options = dropdown.querySelectorAll('[data-dropdown-value], [role="option"], li, div[class*="option"]');
+        optionToSelect = Array.from(options).find(option => {
+          const text = option.textContent?.trim().toLowerCase();
+          const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
+          const targetValue = value.toLowerCase();
+          
+          return text?.includes(targetValue) || dataValue?.includes(targetValue);
+        }) as HTMLElement;
+      }
+
+      if (!optionToSelect) {
+        throw new AutomationError(
+          `Option "${value}" not found in SelectBox dropdown`,
+          'ELEMENT_NOT_FOUND'
+        );
+      }
+
+      // Click the selected option
+      this._clickElement(optionToSelect, 'left', 1);
+
+      // Update the button's data-value attribute to reflect the selection
+      const selectedValue = optionToSelect.getAttribute('data-dropdown-value') || 
+                           optionToSelect.textContent?.trim() || 
+                           value;
+      
+      triggerButton.setAttribute('data-value', selectedValue);
+
+      // Update button text if it has data-button-text element
+      const buttonTextElement = triggerButton.querySelector('[data-button-text]');
+      if (buttonTextElement) {
+        buttonTextElement.textContent = optionToSelect.textContent?.trim() || value;
+        buttonTextElement.setAttribute('data-button-text', optionToSelect.textContent?.trim() || value);
+      }
+
+      // Trigger change events on the SelectBox container for React/form libraries
+      selectBoxContainer.dispatchEvent(new Event('change', { bubbles: true }));
+      selectBoxContainer.dispatchEvent(new CustomEvent('select', { 
+        detail: { value: selectedValue },
+        bubbles: true 
+      }));
+
+    }, 100); // Small delay to ensure dropdown is rendered
   }
 
   private async _waitForCondition(

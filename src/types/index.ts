@@ -48,6 +48,7 @@ export interface FormAPI {
   readonly getState: () => FormState;
   readonly batch: (updates: () => void) => void;
   readonly reset: () => void;
+  readonly initialize?: (values: Record<string, unknown>) => void;
 }
 
 export interface FormState {
