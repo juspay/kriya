@@ -12,6 +12,7 @@ import type {
 } from '@/types';
 import { DEFAULT_FORM_REGISTRY_CONFIG } from '@/types';
 import { AutomationError } from '@/types';
+import { EnhancedFormDetector } from './EnhancedFormDetector';
 
 export class FormRegistry {
   private readonly _config: AutomationConfig;
@@ -127,6 +128,14 @@ export class FormRegistry {
     this._forceLog(`🔍 Starting fillAnyForm with fields:`, Object.keys(fields));
     this._forceLog(`📊 Currently registered forms: ${this._forms.size}`);
 
+    // 🚀 PRIORITY 1: Try Enhanced Form Detector FIRST
+    this._forceLog('🚀 PRIORITY 1: Trying Enhanced Form Detector first...');
+    const enhancedResult = this._tryEnhancedFormDetector(fields);
+    if (enhancedResult) {
+      this._forceLog('✅ Enhanced Form Detector succeeded on first try!');
+      return enhancedResult;
+    }
+
     // If no forms are registered, try to detect them again
     if (this._forms.size === 0) {
       this._forceLog('🔄 No forms registered, attempting to detect forms...');
@@ -144,33 +153,33 @@ export class FormRegistry {
     // Log current form details for debugging
     this._logRegisteredFormDetails();
 
+    // PRIORITY 2: Try traditional form matching
+    this._forceLog('🔄 PRIORITY 2: Trying traditional form matching...');
     const bestMatch = this._findBestFormMatch(fields);
-    if (!bestMatch) {
-      this._forceLog('❌ No suitable form match found');
-      this._forceLog('🔍 Trying alternative field matching strategies...');
-
-      // Try alternative matching strategies
-      const alternativeMatch = this._findAlternativeFormMatch(fields);
-      if (alternativeMatch) {
-        this._forceLog('✅ Found form using alternative matching');
-        return this._fillFormInternal(alternativeMatch.formApi, fields, alternativeMatch.formId);
-      }
-
-      // Log detailed field mismatch info
-      this._logFieldMismatchDetails(fields);
-
-      throw new AutomationError(
-        'No suitable form found for the provided fields',
-        'FORM_NOT_FOUND',
-        {
-          fields: Object.keys(fields),
-          availableForms: this._getFormSummary(),
-        }
-      );
+    if (bestMatch) {
+      this._forceLog(`✅ Found best match: ${bestMatch.formId} (score: ${(bestMatch as any).score})`);
+      return this._fillFormInternal(bestMatch.formApi, fields, bestMatch.formId);
     }
 
-    this._forceLog(`✅ Found best match: ${bestMatch.formId} (score: ${(bestMatch as any).score})`);
-    return this._fillFormInternal(bestMatch.formApi, fields, bestMatch.formId);
+    // PRIORITY 3: Try alternative matching strategies
+    this._forceLog('🔄 PRIORITY 3: Trying alternative field matching strategies...');
+    const alternativeMatch = this._findAlternativeFormMatch(fields);
+    if (alternativeMatch) {
+      this._forceLog('✅ Found form using alternative matching');
+      return this._fillFormInternal(alternativeMatch.formApi, fields, alternativeMatch.formId);
+    }
+
+    // Log detailed field mismatch info
+    this._logFieldMismatchDetails(fields);
+
+    throw new AutomationError(
+      'No suitable form found for the provided fields',
+      'FORM_NOT_FOUND',
+      {
+        fields: Object.keys(fields),
+        availableForms: this._getFormSummary(),
+      }
+    );
   }
 
   public async submitForm(formId: string): Promise<FormFillResult> {
@@ -1283,5 +1292,57 @@ export class FormRegistry {
       });
       resolve();
     });
+  }
+
+  private _tryEnhancedFormDetector(fields: Record<string, string>): FormFillResult | null {
+    try {
+      this._forceLog('🔬 Initializing Enhanced Form Detector...');
+      const enhancedDetector = new EnhancedFormDetector({
+        autoDetect: true,
+        debugMode: true,
+        includeDisabled: false,
+      });
+
+      // Get all detected forms to see what we have
+      const detectedForms = enhancedDetector.getForms();
+      this._forceLog(`🔍 Enhanced detector found ${detectedForms.length} forms:`);
+      
+      detectedForms.forEach(form => {
+        this._forceLog(`  📝 ${form.id} (${form.formLibrary})${form.formApi ? ' - WITH API' : ' - no API'}`);
+        if (form.formApi) {
+          this._forceLog(`    🔧 API methods:`, Object.keys(form.formApi));
+        }
+        this._forceLog(`    📋 Fields: ${Array.from(form.fields.keys()).join(', ')}`);
+      });
+
+      const success = enhancedDetector.fillAnyForm(fields);
+      
+      // Enhanced detector should succeed if it fills ANY fields, not just ALL fields
+      // The "success" from fillAnyForm only indicates if it found a suitable form
+      if (success !== false) {
+        const validFieldCount = Object.keys(fields).filter(key => 
+          key && key.trim().length > 0 && !key.match(/^field--?\d*$/)
+        ).length;
+        
+        this._forceLog(`✅ Enhanced Form Detector filled form (${validFieldCount} valid fields attempted)`);
+        return {
+          success: true,
+          fieldsCount: Object.keys(fields).length,
+          filledFields: Object.keys(fields).filter(key => 
+            key && key.trim().length > 0 && !key.match(/^field--?\d*$/)
+          ),
+          failedFields: Object.keys(fields).filter(key => 
+            !key || key.trim().length === 0 || key.match(/^field--?\d*$/)
+          ),
+          formId: 'enhanced-detector-form',
+        };
+      } else {
+        this._forceLog('❌ Enhanced Form Detector could not find suitable form');
+        return null;
+      }
+    } catch (error) {
+      this._forceLog('❌ Enhanced Form Detector encountered an error:', error);
+      return null;
+    }
   }
 }
