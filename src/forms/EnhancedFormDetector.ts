@@ -509,9 +509,34 @@ export class EnhancedFormDetector {
     if (form.formApi && form.formApi.change) {
       this._forceLog(`✨ Using React Final Form API change() for ${fieldName}`);
       try {
-        form.formApi.change(fieldName, value);
-        this.triggerFieldChange(form, fieldName, value);
-        this._forceLog(`✅ Successfully set ${fieldName} = "${value}" via React Final Form API`);
+        // Parse JSON strings to actual JavaScript values
+        let processedValue = value;
+        if (typeof value === 'string' && value.trim().length > 0) {
+          try {
+            // Check if it's a JSON string (starts with [ { or ")
+            if (value.trim().match(/^[\[{"]/) || value === 'true' || value === 'false' || value === 'null') {
+              const parsed = JSON.parse(value);
+              this._forceLog(`🔄 Parsed JSON string for ${fieldName}: "${value}" → ${Array.isArray(parsed) ? `[${parsed.join(', ')}]` : typeof parsed === 'object' ? 'object' : parsed}`);
+              processedValue = parsed;
+            }
+          } catch (parseError) {
+            // If parsing fails, use original value
+            this._forceLog(`⚠️ Could not parse JSON for ${fieldName}, using as string: "${value}"`);
+          }
+        }
+        
+        // Pass the actual JavaScript value to React Final Form (NOT stringified)
+        form.formApi.change(fieldName, processedValue);
+        this.triggerFieldChange(form, fieldName, processedValue);
+        
+        // Log the actual value type being set
+        const valueDisplay = Array.isArray(processedValue) 
+          ? `[${processedValue.join(', ')}] (array)` 
+          : typeof processedValue === 'object' 
+            ? `{object} (${Object.keys(processedValue).length} keys)`
+            : `"${processedValue}" (${typeof processedValue})`;
+        
+        this._forceLog(`✅ Successfully set ${fieldName} = ${valueDisplay} via React Final Form API`);
         return true;
       } catch (error) {
         this._forceLog(`❌ React Final Form API change() failed for ${fieldName}:`, error);

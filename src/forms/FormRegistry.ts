@@ -109,7 +109,7 @@ export class FormRegistry {
     }
   }
 
-  public async fillForm(formId: string, fields: Record<string, string>): Promise<FormFillResult> {
+  public async fillForm(formId: string, fields: Record<string, any>): Promise<FormFillResult> {
     this._ensureInitialized();
 
     const formApi = this._forms.get(formId);
@@ -122,7 +122,7 @@ export class FormRegistry {
     return this._fillFormInternal(formApi, fields, formId);
   }
 
-  public async fillAnyForm(fields: Record<string, string>): Promise<FormFillResult> {
+  public async fillAnyForm(fields: Record<string, any>): Promise<FormFillResult> {
     this._ensureInitialized();
 
     this._forceLog(`🔍 Starting fillAnyForm with fields:`, Object.keys(fields));
@@ -555,7 +555,7 @@ export class FormRegistry {
 
   private async _fillFormInternal(
     formApi: FormAPI,
-    fields: Record<string, string>,
+    fields: Record<string, any>,
     formId?: string
   ): Promise<FormFillResult> {
     const filledFields: string[] = [];
@@ -654,7 +654,7 @@ export class FormRegistry {
   }
 
   private _findBestFormMatch(
-    fields: Record<string, string>
+    fields: Record<string, any>
   ): { formApi: FormAPI; formId: string } | null {
     const fieldNames = Object.keys(fields);
     let bestMatch: { formApi: FormAPI; formId: string; score: number } | null = null;
@@ -1224,7 +1224,7 @@ export class FormRegistry {
     return summary;
   }
 
-  private _filterValidFields(fields: Record<string, string>): Record<string, string> {
+  private _filterValidFields(fields: Record<string, any>): Record<string, any> {
     const validFields: Record<string, string> = {};
 
     for (const [fieldName, fieldValue] of Object.entries(fields)) {
