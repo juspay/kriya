@@ -80,13 +80,14 @@ export interface FormContext {
 }
 
 export interface FormFieldContext {
-  readonly name: string;
-  readonly type: string;
-  readonly value: string;
-  readonly placeholder?: string;
-  readonly required: boolean;
-  readonly disabled: boolean;
-  readonly label?: string;
+  name: string;
+  type: string;
+  value: FormFieldValue;
+  initialValue: FormFieldValue; // Track initial/default value
+  placeholder?: string;
+  required: boolean;
+  disabled: boolean;
+  label?: string;
 }
 
 export interface ElementContext {

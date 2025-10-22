@@ -730,6 +730,7 @@ export class ContextCapture {
           name: fieldName,
           type: 'class-selectbox',
           value: currentValue,
+          initialValue: currentValue, // For now, use current value as initial value
           label: label || undefined,
           placeholder: buttonText,
           required: false,

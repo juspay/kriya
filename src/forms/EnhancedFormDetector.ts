@@ -10,6 +10,7 @@ export interface EnhancedFormField {
   name: string;
   type: string;
   value: string | boolean | string[];
+  initialValue: string | boolean | string[]; // Track initial/default value
   label?: string;
   placeholder?: string;
   required: boolean;
@@ -67,18 +68,24 @@ export class EnhancedFormDetector {
   public detectAllForms(): EnhancedDetectedForm[] {
     this._forceLog('🔍 Starting enhanced form detection...');
     const newForms: EnhancedDetectedForm[] = [];
+    const detectedElements = new Set<HTMLElement>();
     
     // Detect React Final Form instances
     const reactFinalForms = this.detectReactFinalForms();
     newForms.push(...reactFinalForms);
+    reactFinalForms.forEach(form => detectedElements.add(form.element));
+    this._forceLog(`📊 React Final Form detection: found ${reactFinalForms.length} forms`);
     
     // Detect Formik forms
-    const formikForms = this.detectFormikForms();
+    const formikForms = this.detectFormikForms(detectedElements);
     newForms.push(...formikForms);
+    formikForms.forEach(form => detectedElements.add(form.element));
+    this._forceLog(`📊 Formik detection: found ${formikForms.length} forms`);
     
-    // Detect native HTML forms
-    const nativeForms = this.detectNativeForms();
+    // Detect native HTML forms (pass already detected elements)
+    const nativeForms = this.detectNativeForms(detectedElements);
     newForms.push(...nativeForms);
+    this._forceLog(`📊 Native form detection: found ${nativeForms.length} forms`);
     
     this._forceLog(`📊 Enhanced detection found ${newForms.length} forms total`);
     
@@ -256,7 +263,7 @@ export class EnhancedFormDetector {
   /**
    * Detect Formik forms
    */
-  private detectFormikForms(): EnhancedDetectedForm[] {
+  private detectFormikForms(alreadyDetectedElements: Set<HTMLElement> = new Set()): EnhancedDetectedForm[] {
     const forms: EnhancedDetectedForm[] = [];
     this._forceLog('🔍 Looking for Formik instances...');
     
@@ -293,21 +300,33 @@ export class EnhancedFormDetector {
   }
 
   /**
-   * Detect native HTML forms
+   * Detect native HTML forms (only check forms not already detected by other libraries)
    */
-  private detectNativeForms(): EnhancedDetectedForm[] {
+  private detectNativeForms(alreadyDetectedElements: Set<HTMLElement> = new Set()): EnhancedDetectedForm[] {
     const forms: EnhancedDetectedForm[] = [];
     this._forceLog('🔍 Looking for native HTML forms...');
     
     const formElements = document.querySelectorAll('form');
     
+    this._forceLog(`📊 Total <form> elements: ${formElements.length}, Already detected: ${alreadyDetectedElements.size}`);
+    
     formElements.forEach((formElement, index) => {
-      // Skip if already detected as React Final Form
-      const existingReactForm = Array.from(this.forms.values()).find(f => f.element === formElement);
-      if (existingReactForm) return;
+      // Skip if this exact element was already detected as React Final Form, Formik, etc.
+      if (alreadyDetectedElements.has(formElement)) {
+        this._forceLog(`⏭️ Form element already detected by previous detection phases - skipping native detection`);
+        return;
+      }
       
       const formId = formElement.id || `native-form-${index}`;
+      this._forceLog(`🔍 Checking undetected form: ${formId}`);
+      
       const fields = this.detectFieldsInContainer(formElement, 'native');
+      
+      // Skip if no fields were detected
+      if (fields.size === 0) {
+        this._forceLog(`⏭️ Form ${formId} has no detectable fields - skipping`);
+        return;
+      }
       
       const detectedForm: EnhancedDetectedForm = {
         element: formElement,
@@ -318,9 +337,10 @@ export class EnhancedFormDetector {
       };
       
       forms.push(detectedForm);
+      this._forceLog(`✅ Detected native form: ${formId} with ${fields.size} fields`);
     });
     
-    this._forceLog(`📋 Found ${forms.length} native HTML forms`);
+    this._forceLog(`📋 Found ${forms.length} new native HTML forms`);
     return forms;
   }
 
@@ -379,12 +399,17 @@ export class EnhancedFormDetector {
       if (container) {
         const name = container.getAttribute('data-component-field-wrapper') || element.id || 'unknown';
         const value = element.getAttribute('data-value') || '';
+        const cleanName = name.replace(/^field-/, ''); // Remove field- prefix
+        
+        // Get initial value for SelectBox
+        const initialValue = this.extractInitialValue(element, cleanName, formLibrary);
         
         return {
           element,
-          name: name.replace(/^field-/, ''), // Remove field- prefix
+          name: cleanName,
           type: 'selectbox',
           value,
+          initialValue,
           required: element.hasAttribute('required'),
           disabled: element.hasAttribute('disabled'),
           formLibrary: formLibrary as any
@@ -426,6 +451,9 @@ export class EnhancedFormDetector {
       value = input.value || '';
     }
     
+    // Extract initial value based on form library
+    const initialValue = this.extractInitialValue(input, name, formLibrary);
+    
     // Find associated label with multiple strategies
     let label: string | undefined;
     
@@ -458,12 +486,282 @@ export class EnhancedFormDetector {
       name,
       type,
       value,
+      initialValue,
       label,
       placeholder: 'placeholder' in input ? input.placeholder : undefined,
       required: input.required,
       disabled: input.disabled,
       formLibrary: formLibrary as any
     };
+  }
+
+  /**
+   * Extract initial value from React Final Form, Formik, or native HTML forms
+   */
+  private extractInitialValue(
+    element: HTMLElement,
+    fieldName: string,
+    formLibrary: string
+  ): string | boolean | string[] {
+    // Try different strategies based on form library
+    if (formLibrary === 'react-final-form') {
+      const reactInitialValue = this.extractReactFinalFormInitialValue(element, fieldName);
+      if (reactInitialValue !== null) {
+        return reactInitialValue;
+      }
+    } else if (formLibrary === 'formik') {
+      const formikInitialValue = this.extractFormikInitialValue(element, fieldName);
+      if (formikInitialValue !== null) {
+        return formikInitialValue;
+      }
+    }
+    
+    // Fallback to native HTML initial values
+    return this.extractNativeInitialValue(element);
+  }
+
+  /**
+   * Extract initial value from React Final Form with enhanced detection
+   */
+  private extractReactFinalFormInitialValue(
+    element: HTMLElement,
+    fieldName: string
+  ): string | boolean | string[] | null {
+    this._forceLog(`🔍 Extracting React Final Form initial value for field: ${fieldName}`);
+    
+    // Strategy 1: Find form API from the element itself
+    const reactInstance = this.getReactInstance(element);
+    if (reactInstance) {
+      const formApi = this.extractReactFinalFormApi(reactInstance);
+      if (formApi) {
+        this._forceLog(`✅ Found form API for field ${fieldName}, checking state...`);
+        
+        if (formApi.getState) {
+          try {
+            const state = formApi.getState();
+            this._forceLog(`🔍 Form state for ${fieldName}:`, {
+              hasInitialValues: !!state.initialValues,
+              initialValuesKeys: state.initialValues ? Object.keys(state.initialValues) : [],
+              hasFieldInInitialValues: state.initialValues && fieldName in state.initialValues,
+              fieldInitialValue: state.initialValues?.[fieldName],
+              allInitialValues: state.initialValues
+            });
+            
+            if (state.initialValues && fieldName in state.initialValues) {
+              this._forceLog(`✅ Found React Final Form initial value for ${fieldName}:`, state.initialValues[fieldName]);
+              return state.initialValues[fieldName];
+            } else {
+              this._forceLog(`⚠️ Field ${fieldName} not found in initialValues or initialValues is empty`);
+            }
+          } catch (error) {
+            this._forceLog(`❌ Error calling getState() for ${fieldName}:`, error);
+          }
+        } else {
+          this._forceLog(`⚠️ Form API found but no getState() method for ${fieldName}`);
+        }
+      } else {
+        this._forceLog(`⚠️ No form API found for field ${fieldName}`);
+      }
+    }
+    
+    // Strategy 2: Search for form API in the form container/parent elements
+    let container = element.closest('form') || element.closest('[data-react-final-form]') || element.closest('[id*="form"]');
+    if (container) {
+      this._forceLog(`🔍 Searching for form API in container for field ${fieldName}`);
+      const containerReactInstance = this.getReactInstance(container as HTMLElement);
+      if (containerReactInstance) {
+        const containerFormApi = this.extractReactFinalFormApi(containerReactInstance);
+        if (containerFormApi && containerFormApi.getState) {
+          try {
+            const state = containerFormApi.getState();
+            this._forceLog(`🔍 Container form state for ${fieldName}:`, {
+              hasInitialValues: !!state.initialValues,
+              fieldValue: state.initialValues?.[fieldName]
+            });
+            
+            if (state.initialValues && fieldName in state.initialValues) {
+              this._forceLog(`✅ Found React Final Form initial value in container for ${fieldName}:`, state.initialValues[fieldName]);
+              return state.initialValues[fieldName];
+            }
+          } catch (error) {
+            this._forceLog(`❌ Error getting state from container for ${fieldName}:`, error);
+          }
+        }
+      }
+    }
+    
+    // Strategy 3: Look for useFormState hook patterns in React tree
+    const formStateValue = this.searchForFormStateInReactTree(element, fieldName);
+    if (formStateValue !== null) {
+      this._forceLog(`✅ Found initial value via React hook search for ${fieldName}:`, formStateValue);
+      return formStateValue;
+    }
+    
+    this._forceLog(`❌ Could not find React Final Form initial value for ${fieldName}, falling back to DOM`);
+    return null;
+  }
+  
+  /**
+   * Search for form state in React component tree (enhanced hook detection)
+   */
+  private searchForFormStateInReactTree(element: HTMLElement, fieldName: string): any {
+    this._forceLog(`🔍 Searching React tree for form state containing ${fieldName}`);
+    
+    // Search broader React tree for form state
+    const allElements = [element];
+    
+    // Add parent elements
+    let parent = element.parentElement;
+    while (parent && allElements.length < 10) {
+      allElements.push(parent);
+      parent = parent.parentElement;
+    }
+    
+    // Add sibling containers that might have form context
+    const containers = document.querySelectorAll('[id*="form"], [class*="form"], form');
+    containers.forEach(container => {
+      if (allElements.length < 20) {
+        allElements.push(container as HTMLElement);
+      }
+    });
+    
+    for (const el of allElements) {
+      const reactInstance = this.getReactInstance(el);
+      if (reactInstance) {
+        // Search for useFormState hook patterns
+        const formState = this.searchHooksForFormState(reactInstance, fieldName);
+        if (formState !== null) {
+          return formState;
+        }
+        
+        // Search for form context
+        const contextState = this.searchContextForFormState(reactInstance, fieldName);
+        if (contextState !== null) {
+          return contextState;
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Search React hooks for form state
+   */
+  private searchHooksForFormState(reactInstance: any, fieldName: string): any {
+    if (!reactInstance?.memoizedState) return null;
+    
+    let hook = reactInstance.memoizedState;
+    while (hook) {
+      if (hook.memoizedState) {
+        // Check if this looks like useFormState result
+        if (hook.memoizedState.initialValues && fieldName in hook.memoizedState.initialValues) {
+          this._forceLog(`✅ Found initial value in React hook for ${fieldName}:`, hook.memoizedState.initialValues[fieldName]);
+          return hook.memoizedState.initialValues[fieldName];
+        }
+        
+        // Check if this is a form state object
+        if (typeof hook.memoizedState === 'object' && hook.memoizedState.values && hook.memoizedState.initialValues) {
+          if (fieldName in hook.memoizedState.initialValues) {
+            this._forceLog(`✅ Found initial value in form state hook for ${fieldName}:`, hook.memoizedState.initialValues[fieldName]);
+            return hook.memoizedState.initialValues[fieldName];
+          }
+        }
+      }
+      hook = hook.next;
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Search React context for form state
+   */
+  private searchContextForFormState(reactInstance: any, fieldName: string): any {
+    if (!reactInstance?.dependencies?.firstContext) return null;
+    
+    let context = reactInstance.dependencies.firstContext;
+    while (context) {
+      if (context.memoizedValue) {
+        // Check if context contains initialValues
+        if (context.memoizedValue.initialValues && fieldName in context.memoizedValue.initialValues) {
+          this._forceLog(`✅ Found initial value in React context for ${fieldName}:`, context.memoizedValue.initialValues[fieldName]);
+          return context.memoizedValue.initialValues[fieldName];
+        }
+        
+        // Check nested form state in context
+        if (context.memoizedValue.form?.getState) {
+          try {
+            const state = context.memoizedValue.form.getState();
+            if (state.initialValues && fieldName in state.initialValues) {
+              this._forceLog(`✅ Found initial value in context form API for ${fieldName}:`, state.initialValues[fieldName]);
+              return state.initialValues[fieldName];
+            }
+          } catch (error) {
+            // Ignore errors
+          }
+        }
+      }
+      context = context.next;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Extract initial value from Formik
+   */
+  private extractFormikInitialValue(
+    element: HTMLElement,
+    fieldName: string
+  ): string | boolean | string[] | null {
+    // Try to find Formik's initialValues
+    const reactInstance = this.getReactInstance(element);
+    if (reactInstance) {
+      const formikApi = this.extractFormikApi(reactInstance);
+      if (formikApi && formikApi.initialValues && fieldName in formikApi.initialValues) {
+        this._forceLog(`🔍 Found Formik initial value for ${fieldName}:`, formikApi.initialValues[fieldName]);
+        return formikApi.initialValues[fieldName];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Extract initial value from native HTML forms
+   */
+  private extractNativeInitialValue(element: HTMLElement): string | boolean | string[] {
+    const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+    
+    // For native forms, use HTML attributes and defaults
+    if (input.type === 'checkbox') {
+      return (input as HTMLInputElement).defaultChecked;
+    } else if (input.type === 'radio') {
+      return (input as HTMLInputElement).defaultChecked
+        ? (input as HTMLInputElement).defaultValue
+        : '';
+    } else if (input.tagName === 'SELECT') {
+      const select = input as HTMLSelectElement;
+      if (select.multiple) {
+        return Array.from(select.options)
+          .filter(option => option.defaultSelected)
+          .map(option => option.value);
+      } else {
+        // For single select, find the default selected option
+        const defaultOption = Array.from(select.options).find(
+          option => option.defaultSelected
+        );
+        return defaultOption ? defaultOption.value : '';
+      }
+    } else if (input.tagName === 'TEXTAREA') {
+      return (input as HTMLTextAreaElement).defaultValue || '';
+    } else if (element.tagName === 'BUTTON' && element.hasAttribute('data-value')) {
+      // For ReScript SelectBox, try to get original data-value
+      return element.getAttribute('data-value') || '';
+    } else {
+      // For regular input elements
+      return (input as HTMLInputElement).defaultValue || '';
+    }
   }
 
   /**
@@ -1009,5 +1307,237 @@ export class EnhancedFormDetector {
     
     this._forceLog(`🚀 Using form ${bestForm.id} (${bestForm.formLibrary}) for filling`);
     return this.setFormValues(bestForm.id, fields);
+  }
+
+  /**
+   * Reset form to initial values
+   */
+  public resetFormToInitialValues(formId: string): boolean {
+    const form = this.forms.get(formId);
+    if (!form) {
+      this._forceLog(`❌ Form not found: ${formId}`);
+      return false;
+    }
+
+    this._forceLog(`🔄 Resetting form ${formId} to initial values`);
+    let success = true;
+    
+    form.fields.forEach((field, fieldName) => {
+      if (!this.setFieldValue(formId, fieldName, field.initialValue)) {
+        success = false;
+      }
+    });
+
+    this._forceLog(`📊 Reset result: ${success ? 'SUCCESS' : 'PARTIAL_FAILURE'}`);
+    return success;
+  }
+
+  /**
+   * Get initial values for a specific form
+   */
+  public getFormInitialValues(formId: string): Record<string, any> | null {
+    const form = this.forms.get(formId);
+    if (!form) {
+      this._forceLog(`❌ Form not found: ${formId}`);
+      return null;
+    }
+
+    const initialValues: Record<string, any> = {};
+    form.fields.forEach((field, fieldName) => {
+      initialValues[fieldName] = field.initialValue;
+    });
+
+    return initialValues;
+  }
+
+  /**
+   * Get initial values for all forms
+   */
+  public getAllFormsInitialValues(): Record<string, Record<string, any>> {
+    const allInitialValues: Record<string, Record<string, any>> = {};
+
+    this.forms.forEach((form, formId) => {
+      const formInitialValues: Record<string, any> = {};
+      form.fields.forEach((field, fieldName) => {
+        formInitialValues[fieldName] = field.initialValue;
+      });
+      allInitialValues[formId] = formInitialValues;
+    });
+
+    return allInitialValues;
+  }
+
+  /**
+   * Refresh form values (re-read current values from DOM)
+   */
+  public refreshFormValues(formId: string): boolean {
+    const form = this.forms.get(formId);
+    if (!form) {
+      this._forceLog(`❌ Form not found: ${formId}`);
+      return false;
+    }
+
+    form.fields.forEach((field, _fieldName) => {
+      const element = field.element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+      // Update current value based on element type
+      if (field.type === 'checkbox') {
+        field.value = (element as HTMLInputElement).checked;
+      } else if (field.type === 'radio') {
+        field.value = (element as HTMLInputElement).checked ? element.value : '';
+      } else if (field.type === 'select-multiple') {
+        const select = element as HTMLSelectElement;
+        field.value = Array.from(select.selectedOptions).map(option => option.value);
+      } else if (field.type === 'selectbox' && element.tagName === 'BUTTON') {
+        field.value = element.getAttribute('data-value') || '';
+      } else {
+        field.value = element.value || '';
+      }
+    });
+
+    this._forceLog(`✅ Refreshed values for form ${formId}`);
+    return true;
+  }
+
+  /**
+   * Check if form has been modified from initial values
+   */
+  public isFormModified(formId: string): boolean {
+    const form = this.forms.get(formId);
+    if (!form) {
+      this._forceLog(`❌ Form not found: ${formId}`);
+      return false;
+    }
+
+    // Refresh current values before comparing
+    this.refreshFormValues(formId);
+
+    for (const [_fieldName, field] of form.fields) {
+      if (JSON.stringify(field.value) !== JSON.stringify(field.initialValue)) {
+        this._forceLog(`🔍 Form ${formId} is modified - field ${field.name}: current=${JSON.stringify(field.value)}, initial=${JSON.stringify(field.initialValue)}`);
+        return true;
+      }
+    }
+
+    this._forceLog(`✅ Form ${formId} is not modified`);
+    return false;
+  }
+
+  /**
+   * Get modified fields (fields that differ from initial values)
+   */
+  public getModifiedFields(formId: string): Record<string, { currentValue: any; initialValue: any }> {
+    const form = this.forms.get(formId);
+    if (!form) {
+      this._forceLog(`❌ Form not found: ${formId}`);
+      return {};
+    }
+
+    // Refresh current values before comparing
+    this.refreshFormValues(formId);
+
+    const modifiedFields: Record<string, { currentValue: any; initialValue: any }> = {};
+
+    form.fields.forEach((field, fieldName) => {
+      if (JSON.stringify(field.value) !== JSON.stringify(field.initialValue)) {
+        modifiedFields[fieldName] = {
+          currentValue: field.value,
+          initialValue: field.initialValue,
+        };
+      }
+    });
+
+    this._forceLog(`📊 Found ${Object.keys(modifiedFields).length} modified fields in form ${formId}`);
+    return modifiedFields;
+  }
+
+  /**
+   * Clear all field values in a form
+   */
+  public clearForm(formId: string): boolean {
+    const form = this.forms.get(formId);
+    if (!form) {
+      this._forceLog(`❌ Form not found: ${formId}`);
+      return false;
+    }
+
+    this._forceLog(`🧹 Clearing all values in form ${formId}`);
+    let success = true;
+    
+    form.fields.forEach((field, fieldName) => {
+      const clearValue = field.type === 'checkbox' ? false : '';
+      if (!this.setFieldValue(formId, fieldName, clearValue)) {
+        success = false;
+      }
+    });
+
+    this._forceLog(`📊 Clear result: ${success ? 'SUCCESS' : 'PARTIAL_FAILURE'}`);
+    return success;
+  }
+
+  /**
+   * Get form context in the format expected by the user
+   */
+  public getFormContext(formId: string): any | null {
+    const form = this.forms.get(formId);
+    if (!form) {
+      this._forceLog(`❌ Form not found: ${formId}`);
+      return null;
+    }
+
+    // Refresh values to get current state
+    this.refreshFormValues(formId);
+
+    const fields = Array.from(form.fields.values()).map(field => ({
+      name: field.name,
+      type: field.type,
+      value: field.value,
+      initialValue: field.initialValue,
+      label: field.label,
+      placeholder: field.placeholder,
+      required: field.required,
+      disabled: field.disabled,
+      formLibrary: field.formLibrary,
+    }));
+
+    return {
+      formId: form.id,
+      formLibrary: form.formLibrary,
+      fields,
+    };
+  }
+
+  /**
+   * Get all form contexts with initial values
+   */
+  public getAllFormContexts(): any[] {
+    return Array.from(this.forms.values()).map(form => {
+      // Refresh values to get current state
+      this.refreshFormValues(form.id);
+      
+      return {
+        formId: form.id,
+        formLibrary: form.formLibrary,
+        fields: Array.from(form.fields.values()).map(field => ({
+          name: field.name,
+          type: field.type,
+          value: field.value,
+          initialValue: field.initialValue,
+          label: field.label,
+          placeholder: field.placeholder,
+          required: field.required,
+          disabled: field.disabled,
+          formLibrary: field.formLibrary,
+        })),
+      };
+    });
+  }
+
+  /**
+   * Dispose of the detector and clean up resources
+   */
+  public dispose(): void {
+    this.forms.clear();
+    this._forceLog('🧹 Enhanced Form Detector disposed');
   }
 }

@@ -693,10 +693,15 @@ export class FormRegistry {
         return;
       }
 
+      // Create proper FormFieldValue objects
+      const currentValue = this.createFormFieldValue(htmlElement);
+      const initialValue = this.extractFormInitialValue(htmlElement);
+      
       const field: FormFieldContext = {
         name: htmlElement.name || htmlElement.id || '',
         type: htmlElement.type || htmlElement.tagName.toLowerCase(),
-        value: htmlElement.value || '',
+        value: currentValue,
+        initialValue: initialValue,
         placeholder: (htmlElement as HTMLInputElement).placeholder || undefined,
         required: htmlElement.required,
         disabled: htmlElement.disabled,
@@ -1292,6 +1297,93 @@ export class FormRegistry {
       });
       resolve();
     });
+  }
+
+  /**
+   * Create a proper FormFieldValue object from an HTML element
+   */
+  private createFormFieldValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FormFieldValue {
+    if (element.type === 'checkbox') {
+      return {
+        type: 'boolean',
+        value: (element as HTMLInputElement).checked
+      };
+    } else if (element.type === 'radio') {
+      return {
+        type: 'boolean', 
+        value: (element as HTMLInputElement).checked
+      };
+    } else if (element.tagName === 'SELECT' && (element as HTMLSelectElement).multiple) {
+      const select = element as HTMLSelectElement;
+      const selectedValues = Array.from(select.selectedOptions).map(option => option.value);
+      return {
+        type: 'array',
+        value: selectedValues
+      };
+    } else if (element.type === 'number') {
+      const numValue = parseFloat(element.value) || 0;
+      return {
+        type: 'number',
+        value: numValue
+      };
+    } else {
+      return {
+        type: 'string',
+        value: element.value || ''
+      };
+    }
+  }
+
+  /**
+   * Extract initial value for a form field
+   */
+  private extractFormInitialValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FormFieldValue {
+    if (element.type === 'checkbox') {
+      return {
+        type: 'boolean',
+        value: (element as HTMLInputElement).defaultChecked
+      };
+    } else if (element.type === 'radio') {
+      return {
+        type: 'boolean',
+        value: (element as HTMLInputElement).defaultChecked
+      };
+    } else if (element.tagName === 'SELECT') {
+      const select = element as HTMLSelectElement;
+      if (select.multiple) {
+        const defaultValues = Array.from(select.options)
+          .filter(option => option.defaultSelected)
+          .map(option => option.value);
+        return {
+          type: 'array',
+          value: defaultValues
+        };
+      } else {
+        const defaultOption = Array.from(select.options).find(
+          option => option.defaultSelected
+        );
+        return {
+          type: 'string',
+          value: defaultOption ? defaultOption.value : ''
+        };
+      }
+    } else if (element.tagName === 'TEXTAREA') {
+      return {
+        type: 'string',
+        value: (element as HTMLTextAreaElement).defaultValue || ''
+      };
+    } else if (element.type === 'number') {
+      const defaultValue = parseFloat((element as HTMLInputElement).defaultValue) || 0;
+      return {
+        type: 'number',
+        value: defaultValue
+      };
+    } else {
+      return {
+        type: 'string',
+        value: (element as HTMLInputElement).defaultValue || ''
+      };
+    }
   }
 
   private _tryEnhancedFormDetector(fields: Record<string, string>): FormFillResult | null {

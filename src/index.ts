@@ -5,6 +5,7 @@ export { AutomationEngine } from '@/core/AutomationEngine';
 export { ActionExecutor } from '@/actions/ActionExecutor';
 export { DOMActions } from '@/actions/DOMActions';
 export { FormRegistry } from '@/forms/FormRegistry';
+export { EnhancedFormDetector } from '@/forms/EnhancedFormDetector';
 export { ContextCapture } from '@/context/ContextCapture';
 
 export type {
@@ -28,7 +29,6 @@ export type {
   FormFillResult,
   FormLibrary,
   FormRegistryConfig,
-  FormState,
   NavigationOptions,
   PageContext,
   ScreenshotOptions,
