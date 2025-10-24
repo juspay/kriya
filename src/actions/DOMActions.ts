@@ -16,6 +16,17 @@ export class DOMActions {
     this._initialized = false;
   }
 
+  /**
+   * Force log function that always logs regardless of debug mode
+   */
+  private forcelog(...args: any[]): void {
+        console.log('🔍 KRIYA-ENHANCEDD:', ...args);
+        console.info('🔍 KRIYA-ENHANCEDD:', ...args);
+        console.warn('🔍 KRIYA-ENHANCEDD:', ...args);
+        // Also try direct console access
+        (window as any).console?.log?.('🔍 KRIYA-ENHANCEDD:', ...args);
+  }
+
   public initialize(): void {
     this._initialized = true;
   }
@@ -66,18 +77,27 @@ export class DOMActions {
 
     let element = await this._findElement(options.selector, options.description);
 
+    this.forcelog(`[KRIYA DEBUG] Click attempt - Found element:`, element);
+    this.forcelog(`[KRIYA DEBUG] Click attempt - Element tag: ${element.tagName}`);
+    this.forcelog(`[KRIYA DEBUG] Click attempt - Element href: ${element.getAttribute('href')}`);
+    this.forcelog(`[KRIYA DEBUG] Click attempt - Element clickable: ${this._isElementClickable(element)}`);
+
     // If the found element is not directly clickable, try to find a clickable child or parent
     if (!this._isElementClickable(element)) {
+      this.forcelog(`[KRIYA DEBUG] Element not directly clickable, looking for alternatives...`);
       // First try to find a clickable child
       const clickableChild = this._findClickableChild(element);
       if (clickableChild) {
+        this.forcelog(`[KRIYA DEBUG] Found clickable child:`, clickableChild);
         element = clickableChild;
       } else {
         // If no clickable child, try to find a clickable parent
         const clickableParent = this._findClickableParent(element);
         if (clickableParent) {
+          this.forcelog(`[KRIYA DEBUG] Found clickable parent:`, clickableParent);
           element = clickableParent;
         } else {
+          this.forcelog(`[KRIYA DEBUG] No clickable parent or child found`);
           throw new AutomationError(
             'Element is not clickable and no clickable parent or child found',
             'ELEMENT_NOT_FOUND',
@@ -87,13 +107,31 @@ export class DOMActions {
       }
     }
 
+    this.forcelog(`[KRIYA DEBUG] About to click element:`, element);
+    this.forcelog(`[KRIYA DEBUG] Click options:`, {
+      position: options.position,
+      button: options.button || 'left',
+      clickCount: options.clickCount || 1
+    });
+
     try {
+      // Scroll element into view first
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // Wait a small moment for scroll to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       if (options.position) {
+        this.forcelog(`[KRIYA DEBUG] Clicking at position:`, options.position);
         this._clickAtPosition(element, options.position, options.button, options.clickCount);
       } else {
+        this.forcelog(`[KRIYA DEBUG] Clicking element directly`);
         this._clickElement(element, options.button, options.clickCount);
       }
+      
+      this.forcelog(`[KRIYA DEBUG] Click events dispatched successfully`);
     } catch (error) {
+      this.forcelog(`[KRIYA DEBUG] Click failed with error:`, error);
       throw new AutomationError(
         `Click failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'EXECUTION_FAILED',
@@ -201,7 +239,58 @@ export class DOMActions {
 
     scores.sort((a, b) => b.score - a.score);
 
+    // DEBUG: Log top 10 scoring elements for debugging
+    if (this._config.debugMode) {
+      this.forcelog(`[KRIYA DEBUG] Searching for: "${description}"`);
+      this.forcelog('[KRIYA DEBUG] Top 10 scoring elements:');
+      scores.slice(0, 10).forEach((item, index) => {
+        const { element, score } = item;
+        const tagName = element.tagName.toLowerCase();
+        const text = element.textContent?.trim().substring(0, 100) || '';
+        const href = element.getAttribute('href') || '';
+        const clickable = this._isElementClickable(element);
+        const dataDesignSystem = element.getAttribute('data-design-system') || '';
+        const className = element.className || '';
+        
+        this.forcelog(`  ${index + 1}. Score: ${score} | Tag: ${tagName} | Clickable: ${clickable} | Text: "${text}" | Href: "${href}" | data-design-system: "${dataDesignSystem}" | class: "${className.substring(0, 50)}"`);
+      });
+    }
+
+    // DEBUG: Log additional info for YouTube-specific debugging
+    if (this._config.debugMode && lowerDescription.includes('youtube')) {
+      this.forcelog(`[KRIYA DEBUG] YouTube-specific analysis:`);
+      
+      // Look for elements with YouTube in href
+      const youtubeLinks = Array.from(document.querySelectorAll('a[href*="youtube"]')) as HTMLElement[];
+      this.forcelog(`[KRIYA DEBUG] Found ${youtubeLinks.length} elements with YouTube in href:`);
+      youtubeLinks.forEach((link, index) => {
+        const score = this._calculateElementScore(link, lowerDescription);
+        const clickable = this._isElementClickable(link);
+        this.forcelog(`  YouTube Link ${index + 1}: Score: ${score} | Clickable: ${clickable} | Text: "${link.textContent?.trim()}" | Href: "${link.getAttribute('href')}"`);
+      });
+
+      // Look for elements with data-design-system
+      const designSystemElements = Array.from(document.querySelectorAll('[data-design-system]')) as HTMLElement[];
+      this.forcelog(`[KRIYA DEBUG] Found ${designSystemElements.length} elements with data-design-system:`);
+      designSystemElements.slice(0, 5).forEach((element, index) => {
+        const score = this._calculateElementScore(element, lowerDescription);
+        const clickable = this._isElementClickable(element);
+        const text = element.textContent?.trim() || '';
+        this.forcelog(`  Design System ${index + 1}: Score: ${score} | Clickable: ${clickable} | Text: "${text.substring(0, 50)}" | data-design-system: "${element.getAttribute('data-design-system')}"`);
+      });
+    }
+
     const bestMatch = scores[0];
+    
+    // DEBUG: Log the selected element
+    if (this._config.debugMode && bestMatch && bestMatch.score > 0) {
+      this.forcelog(`[KRIYA DEBUG] Selected element:`, bestMatch.element);
+      this.forcelog(`[KRIYA DEBUG] Selected element score: ${bestMatch.score}`);
+      this.forcelog(`[KRIYA DEBUG] Selected element clickable: ${this._isElementClickable(bestMatch.element)}`);
+    } else if (this._config.debugMode) {
+      this.forcelog(`[KRIYA DEBUG] No element found with score > 0`);
+    }
+
     return bestMatch && bestMatch.score > 0 ? bestMatch.element : null;
   }
 
@@ -309,12 +398,28 @@ export class DOMActions {
   private _calculateElementScore(element: HTMLElement, description: string): number {
     let score = 0;
 
-    const textContent = element.textContent?.toLowerCase() ?? '';
-    const placeholder = (element as HTMLInputElement).placeholder?.toLowerCase() ?? '';
-    const label = element.getAttribute('aria-label')?.toLowerCase() ?? '';
-    const title = element.getAttribute('title')?.toLowerCase() ?? '';
+    // Enhanced text content processing - handle whitespace and invisible characters
+    const rawTextContent = element.textContent ?? '';
+    const textContent = rawTextContent.toLowerCase().trim().replace(/\s+/g, ' '); // Normalize whitespace
+    const placeholder = (element as HTMLInputElement).placeholder?.toLowerCase().trim() ?? '';
+    const label = element.getAttribute('aria-label')?.toLowerCase().trim() ?? '';
+    const title = element.getAttribute('title')?.toLowerCase().trim() ?? '';
     const id = element.id?.toLowerCase() ?? '';
     const className = String(element.className || '').toLowerCase();
+
+    // Normalize the description as well
+    const normalizedDescription = description.toLowerCase().trim().replace(/\s+/g, ' ');
+
+    // DEBUG: Log text comparison for problematic elements
+    if (this._config.debugMode && (textContent.includes('bulk') || textContent.includes('operation'))) {
+      this.forcelog(`[KRIYA DEBUG] Text comparison for ${element.tagName}:`);
+      this.forcelog(`  Raw text: "${rawTextContent}"`);
+      this.forcelog(`  Normalized text: "${textContent}"`);
+      this.forcelog(`  Target: "${normalizedDescription}"`);
+      this.forcelog(`  Exact match: ${textContent === normalizedDescription}`);
+      this.forcelog(`  Contains match: ${textContent.includes(normalizedDescription)}`);
+      this.forcelog(`  Element: `, element);
+    }
     
     // Check data attributes for button text and other descriptive content
     const dataButtonText = element.getAttribute('data-button-text')?.toLowerCase() ?? '';
@@ -332,26 +437,78 @@ export class DOMActions {
     const selectBoxButtonText = this._extractSelectBoxButtonText(element);
     const formFieldName = this._extractFormFieldName(element);
 
-    // HIGHEST Priority: Exact breadcrumb matches (navigation elements)
-    if (dataBreadcrumb.trim() === description) score += 20; // Highest priority for exact breadcrumb matches
-    if (dataBreadcrumb.includes(description)) score += 15; // High priority for breadcrumb navigation
+    // NESTED ELEMENT HANDLING: Check if this element contains the target text in child elements
+    // This is crucial for complex nested structures like your Bulk Operations element
+    let hasNestedTextMatch = false;
+    if (textContent.includes(description)) {
+      // Check if the text match comes from a direct child vs deeply nested
+      const directChildrenText = Array.from(element.children).map(child => 
+        child.textContent?.toLowerCase() ?? ''
+      ).join(' ');
+      
+      if (directChildrenText.includes(description)) {
+        hasNestedTextMatch = true;
+      }
+    }
 
-    // High priority matches (exact text content)
-    if (textContent.trim() === description) score += 12;
-    if (textContent.includes(description)) score += 8;
-    if (dataButtonText.trim() === description) score += 12;
-    if (dataButtonText.includes(description)) score += 8;
+    // HIGHEST Priority: URL + Text Content Combination (like YouTube links)
+    const href = element.getAttribute('href')?.toLowerCase() ?? '';
+    if (href && textContent.includes(normalizedDescription)) {
+      // Check if the href contains the same text as the description (case insensitive)
+      if (href.includes(normalizedDescription)) {
+        score += 25; // Very high score for URL + text content match
+      } else {
+        score += 18; // High score for any URL with matching text content
+      }
+    }
+
+    // HIGHEST Priority: Exact breadcrumb matches (navigation elements)
+    if (dataBreadcrumb.trim() === normalizedDescription) score += 20; // Highest priority for exact breadcrumb matches
+    if (dataBreadcrumb.includes(normalizedDescription)) score += 15; // High priority for breadcrumb navigation
+
+    // High priority matches (exact text content) - using normalized text
+    if (textContent === normalizedDescription) score += 12;
+    if (textContent.includes(normalizedDescription)) {
+      // Boost score for clickable elements that contain the text (like your <a> element)
+      const tagName = element.tagName.toLowerCase();
+      if ((tagName === 'a' && element.getAttribute('href')) || tagName === 'button') {
+        score += 10; // Higher score for clickable elements containing the text
+      } else {
+        score += 8;
+      }
+    }
+    
+    // FALLBACK: Check if any individual words from description match
+    const descriptionWords = normalizedDescription.split(' ');
+    const textWords = textContent.split(' ');
+    const matchingWords = descriptionWords.filter(word => textWords.some(textWord => textWord.includes(word)));
+    
+    if (matchingWords.length === descriptionWords.length && descriptionWords.length > 1) {
+      // All words from description found in text
+      const tagName = element.tagName.toLowerCase();
+      if ((tagName === 'a' && element.getAttribute('href')) || tagName === 'button') {
+        score += 9; // High score for word-based match in clickable elements
+      } else {
+        score += 6; // Lower score for word-based match in non-clickable elements
+      }
+    } else if (matchingWords.length > 0) {
+      // Partial word match
+      score += Math.min(matchingWords.length * 2, 5);
+    }
+    
+    if (dataButtonText.trim() === normalizedDescription) score += 12;
+    if (dataButtonText.includes(normalizedDescription)) score += 8;
     
     // Exact matches for other descriptive attributes
-    if (placeholder.trim() === description) score += 10;
-    if (label.trim() === description) score += 10;
-    if (title.trim() === description) score += 10;
-    if (dataDesignSystem.trim() === description && dataDesignSystem !== 'true') score += 10;
+    if (placeholder === normalizedDescription) score += 10;
+    if (label === normalizedDescription) score += 10;
+    if (title === normalizedDescription) score += 10;
+    if (dataDesignSystem.trim() === normalizedDescription && dataDesignSystem !== 'true') score += 10;
     
     // Partial matches for descriptive attributes
-    if (placeholder.includes(description)) score += 6;
-    if (label.includes(description)) score += 6;
-    if (title.includes(description)) score += 6;
+    if (placeholder.includes(normalizedDescription)) score += 6;
+    if (label.includes(normalizedDescription)) score += 6;
+    if (title.includes(normalizedDescription)) score += 6;
     
     // Enhanced SelectBox component scoring
     if (isSelectBoxComponent) {
@@ -386,16 +543,27 @@ export class DOMActions {
 
     // Bonus for clickable elements (prefer directly clickable elements)
     const tagName = element.tagName.toLowerCase();
-    if (tagName === 'a' && element.getAttribute('href')) score += 5;
+    if (tagName === 'a' && element.getAttribute('href')) score += 7; // Increased from 5 to 7
     if (tagName === 'button') score += 5;
     if (element.getAttribute('onclick')) score += 3;
     if (element.getAttribute('role') === 'button') score += 3;
+
+    // NESTED STRUCTURE BONUS: Give extra points to clickable parents that contain target text
+    if (hasNestedTextMatch && ((tagName === 'a' && element.getAttribute('href')) || tagName === 'button')) {
+      score += 5; // Extra bonus for clickable parents of nested text
+    }
 
     // Penalize hidden or disabled elements
     if (element.getAttribute('aria-hidden') === 'true') score -= 10;
     if (element.style.display === 'none') score -= 10;
     if (element.style.visibility === 'hidden') score -= 10;
     if ((element as HTMLButtonElement).disabled) score -= 8;
+
+    // PENALIZE NON-CLICKABLE ELEMENTS that contain text but aren't actionable
+    // This prevents text-containing divs from scoring higher than their clickable parents
+    if (textContent.includes(description) && !this._isElementClickable(element)) {
+      score -= 3; // Reduce score for non-clickable elements
+    }
 
     return score;
   }
@@ -475,6 +643,9 @@ export class DOMActions {
     button: ClickOptions['button'], 
     clickCount: number
   ): void {
+    this.forcelog(`[KRIYA DEBUG] _clickElement called for:`, element.tagName, element.getAttribute('href'));
+    
+    // Method 1: Try synthetic events first
     const eventOptions = {
       bubbles: true,
       cancelable: true,
@@ -482,13 +653,259 @@ export class DOMActions {
       detail: clickCount,
     };
 
+    let clickHandled = false;
+
     for (let i = 0; i < clickCount; i++) {
-      element.dispatchEvent(new MouseEvent('mousedown', eventOptions));
-      element.dispatchEvent(new MouseEvent('mouseup', eventOptions));
-      element.dispatchEvent(new MouseEvent('click', eventOptions));
+      const mousedownEvent = new MouseEvent('mousedown', eventOptions);
+      const mouseupEvent = new MouseEvent('mouseup', eventOptions);
+      const clickEvent = new MouseEvent('click', eventOptions);
+      
+      this.forcelog(`[KRIYA DEBUG] Dispatching mousedown event`);
+      const mousedownResult = element.dispatchEvent(mousedownEvent);
+      this.forcelog(`[KRIYA DEBUG] Mousedown event result:`, mousedownResult);
+      
+      this.forcelog(`[KRIYA DEBUG] Dispatching mouseup event`);
+      const mouseupResult = element.dispatchEvent(mouseupEvent);
+      this.forcelog(`[KRIYA DEBUG] Mouseup event result:`, mouseupResult);
+      
+      this.forcelog(`[KRIYA DEBUG] Dispatching click event`);
+      const clickResult = element.dispatchEvent(clickEvent);
+      this.forcelog(`[KRIYA DEBUG] Click event result:`, clickResult);
+      
+      if (clickResult) {
+        clickHandled = true;
+      }
+    }
+
+    // Method 2: For links, use the same simple approach as navigate() function
+    if (element.tagName.toLowerCase() === 'a') {
+      const href = element.getAttribute('href');
+      const target = element.getAttribute('target');
+      
+      this.forcelog(`[KRIYA DEBUG] Link detected - href: ${href}, target: ${target}`);
+      
+      if (href && (href.startsWith('http') || href.startsWith('/') || href.startsWith('./'))) {
+        // For relative URLs, construct the full URL
+        let fullUrl = href;
+        if (href.startsWith('/') || href.startsWith('./')) {
+          fullUrl = new URL(href, window.location.origin).href;
+          this.forcelog(`[KRIYA DEBUG] Converted relative URL to: ${fullUrl}`);
+        }
+        
+        // Method 2a: Use the same simple approach as navigate() function
+        this.forcelog(`[KRIYA DEBUG] Method 2a: Direct navigation (same as navigate function) for: ${fullUrl}`);
+        try {
+          if (target === '_blank') {
+            // For _blank targets, try window.open first, then fallback to direct navigation
+            this.forcelog(`[KRIYA DEBUG] Trying window.open for _blank target`);
+            const newWindow = window.open(fullUrl, '_blank');
+            if (newWindow && !newWindow.closed) {
+              this.forcelog(`[KRIYA DEBUG] window.open for _blank succeeded!`);
+              element.focus();
+              return; // Success! Exit early
+            } else {
+              this.forcelog(`[KRIYA DEBUG] window.open blocked, using direct navigation (same window)`);
+              // Fallback to same window navigation (like navigate function)
+              window.location.href = fullUrl;
+              this.forcelog(`[KRIYA DEBUG] Direct navigation executed (same as navigate function)`);
+              return; // Success! Exit early
+            }
+          } else {
+            // For same window, use direct navigation (same as navigate function)
+            this.forcelog(`[KRIYA DEBUG] Same window direct navigation (same as navigate function)`);
+            window.location.href = fullUrl;
+            this.forcelog(`[KRIYA DEBUG] Direct navigation executed (same as navigate function)`);
+            return; // Success! Exit early
+          }
+        } catch (error) {
+          this.forcelog(`[KRIYA DEBUG] Direct navigation failed:`, error);
+        }
+      }
+    }
+
+    // Method 3: Try native click if immediate redirect didn't work
+    if (!clickHandled || element.tagName.toLowerCase() === 'a') {
+      this.forcelog(`[KRIYA DEBUG] Trying native click() method`);
+      try {
+        (element as any).click();
+        this.forcelog(`[KRIYA DEBUG] Native click() executed`);
+      } catch (error) {
+        this.forcelog(`[KRIYA DEBUG] Native click() failed:`, error);
+      }
+    }
+
+    // Method 4: For links, try enhanced navigation techniques
+    if (element.tagName.toLowerCase() === 'a') {
+      const href = element.getAttribute('href');
+      const target = element.getAttribute('target');
+      
+      if (href && (href.startsWith('http') || href.startsWith('/') || href.startsWith('./'))) {
+        // For relative URLs, use the full URL we constructed earlier
+        let targetUrl = href;
+        if (href.startsWith('/') || href.startsWith('./')) {
+          targetUrl = new URL(href, window.location.origin).href;
+          this.forcelog(`[KRIYA DEBUG] Using full URL for enhanced techniques: ${targetUrl}`);
+        }
+        this.forcelog(`[KRIYA DEBUG] Attempting enhanced navigation techniques for: ${targetUrl}`);
+        
+        // Method 3a: Try creating a temporary hidden link and clicking it
+        this.forcelog(`[KRIYA DEBUG] Method 3a: Creating temporary link`);
+        try {
+          const tempLink = document.createElement('a');
+          tempLink.href = targetUrl;
+          tempLink.target = target || '_blank';
+          tempLink.style.display = 'none';
+          tempLink.style.position = 'absolute';
+          tempLink.style.left = '-9999px';
+          document.body.appendChild(tempLink);
+          
+          // Try clicking the temporary link
+          tempLink.click();
+          this.forcelog(`[KRIYA DEBUG] Temporary link clicked`);
+          
+          // Clean up
+          setTimeout(() => {
+            document.body.removeChild(tempLink);
+            this.forcelog(`[KRIYA DEBUG] Temporary link cleaned up`);
+          }, 100);
+          
+        } catch (error) {
+          this.forcelog(`[KRIYA DEBUG] Temporary link method failed:`, error);
+        }
+        
+        // Method 3b: Try focus + Enter key simulation
+        this.forcelog(`[KRIYA DEBUG] Method 3b: Focus + Enter key simulation`);
+        try {
+          element.focus();
+          
+          // Dispatch Enter key press
+          const enterKeyEvent = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            keyCode: 13,
+            which: 13,
+            bubbles: true,
+            cancelable: true
+          });
+          
+          const enterResult = element.dispatchEvent(enterKeyEvent);
+          this.forcelog(`[KRIYA DEBUG] Enter key event result:`, enterResult);
+          
+        } catch (error) {
+          this.forcelog(`[KRIYA DEBUG] Enter key simulation failed:`, error);
+        }
+        
+        // Method 3c: Enhanced direct navigation with user gesture simulation
+        setTimeout(() => {
+          const currentLocation = window.location.href;
+          this.forcelog(`[KRIYA DEBUG] Current location after enhanced methods: ${currentLocation}`);
+          
+          // Check if any method worked
+          if (target === '_blank' || currentLocation === window.location.href) {
+            this.forcelog(`[KRIYA DEBUG] Enhanced direct navigation needed`);
+            
+            try {
+              // Method 3c1: Try with user gesture flag
+              if (target === '_blank') {
+                this.forcelog(`[KRIYA DEBUG] Method 3c1: window.open with user gesture simulation`);
+                
+                // Create a click event on document to simulate user gesture
+                const userGestureEvent = new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window
+                });
+                document.dispatchEvent(userGestureEvent);
+                
+                // Try multiple window.open variations
+                let newWindow: Window | null = null;
+                
+                // Method 3c1a: Try without features parameter
+                newWindow = window.open(targetUrl, '_blank');
+                if (newWindow) {
+                  this.forcelog(`[KRIYA DEBUG] window.open without features succeeded`);
+                } else {
+                  this.forcelog(`[KRIYA DEBUG] window.open without features blocked`);
+                  
+                  // Method 3c1b: Try with minimal features
+                  newWindow = window.open(targetUrl, '_blank', 'toolbar=yes,scrollbars=yes,resizable=yes');
+                  if (newWindow) {
+                    this.forcelog(`[KRIYA DEBUG] window.open with minimal features succeeded`);
+                  } else {
+                    this.forcelog(`[KRIYA DEBUG] window.open with minimal features blocked`);
+                    
+                    // Method 3c1c: Try with popup-like features (sometimes works)
+                    newWindow = window.open(targetUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+                    if (newWindow) {
+                      this.forcelog(`[KRIYA DEBUG] window.open with popup features succeeded`);
+                    } else {
+                      this.forcelog(`[KRIYA DEBUG] All window.open methods blocked (likely popup blocker)`);
+                      
+                      // Method 3c2: Try assignment to parent window
+                      this.forcelog(`[KRIYA DEBUG] Method 3c2: Trying parent.location assignment`);
+                      try {
+                        if (window.parent && window.parent !== window) {
+                          window.parent.open(targetUrl, '_blank');
+                          this.forcelog(`[KRIYA DEBUG] parent.open() executed`);
+                        } else {
+                          // Method 3c3: Try creating and submitting a form
+                          this.forcelog(`[KRIYA DEBUG] Method 3c3: Creating form submission`);
+                          const form = document.createElement('form');
+                          form.action = targetUrl;
+                          form.target = '_blank';
+                          form.method = 'GET';
+                          form.style.display = 'none';
+                          document.body.appendChild(form);
+                          form.submit();
+                          
+                          setTimeout(() => {
+                            document.body.removeChild(form);
+                          }, 100);
+                          
+                          this.forcelog(`[KRIYA DEBUG] Form submission executed`);
+                          
+                          // Check if form submission worked
+                          setTimeout(() => {
+                            const finalLocation = window.location.href;
+                            if (finalLocation === currentLocation) {
+                              this.forcelog(`[KRIYA DEBUG] Form submission also failed - trying final fallback`);
+                              this._showNavigationAssistance(targetUrl);
+                            } else {
+                              this.forcelog(`[KRIYA DEBUG] Form submission appears to have worked`);
+                            }
+                          }, 500);
+                        }
+                      } catch (formError) {
+                        this.forcelog(`[KRIYA DEBUG] Form submission failed:`, formError);
+                        this._showNavigationAssistance(targetUrl);
+                      }
+                    }
+                  }
+                }
+              } else {
+                // For same window navigation
+                this.forcelog(`[KRIYA DEBUG] Same window navigation`);
+                try {
+                  window.location.href = targetUrl;
+                  this.forcelog(`[KRIYA DEBUG] window.location.href set for same window`);
+                } catch (navError) {
+                  this.forcelog(`[KRIYA DEBUG] Same window navigation failed:`, navError);
+                  this._showNavigationAssistance(targetUrl);
+                }
+              }
+            } catch (error) {
+              this.forcelog(`[KRIYA DEBUG] Enhanced direct navigation failed:`, error);
+              this._showNavigationAssistance(href);
+            }
+          } else {
+            this.forcelog(`[KRIYA DEBUG] Enhanced methods appear to have worked - page changed`);
+          }
+        }, 300); // Increased delay to allow for navigation
+      }
     }
 
     element.focus();
+    this.forcelog(`[KRIYA DEBUG] Element focused`);
   }
 
   private _clickAtPosition(
@@ -901,5 +1318,224 @@ export class DOMActions {
     }
     
     return '';
+  }
+
+  /**
+   * Show navigation assistance when automated clicking fails
+   */
+  private _showNavigationAssistance(href: string): void {
+    this.forcelog(`[KRIYA DEBUG] Showing navigation assistance for: ${href}`);
+    
+    try {
+      // Create a prominent notification overlay
+      const notification = document.createElement('div');
+      notification.id = 'kriya-navigation-assist';
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 999999;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        max-width: 350px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        animation: kriyaSlideIn 0.3s ease-out;
+      `;
+
+      // Add CSS animation
+      if (!document.getElementById('kriya-styles')) {
+        const style = document.createElement('style');
+        style.id = 'kriya-styles';
+        style.textContent = `
+          @keyframes kriyaSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+          @keyframes kriyaSlideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      notification.innerHTML = `
+        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+          <div style="
+            width: 24px; 
+            height: 24px; 
+            background: rgba(255,255,255,0.2); 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            margin-right: 12px;
+          ">🔗</div>
+          <strong style="font-size: 16px;">Kriya Navigation Assistant</strong>
+        </div>
+        <div style="margin-bottom: 15px; opacity: 0.9;">
+          Automatic navigation was blocked by browser security. 
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>Target:</strong> <span style="font-family: monospace; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">${href}</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <button id="kriya-open-link" style="
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+          ">📋 Copy Link</button>
+          <button id="kriya-dismiss" style="
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+          ">✕ Dismiss</button>
+        </div>
+        <div style="font-size: 12px; opacity: 0.7;">
+          The link has been copied to your clipboard for manual opening.
+        </div>
+      `;
+
+      // Add hover effects
+      const buttons = notification.querySelectorAll('button');
+      buttons.forEach(button => {
+        button.addEventListener('mouseenter', () => {
+          (button as HTMLElement).style.background = 'rgba(255,255,255,0.3)';
+        });
+        button.addEventListener('mouseleave', () => {
+          if (button.id === 'kriya-open-link') {
+            (button as HTMLElement).style.background = 'rgba(255,255,255,0.2)';
+          } else {
+            (button as HTMLElement).style.background = 'transparent';
+          }
+        });
+      });
+
+      // Copy link functionality
+      const copyButton = notification.querySelector('#kriya-open-link') as HTMLButtonElement;
+      copyButton.addEventListener('click', () => {
+        this.forcelog(`[KRIYA DEBUG] Copy link button clicked`);
+        try {
+          // Try to copy to clipboard
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(href).then(() => {
+              copyButton.innerHTML = '✅ Copied!';
+              setTimeout(() => {
+                copyButton.innerHTML = '📋 Copy Link';
+              }, 2000);
+            }).catch(() => {
+              this._fallbackCopyToClipboard(href, copyButton);
+            });
+          } else {
+            this._fallbackCopyToClipboard(href, copyButton);
+          }
+        } catch (error) {
+          this.forcelog(`[KRIYA DEBUG] Copy failed:`, error);
+          copyButton.innerHTML = '❌ Copy Failed';
+        }
+      });
+
+      // Dismiss functionality
+      const dismissButton = notification.querySelector('#kriya-dismiss') as HTMLButtonElement;
+      dismissButton.addEventListener('click', () => {
+        this.forcelog(`[KRIYA DEBUG] Dismiss button clicked`);
+        this._dismissNotification(notification);
+      });
+
+      // Auto-dismiss after 10 seconds
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          this._dismissNotification(notification);
+        }
+      }, 10000);
+
+      // Remove any existing notifications
+      const existing = document.getElementById('kriya-navigation-assist');
+      if (existing) {
+        existing.remove();
+      }
+
+      // Add to page
+      document.body.appendChild(notification);
+
+      // Automatically copy the link
+      setTimeout(() => {
+        copyButton.click();
+      }, 500);
+
+      this.forcelog(`[KRIYA DEBUG] Navigation assistance displayed`);
+
+    } catch (error) {
+      this.forcelog(`[KRIYA DEBUG] Failed to show navigation assistance:`, error);
+      
+      // Fallback: Just log and show alert
+      console.warn(`Kriya: Unable to navigate to ${href}. Please open this link manually.`);
+      
+      // Try basic alert as last resort
+      try {
+        alert(`Kriya Navigation: Please manually open this link: ${href}`);
+      } catch (alertError) {
+        this.forcelog(`[KRIYA DEBUG] Alert also failed:`, alertError);
+      }
+    }
+  }
+
+  private _fallbackCopyToClipboard(text: string, button: HTMLButtonElement): void {
+    try {
+      // Create a temporary textarea element
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        button.innerHTML = '✅ Copied!';
+        this.forcelog(`[KRIYA DEBUG] Fallback copy successful`);
+      } else {
+        button.innerHTML = '❌ Copy Failed';
+        this.forcelog(`[KRIYA DEBUG] Fallback copy failed`);
+      }
+      
+      setTimeout(() => {
+        button.innerHTML = '📋 Copy Link';
+      }, 2000);
+      
+    } catch (error) {
+      this.forcelog(`[KRIYA DEBUG] Fallback copy failed:`, error);
+      button.innerHTML = '❌ Copy Failed';
+    }
+  }
+
+  private _dismissNotification(notification: HTMLElement): void {
+    notification.style.animation = 'kriyaSlideOut 0.3s ease-in forwards';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
   }
 }
