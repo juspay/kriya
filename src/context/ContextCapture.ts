@@ -4,6 +4,7 @@ import type {
   ElementContext,
   EventCallback,
   EventType,
+  FormFieldValue,
   PageContext,
   ScreenshotOptions,
   ViewportInfo,
@@ -368,6 +369,48 @@ export class ContextCapture {
     return forms;
   }
 
+  private _toFormFieldValue(fieldType: string, value: unknown): FormFieldValue {
+    const normalizedType = fieldType.toLowerCase();
+
+    if (value instanceof File) {
+      return { type: 'file', value };
+    }
+
+    if (value instanceof FileList) {
+      const firstFile = value.length > 0 ? value[0] : undefined;
+      return { type: 'file', value: firstFile ?? '' };
+    }
+
+    if (Array.isArray(value)) {
+      const normalized = value.map(item => (item == null ? '' : String(item)));
+      return { type: 'array', value: normalized };
+    }
+
+    if (normalizedType.includes('file')) {
+      return { type: 'file', value: value == null ? '' : String(value) };
+    }
+
+    if (
+      normalizedType.includes('check') ||
+      normalizedType.includes('radio') ||
+      normalizedType.includes('bool') ||
+      normalizedType.includes('toggle')
+    ) {
+      return { type: 'boolean', value: Boolean(value) };
+    }
+
+    if (
+      normalizedType.includes('number') ||
+      normalizedType.includes('range') ||
+      normalizedType.includes('numeric')
+    ) {
+      const numericValue = typeof value === 'number' ? value : Number(value);
+      return { type: 'number', value: Number.isNaN(numericValue) ? 0 : numericValue };
+    }
+
+    return { type: 'string', value: value == null ? '' : String(value) };
+  }
+
   private _extractCustomFieldInfo(wrapper: HTMLElement, index: number): any | null {
     // Try multiple strategies to get a meaningful field name
     const fieldName = this._extractFieldName(wrapper, index);
@@ -388,15 +431,39 @@ export class ContextCapture {
     
     console.log(`📋 Kriya: Extracted field "${fieldName}" - type: ${fieldInfo.type}, value: "${fieldInfo.value}"`);
     
+    const normalizedValue = fieldInfo.value &&
+      typeof fieldInfo.value === 'object' &&
+      'type' in fieldInfo.value &&
+      'value' in fieldInfo.value
+      ? fieldInfo.value
+      : this._toFormFieldValue(fieldInfo.type, fieldInfo.value);
+    const normalizedInitialValue = fieldInfo.initialValue &&
+      typeof fieldInfo.initialValue === 'object' &&
+      'type' in fieldInfo.initialValue &&
+      'value' in fieldInfo.initialValue
+      ? fieldInfo.initialValue
+      : this._toFormFieldValue(fieldInfo.type, fieldInfo.initialValue ?? fieldInfo.value);
+    const normalizedOptions = fieldInfo.options
+      ? fieldInfo.options.map((option: unknown) =>
+          option &&
+          typeof option === 'object' &&
+          'type' in option &&
+          'value' in option
+            ? option
+            : this._toFormFieldValue('string', option)
+        )
+      : undefined;
+
     return {
       name: fieldName,
       type: fieldInfo.type,
-      value: fieldInfo.value,
+      value: normalizedValue,
+      initialValue: normalizedInitialValue,
       placeholder: fieldInfo.placeholder,
       required: fieldInfo.required || false,
       disabled: fieldInfo.disabled || false,
       label: label,
-      options: fieldInfo.options || undefined,
+      options: normalizedOptions,
     };
   }
 
@@ -432,11 +499,12 @@ export class ContextCapture {
       
       return {
         type: 'select',
-        value: currentValue,
+        value: this._toFormFieldValue('select', currentValue),
+        initialValue: this._toFormFieldValue('select', currentValue),
         displayText: displayText,
         buttonText: buttonText,
         placeholder: buttonText,
-        options: options.length > 0 ? options : undefined,
+        options: options.length > 0 ? options.map(option => this._toFormFieldValue('string', option)) : undefined,
       };
     }
     
@@ -446,7 +514,8 @@ export class ContextCapture {
       const input = inputElement as HTMLInputElement | HTMLTextAreaElement;
       return {
         type: input.type || 'text',
-        value: input.value || '',
+        value: this._toFormFieldValue(input.type || 'text', input.value || ''),
+        initialValue: this._toFormFieldValue(input.type || 'text', input.value || ''),
         placeholder: (input as HTMLInputElement).placeholder || undefined,
         required: input.required,
         disabled: input.disabled,
@@ -461,7 +530,8 @@ export class ContextCapture {
       
       return {
         type: 'button',
-        value: value,
+        value: this._toFormFieldValue('button', value),
+        initialValue: this._toFormFieldValue('button', value),
         placeholder: buttonText,
       };
     }
@@ -472,7 +542,8 @@ export class ContextCapture {
       const input = numericInput as HTMLInputElement;
       return {
         type: 'number',
-        value: input.value || '',
+        value: this._toFormFieldValue('number', input.value || ''),
+        initialValue: this._toFormFieldValue('number', input.value || ''),
         placeholder: input.placeholder || undefined,
         required: input.required,
         disabled: input.disabled,
@@ -505,7 +576,8 @@ export class ContextCapture {
       fields.push({
         name: fieldName,
         type: 'select',
-        value: currentValue,
+        value: this._toFormFieldValue('select', currentValue),
+        initialValue: this._toFormFieldValue('select', currentValue),
         displayText: displayText,
         buttonText: buttonText,
         placeholder: buttonText,
@@ -533,7 +605,8 @@ export class ContextCapture {
       fields.push({
         name: fieldName,
         type: input.type || 'text',
-        value: input.value || '',
+        value: this._toFormFieldValue(input.type || 'text', input.value || ''),
+        initialValue: this._toFormFieldValue(input.type || 'text', input.value || ''),
         placeholder: (input as HTMLInputElement).placeholder || undefined,
         required: input.required,
         disabled: input.disabled,
@@ -656,7 +729,8 @@ export class ContextCapture {
         fields.push({
           name: fieldName,
           type: 'euler-selectbox',
-          value: currentValue,
+          value: this._toFormFieldValue('select', currentValue),
+          initialValue: this._toFormFieldValue('select', currentValue),
           displayText: displayText,
           label: label || undefined,
           placeholder: selectboxTitle,
@@ -729,13 +803,13 @@ export class ContextCapture {
         fields.push({
           name: fieldName,
           type: 'class-selectbox',
-          value: currentValue,
-          initialValue: currentValue, // For now, use current value as initial value
+          value: this._toFormFieldValue('select', currentValue),
+          initialValue: this._toFormFieldValue('select', currentValue),
           label: label || undefined,
           placeholder: buttonText,
           required: false,
           disabled: button.disabled,
-          options: options.length > 0 ? options : undefined,
+          options: options.length > 0 ? options.map(option => this._toFormFieldValue('string', option)) : undefined,
           framework: 'Generic ReScript SelectBox',
         });
       }
@@ -796,12 +870,13 @@ export class ContextCapture {
         fields.push({
           name: fieldName,
           type: fieldType,
-          value: currentValue,
+          value: this._toFormFieldValue(fieldType, currentValue),
+          initialValue: this._toFormFieldValue(fieldType, currentValue),
           label: label || undefined,
           placeholder: (input as HTMLInputElement).placeholder || undefined,
           required: input.required || false,
           disabled: input.disabled || false,
-          options: options.length > 0 ? options : undefined,
+          options: options.length > 0 ? options.map(option => this._toFormFieldValue('string', option)) : undefined,
           framework: 'React Final Form',
         });
       }
@@ -956,13 +1031,14 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: isMultiSelect ? 'multiselect' : 'select',
-      value: isMultiSelect ? selectedValues : currentValue,
+      value: this._toFormFieldValue(isMultiSelect ? 'array' : 'select', isMultiSelect ? selectedValues : currentValue),
+      initialValue: this._toFormFieldValue(isMultiSelect ? 'array' : 'select', isMultiSelect ? selectedValues : currentValue),
       displayText: displayText,
       label: label || undefined,
       placeholder: selectboxTitle,
       required: isRequired,
       disabled: button?.disabled || button?.getAttribute('data-button-status') === 'disabled',
-      options: options.length > 0 ? options : undefined,
+      options: options.length > 0 ? options.map(option => this._toFormFieldValue('string', option)) : undefined,
       framework: 'Euler ReScript SelectBox',
       inputType: 'selectInput',
     };
@@ -972,7 +1048,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'text',
-      value: input.value || '',
+      value: this._toFormFieldValue('text', input.value || ''),
+      initialValue: this._toFormFieldValue('text', input.value || ''),
       label: label || undefined,
       placeholder: input.placeholder || undefined,
       required: input.required,
@@ -987,7 +1064,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'number',
-      value: input.value || '',
+      value: this._toFormFieldValue('number', input.value || ''),
+      initialValue: this._toFormFieldValue('number', input.value || ''),
       label: label || undefined,
       placeholder: input.placeholder || undefined,
       required: input.required,
@@ -1004,7 +1082,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'textarea',
-      value: textarea.value || '',
+      value: this._toFormFieldValue('textarea', textarea.value || ''),
+      initialValue: this._toFormFieldValue('textarea', textarea.value || ''),
       label: label || undefined,
       placeholder: textarea.placeholder || undefined,
       required: textarea.required,
@@ -1027,7 +1106,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: isDateRange ? 'daterange' : 'date',
-      value: currentValue,
+      value: this._toFormFieldValue(isDateRange ? 'daterange' : 'date', currentValue),
+      initialValue: this._toFormFieldValue(isDateRange ? 'daterange' : 'date', currentValue),
       label: label || undefined,
       placeholder: button?.textContent?.trim() || 'Select Date',
       required: wrapper.querySelector('.text-red-950') !== null,
@@ -1044,7 +1124,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'file',
-      value: fileInput?.files?.[0]?.name || '',
+      value: this._toFormFieldValue('file', fileInput?.files?.[0] || fileInput?.files || ''),
+      initialValue: this._toFormFieldValue('file', fileInput?.files?.[0] || fileInput?.files || ''),
       label: label || undefined,
       placeholder: button?.textContent?.trim() || 'Choose File',
       required: wrapper.querySelector('.text-red-950') !== null,
@@ -1060,7 +1141,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: input.type === 'radio' ? 'radio' : 'checkbox',
-      value: input.checked,
+      value: this._toFormFieldValue(input.type === 'radio' ? 'radio' : 'checkbox', input.checked),
+      initialValue: this._toFormFieldValue(input.type === 'radio' ? 'radio' : 'checkbox', input.checked),
       label: label || undefined,
       required: input.required,
       disabled: input.disabled,
@@ -1084,11 +1166,12 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'buttongroup',
-      value: currentValue,
+      value: this._toFormFieldValue('buttongroup', currentValue),
+      initialValue: this._toFormFieldValue('buttongroup', currentValue),
       label: label || undefined,
       required: wrapper.querySelector('.text-red-950') !== null,
       disabled: Array.from(buttons).every(btn => btn.disabled),
-      options: options,
+      options: options.map(option => this._toFormFieldValue('string', option)),
       framework: 'Euler ReScript ButtonGroup',
       inputType: 'btnGroupInput',
     };
@@ -1100,7 +1183,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'range',
-      value: rangeInput?.value || '',
+      value: this._toFormFieldValue('range', rangeInput?.value || ''),
+      initialValue: this._toFormFieldValue('range', rangeInput?.value || ''),
       label: label || undefined,
       required: wrapper.querySelector('.text-red-950') !== null,
       disabled: rangeInput?.disabled || false,
@@ -1118,7 +1202,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'color',
-      value: colorInput?.value || '#000000',
+      value: this._toFormFieldValue('color', colorInput?.value || '#000000'),
+      initialValue: this._toFormFieldValue('color', colorInput?.value || '#000000'),
       label: label || undefined,
       required: wrapper.querySelector('.text-red-950') !== null,
       disabled: colorInput?.disabled || false,
@@ -1139,7 +1224,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'tags',
-      value: tags,
+      value: this._toFormFieldValue('array', tags),
+      initialValue: this._toFormFieldValue('array', tags),
       label: label || undefined,
       placeholder: wrapper.querySelector('input')?.placeholder || 'Add tags',
       required: wrapper.querySelector('.text-red-950') !== null,
@@ -1157,7 +1243,8 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: 'button',
-      value: currentValue,
+      value: this._toFormFieldValue('button', currentValue),
+      initialValue: this._toFormFieldValue('button', currentValue),
       displayText: displayText,
       label: label || undefined,
       placeholder: displayText,
@@ -1205,12 +1292,13 @@ export class ContextCapture {
     return {
       name: fieldName,
       type: fieldType,
-      value: currentValue,
+      value: this._toFormFieldValue(fieldType, currentValue),
+      initialValue: this._toFormFieldValue(fieldType, currentValue),
       label: label || undefined,
       placeholder: (input as HTMLInputElement).placeholder || undefined,
       required: input.required || false,
       disabled: input.disabled || false,
-      options: options.length > 0 ? options : undefined,
+      options: options.length > 0 ? options.map(option => this._toFormFieldValue('string', option)) : undefined,
       framework: 'React Final Form',
       inputType: 'standardInput',
     };
@@ -1227,7 +1315,8 @@ export class ContextCapture {
       fields.push({
         name: fieldName,
         type: 'code',
-        value: '', // Monaco editor value would need special extraction
+        value: this._toFormFieldValue('string', ''), // Monaco editor value would need special extraction
+        initialValue: this._toFormFieldValue('string', ''),
         label: 'Code Editor',
         framework: 'Monaco Editor',
         inputType: 'monacoInput',
@@ -1241,7 +1330,8 @@ export class ContextCapture {
       fields.push({
         name: fieldName,
         type: 'richtext',
-        value: '', // Draft.js content would need special extraction
+        value: this._toFormFieldValue('string', ''), // Draft.js content would need special extraction
+        initialValue: this._toFormFieldValue('string', ''),
         label: 'Rich Text Editor',
         framework: 'Draft.js',
         inputType: 'draftPreviewInput',
@@ -1256,7 +1346,8 @@ export class ContextCapture {
       fields.push({
         name: fieldName,
         type: 'async-select',
-        value: button?.getAttribute('data-value') || '',
+        value: this._toFormFieldValue('select', button?.getAttribute('data-value') || ''),
+        initialValue: this._toFormFieldValue('select', button?.getAttribute('data-value') || ''),
         label: 'Async Select',
         placeholder: button?.textContent?.trim() || 'Loading...',
         framework: 'Async SelectBox',
@@ -1271,7 +1362,8 @@ export class ContextCapture {
       fields.push({
         name: fieldName,
         type: 'nested-select',
-        value: '', // Would need special extraction for nested values
+        value: this._toFormFieldValue('string', ''), // Would need special extraction for nested values
+        initialValue: this._toFormFieldValue('string', ''),
         label: 'Nested Dropdown',
         framework: 'Nested Dropdown',
         inputType: 'nestedDropdown',
@@ -1285,7 +1377,8 @@ export class ContextCapture {
       fields.push({
         name: fieldName,
         type: 'calendar',
-        value: '', // Calendar selection would need special extraction
+        value: this._toFormFieldValue('string', ''), // Calendar selection would need special extraction
+        initialValue: this._toFormFieldValue('string', ''),
         label: 'Calendar Input',
         framework: 'Calendar Input',
         inputType: 'calendarInputHighlighted',
@@ -1299,7 +1392,8 @@ export class ContextCapture {
       fields.push({
         name: fieldName,
         type: 'timerange',
-        value: '', // Time range would need special extraction
+        value: this._toFormFieldValue('string', ''), // Time range would need special extraction
+        initialValue: this._toFormFieldValue('string', ''),
         label: 'Time Range',
         framework: 'Time Range Input',
         inputType: 'timeRangeFields',

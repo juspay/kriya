@@ -565,10 +565,11 @@ export class FormRegistry {
       this._forceLog(
         `🚀 Filling form ${formId || 'any'} with ${Object.keys(fields).length} fields`
       );
-      this._forceLog(
-        `📋 Field details:`,
-        Object.entries(fields).map(([name, value]) => `${name}: "${value}" (${value.length} chars)`)
-      );
+      const fieldSummaries = Object.entries(fields).map(([name, value]) => {
+        const preview = value == null ? '' : String(value);
+        return `${name}: "${preview}" (${preview.length} chars)`;
+      });
+      this._forceLog(`📋 Field details:`, fieldSummaries);
 
       // Filter out invalid field names and empty values
       const validFields = this._filterValidFields(fields);

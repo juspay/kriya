@@ -7,6 +7,7 @@
 
 export interface EnhancedFormField {
   element: HTMLElement;
+  elements?: HTMLElement[];
   name: string;
   type: string;
   value: string | boolean | string[];
@@ -101,6 +102,22 @@ export class EnhancedFormDetector {
         if (form.formApi) {
           this._forceLog(`🚀 Form API available for ${form.id}:`, Object.keys(form.formApi));
         }
+        return;
+      }
+
+      const mergedForm: EnhancedDetectedForm = {
+        ...existingForm,
+        ...form,
+        fields: form.fields,
+        formApi: form.formApi ?? existingForm.formApi,
+      };
+      this.forms.set(form.id, mergedForm);
+      if (this.config.onFormDetected) {
+        this.config.onFormDetected(mergedForm);
+      }
+      this._forceLog(`♻️ Updated form: ${form.id} (${mergedForm.formLibrary})`);
+      if (mergedForm.formApi) {
+        this._forceLog(`🚀 Form API available for ${form.id}:`, Object.keys(mergedForm.formApi));
       }
     });
     
@@ -380,8 +397,43 @@ export class EnhancedFormDetector {
       elements.forEach(element => {
         const field = this.createFormField(element as HTMLElement, formLibrary);
         if (field && (this.config.includeDisabled || !field.disabled)) {
-          fields.set(field.name, field);
-          this._forceLog(`🔍 Field detected: "${field.name}" (${field.type}) in ${formLibrary} form`);
+          const existingField = fields.get(field.name);
+          if (
+            existingField &&
+            (field.type === 'checkbox' || field.type === 'radio') &&
+            existingField.type === field.type
+          ) {
+            const existingElements = existingField.elements ?? [existingField.element];
+            const mergedElements = [...existingElements, field.element];
+            existingField.elements = mergedElements;
+
+            if (field.type === 'checkbox') {
+              const checkedValues = mergedElements
+                .filter(el => (el as HTMLInputElement).checked)
+                .map(el => (el as HTMLInputElement).value);
+              existingField.value = checkedValues;
+              existingField.initialValue = checkedValues;
+            } else {
+              const checkedRadio = mergedElements.find(
+                el => (el as HTMLInputElement).checked
+              ) as HTMLInputElement | undefined;
+              existingField.value = checkedRadio ? checkedRadio.value : '';
+              existingField.initialValue = existingField.value;
+            }
+
+            existingField.required = existingField.required || field.required;
+            existingField.disabled = existingField.disabled && field.disabled;
+
+            this._forceLog(
+              `🔍 Field grouped: "${field.name}" (${field.type}) with ${mergedElements.length} elements in ${formLibrary} form`
+            );
+          } else {
+            if (field.type === 'checkbox' || field.type === 'radio') {
+              field.elements = [field.element];
+            }
+            fields.set(field.name, field);
+            this._forceLog(`🔍 Field detected: "${field.name}" (${field.type}) in ${formLibrary} form`);
+          }
         }
       });
     });
@@ -879,6 +931,7 @@ export class EnhancedFormDetector {
    */
   private setNativeFormValue(field: EnhancedFormField, value: any): boolean {
     const element = field.element;
+    const elements = field.elements ?? [field.element];
     
     // Handle ReScript SelectBox components
     if (field.type === 'selectbox' && element.tagName === 'BUTTON') {
@@ -888,10 +941,35 @@ export class EnhancedFormDetector {
     const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
     
     if (field.type === 'checkbox') {
-      (input as HTMLInputElement).checked = Boolean(value);
+      if (elements.length > 1) {
+        if (Array.isArray(value)) {
+          elements.forEach(el => {
+            const checkbox = el as HTMLInputElement;
+            checkbox.checked = value.includes(checkbox.value);
+          });
+        } else if (typeof value === 'string') {
+          elements.forEach(el => {
+            const checkbox = el as HTMLInputElement;
+            checkbox.checked = checkbox.value === value;
+          });
+        } else {
+          elements.forEach(el => {
+            (el as HTMLInputElement).checked = Boolean(value);
+          });
+        }
+      } else {
+        (input as HTMLInputElement).checked = Boolean(value);
+      }
     } else if (field.type === 'radio') {
-      if (input.value === value) {
-        (input as HTMLInputElement).checked = true;
+      if (elements.length > 1) {
+        elements.forEach(el => {
+          const radio = el as HTMLInputElement;
+          radio.checked = radio.value === value;
+        });
+      } else {
+        if (input.value === value) {
+          (input as HTMLInputElement).checked = true;
+        }
       }
     } else if (field.type === 'select-multiple') {
       const select = input as HTMLSelectElement;

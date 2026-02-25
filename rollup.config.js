@@ -17,7 +17,7 @@ const buildConfig = {
   ...baseConfig,
   output: [
     {
-      file: 'dist/index.js',
+      file: 'dist/index.cjs',
       format: 'cjs',
       exports: 'named',
       sourcemap: true,

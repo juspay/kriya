@@ -1384,7 +1384,7 @@ export class DOMActions {
           Automatic navigation was blocked by browser security. 
         </div>
         <div style="margin-bottom: 15px;">
-          <strong>Target:</strong> <span style="font-family: monospace; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">${href}</span>
+          <strong>Target:</strong> <span data-kriya-target style="font-family: monospace; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;"></span>
         </div>
         <div style="display: flex; gap: 8px; margin-bottom: 10px;">
           <button id="kriya-open-link" style="
@@ -1412,6 +1412,11 @@ export class DOMActions {
           The link has been copied to your clipboard for manual opening.
         </div>
       `;
+
+      const targetSpan = notification.querySelector('[data-kriya-target]') as HTMLSpanElement | null;
+      if (targetSpan) {
+        targetSpan.textContent = href;
+      }
 
       // Add hover effects
       const buttons = notification.querySelectorAll('button');
