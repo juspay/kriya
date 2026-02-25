@@ -182,7 +182,8 @@ export class ActionExecutor {
       );
     }
 
-    let fields: Record<string, string>;
+    // Allow any value type, not just strings - supports arrays, objects, etc.
+    let fields: Record<string, any>;
     try {
       fields = typeof fieldsParam === 'string' ? JSON.parse(fieldsParam) : fieldsParam;
     } catch (error) {

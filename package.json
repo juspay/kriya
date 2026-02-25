@@ -1,10 +1,18 @@
 {
   "name": "@juspay/kriya",
-  "version": "1.0.0",
+  "version": "2.0.20",
   "description": "Pure automation execution engine for web actions - no AI, no UI. Execute action commands from any AI.",
-  "main": "dist/index.js",
+  "type": "module",
+  "main": "dist/index.cjs",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.esm.js"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -41,6 +49,11 @@
     "html2canvas": "^1.4.1"
   },
   "devDependencies": {
+    "@rollup/plugin-alias": "^5.1.1",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.5",
     "@types/jest": "^29.5.8",
     "@types/node": "^20.9.0",
     "@typescript-eslint/eslint-plugin": "^6.12.0",
@@ -53,12 +66,9 @@
     "prettier": "^3.1.0",
     "rimraf": "^5.0.5",
     "rollup": "^4.5.0",
-    "@rollup/plugin-commonjs": "^25.0.7",
-    "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-typescript": "^11.1.5",
     "rollup-plugin-dts": "^6.1.0",
-    "@rollup/plugin-terser": "^0.4.4",
     "ts-jest": "^29.1.1",
+    "tslib": "^2.8.1",
     "typescript": "^5.3.2"
   },
   "peerDependencies": {
