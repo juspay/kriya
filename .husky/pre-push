@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Pre-push hook: Run tests and validations before pushing
+echo "🚀 Running pre-push validations..."
+
+# Run type checking if TypeScript is available
+if [ -f "tsconfig.json" ]; then
+  echo "📘 Type checking..."
+  npx tsc --noEmit || exit 1
+fi
+
+# Run tests if available
+if grep -qE '"test"\s*:' package.json 2>/dev/null; then
+  echo "🧪 Running tests..."
+  npm test || exit 1
+fi
+
+# Run build validation if script is available
+if [ -f "scripts/build-validations.cjs" ]; then
+  echo "🔍 Running build validations..."
+  node scripts/build-validations.cjs || exit 1
+fi
+
+echo "✅ Pre-push validations passed!"

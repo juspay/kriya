@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/juspay/kriya/discussions
+    about: Ask questions and discuss ideas
+  - name: 📚 Documentation
+    url: https://github.com/juspay/kriya#readme
+    about: Check out the documentation
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/juspay/kriya/security/advisories/new
+    about: Report a security vulnerability privately

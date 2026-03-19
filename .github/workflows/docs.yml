@@ -1,0 +1,121 @@
+name: Documentation
+
+on:
+  push:
+    branches: [release, main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - '.github/workflows/docs.yml'
+      - 'typedoc.json'
+  pull_request:
+    branches: [release, main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    name: 📚 Build Documentation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate API Documentation
+        run: |
+          if [ -f "typedoc.json" ]; then
+            echo "📖 Generating TypeDoc API documentation..."
+            npx typedoc
+          elif npm run | grep -q "docs:build"; then
+            echo "📖 Running docs:build script..."
+            npm run docs:build
+          else
+            echo "ℹ️  No documentation generator configured, skipping..."
+          fi
+
+      - name: Setup Pages
+        if: github.event_name == 'push'
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        if: github.event_name == 'push' && hashFiles('docs/**') != ''
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+
+  deploy-docs:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/release' || github.ref == 'refs/heads/main')
+    needs: build-docs
+    runs-on: ubuntu-latest
+    name: 🚀 Deploy Documentation
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  validate-docs:
+    runs-on: ubuntu-latest
+    name: ✅ Validate Documentation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Markdown
+        # Pinned to commit SHA for security (v16)
+        uses: DavidAnson/markdownlint-cli2-action@b4c9feab76d8025d1e83c653fa3990936df0e6c8
+        with:
+          globs: |
+            **/*.md
+            !node_modules/**/*.md
+            !CHANGELOG.md
+        continue-on-error: true
+
+      - name: Check Links
+        # Pinned to commit SHA for security (v1)
+        uses: gaurav-nelson/github-action-markdown-link-check@499c1e7f3637c131334fa8e937c45144f79d72d2
+        with:
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'yes'
+          config-file: '.github/mlc_config.json'
+        continue-on-error: true
+
+      - name: Check for broken internal links
+        run: |
+          echo "🔍 Checking for broken internal links..."
+          find docs -name "*.md" -exec grep -l "\[.*\](\./" {} \; | while read file; do
+            echo "Checking: $file"
+            grep -oP '\[.*?\]\(\./[^)]+\)' "$file" | while read link; do
+              target=$(echo "$link" | grep -oP '\(\./[^)]+\)' | tr -d '()')
+              dir=$(dirname "$file")
+              if [ ! -f "$dir/$target" ] && [ ! -d "$dir/$target" ]; then
+                echo "⚠️  Broken link in $file: $link"
+              fi
+            done
+          done || true

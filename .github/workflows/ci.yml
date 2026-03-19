@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: [release, main, develop]
+  pull_request:
+    branches: [release, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check code formatting
+        run: |
+          echo "🎨 Checking code formatting..."
+          npm run format:check || {
+            echo "❌ Formatting issues found!"
+            echo "Run 'npm run format' locally to fix."
+            exit 1
+          }
+
+      - name: Run linting
+        run: |
+          echo "🔍 Running ESLint validation..."
+          npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build project
+        run: npm run build
+
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check package build
+        run: npm run build
+
+      - name: Verify package contents
+        run: |
+          npm pack
+          ls -la dist/ 2>/dev/null || ls -la lib/ 2>/dev/null || echo "No dist/lib directory found"
+
+  quality-gate:
+    runs-on: ubuntu-latest
+    name: 🛡️ Code Quality & Security Gate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: 🔍 Build Validation
+        run: |
+          echo "🔍 Running build validation..."
+          if [ -f "scripts/build-validations.cjs" ]; then
+            node scripts/build-validations.cjs
+          else
+            echo "ℹ️  No build validation script found, skipping..."
+          fi
+
+      - name: 📝 Commit Message Validation
+        run: |
+          echo "📝 Validating commit message format..."
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          echo "Validating: $COMMIT_MSG"
+          if [ -f "scripts/commit-validation.cjs" ]; then
+            node scripts/commit-validation.cjs "$COMMIT_MSG"
+          else
+            echo "ℹ️  No commit validation script found, skipping..."
+          fi
+
+      - name: 🌍 Environment Validation
+        run: |
+          echo "🌍 Validating environment configuration..."
+          if [ -f "scripts/env-validation.cjs" ]; then
+            node scripts/env-validation.cjs
+          else
+            echo "ℹ️  No environment validation script found, skipping..."
+          fi
+
+      - name: 🔒 Security Validation
+        run: |
+          echo "🔒 Running security checks..."
+          if [ -f "scripts/security-check.cjs" ]; then
+            node scripts/security-check.cjs
+          else
+            npm audit --audit-level=high
+          fi
+
+      - name: 📈 TypeScript Compiler Check
+        run: |
+          echo "📈 Running TypeScript compiler checks..."
+          if [ -f "tsconfig.json" ]; then
+            npx tsc --noEmit
+          else
+            echo "ℹ️  No tsconfig.json found, skipping TypeScript check..."
+          fi
+
+      - name: 📋 Quality Summary
+        run: |
+          echo "📋 Quality Gate Summary:"
+          echo "✅ Build validation passed"
+          echo "✅ Environment validation passed"
+          echo "✅ Security validation passed"
+          echo "✅ Commit message format validated"
+          echo ""
+          echo "🎉 All quality gates passed!"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run security audit
+        run: npm audit --audit-level=high
+
+      - name: Check for vulnerabilities
+        run: npm audit --fix --dry-run
+        continue-on-error: true

@@ -1,0 +1,23 @@
+{
+  "app": {
+    "name": "@juspay/kriya",
+    "version": "1.0.0"
+  },
+  "server": {
+    "port": 3000,
+    "host": "localhost"
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "kriya"
+  },
+  "logging": {
+    "level": "info",
+    "format": "json"
+  },
+  "api": {
+    "timeout": 30000,
+    "retries": 3
+  }
+}

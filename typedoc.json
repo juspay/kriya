@@ -1,0 +1,33 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["./src/index.ts"],
+  "out": "./docs",
+  "name": "@juspay/kriya",
+  "readme": "./README.md",
+  "plugin": ["typedoc-plugin-markdown"],
+  "theme": "default",
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "excludeInternal": true,
+  "excludeNotDocumented": false,
+  "includeVersion": true,
+  "categorizeByGroup": true,
+  "categoryOrder": ["Core", "Services", "Commands", "Utilities", "Types", "*"],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "visibilityFilters": {
+    "protected": true,
+    "@alpha": false,
+    "@beta": true,
+    "@internal": false
+  },
+  "sort": ["source-order", "alphabetical"],
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": false
+  }
+}
