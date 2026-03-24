@@ -273,18 +273,36 @@ export class DOMActions {
     if (selector) {
       element = document.querySelector(selector) as HTMLElement;
     } else if (description) {
-      element = this._findElementByDescription(description);
+      element = await this._findElementByText(description, true);
+      if (!element) {
+        element = this._findElementByDescription(description);
+      }
     }
 
-    // If no specific element, use document.activeElement or body
-    const targetElement = (element || document.activeElement || document.body) as HTMLElement;
+    // If no specific element, try document.activeElement — but only if it's a real input,
+    // not body (which is the fallback after blur fires during fill)
+    if (!element) {
+      const active = document.activeElement as HTMLElement;
+      if (active && active !== document.body && this._isElementFillable(active)) {
+        element = active;
+      } else {
+        // Last resort: find the most recently interacted visible input
+        const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), textarea')) as HTMLElement[];
+        element = inputs.find(el => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden';
+        }) || document.body;
+      }
+    }
+
+    const targetElement = element as HTMLElement;
 
     this.forcelog(`[KRIYA] Pressing key "${key}" on element:`, targetElement);
 
-    // Focus the element first (important for input fields)
+    // Focus the resolved element before dispatching key events
     if (targetElement && targetElement.focus) {
       targetElement.focus();
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     // Create and dispatch keyboard events
@@ -1136,7 +1154,6 @@ export class DOMActions {
     if (triggerEvents) {
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
-      element.dispatchEvent(new Event('blur', { bubbles: true }));
     }
   }
 
