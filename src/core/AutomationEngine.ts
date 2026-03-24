@@ -210,7 +210,7 @@ export class AutomationEngine {
       );
     }
 
-    const validActionTypes = ['navigate', 'click', 'fill', 'fillForm', 'submitForm', 'screenshot', 'wait'];
+    const validActionTypes = ['navigate', 'click', 'fill', 'fillForm', 'submitForm', 'screenshot', 'wait', 'press'];
     if (!validActionTypes.includes(action.type)) {
       throw new AutomationError(
         `Invalid action type: ${action.type}. Valid types: ${validActionTypes.join(', ')}`,

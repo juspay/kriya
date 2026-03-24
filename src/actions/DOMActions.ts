@@ -4,6 +4,7 @@ import type {
   FillOptions,
   NavigationOptions,
   WaitOptions,
+  PressOptions,
 } from '@/types';
 import { AutomationError } from '@/types';
 
@@ -262,6 +263,65 @@ export class DOMActions {
     );
   }
 
+  public async press(options: PressOptions): Promise<void> {
+    this._ensureInitialized();
+
+    const { key, selector, description } = options;
+
+    // Find the target element
+    let element: HTMLElement | null = null;
+    if (selector) {
+      element = document.querySelector(selector) as HTMLElement;
+    } else if (description) {
+      element = this._findElementByDescription(description);
+    }
+
+    // If no specific element, use document.activeElement or body
+    const targetElement = (element || document.activeElement || document.body) as HTMLElement;
+
+    this.forcelog(`[KRIYA] Pressing key "${key}" on element:`, targetElement);
+
+    // Focus the element first (important for input fields)
+    if (targetElement && targetElement.focus) {
+      targetElement.focus();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    // Create and dispatch keyboard events
+    const keydownEvent = new KeyboardEvent('keydown', {
+      key,
+      code: key === 'Enter' ? 'Enter' : key,
+      keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
+      which: key === 'Enter' ? 13 : key.charCodeAt(0),
+      bubbles: true,
+      cancelable: true,
+    });
+
+    const keypressEvent = new KeyboardEvent('keypress', {
+      key,
+      code: key === 'Enter' ? 'Enter' : key,
+      keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
+      which: key === 'Enter' ? 13 : key.charCodeAt(0),
+      bubbles: true,
+      cancelable: true,
+    });
+
+    const keyupEvent = new KeyboardEvent('keyup', {
+      key,
+      code: key === 'Enter' ? 'Enter' : key,
+      keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
+      which: key === 'Enter' ? 13 : key.charCodeAt(0),
+      bubbles: true,
+      cancelable: true,
+    });
+
+    targetElement.dispatchEvent(keydownEvent);
+    targetElement.dispatchEvent(keypressEvent);
+    targetElement.dispatchEvent(keyupEvent);
+
+    this.forcelog(`[KRIYA] Key "${key}" pressed successfully`);
+  }
+
   public dispose(): void {
     this._initialized = false;
   }
@@ -363,7 +423,16 @@ export class DOMActions {
       this.forcelog(`[KRIYA DEBUG] No element found with score > 0`);
     }
 
-    return bestMatch && bestMatch.score > 0 ? bestMatch.element : null;
+    // Require minimum score threshold to avoid clicking wrong elements
+    // Low-scoring matches (e.g., logo link with score < 10) indicate poor match
+    const MIN_SCORE_THRESHOLD = 10;
+    if (!bestMatch || bestMatch.score < MIN_SCORE_THRESHOLD) {
+      if (this._config.debugMode) {
+        this.forcelog(`[KRIYA DEBUG] No element found with score >= ${MIN_SCORE_THRESHOLD}. Best score was: ${bestMatch?.score || 0}`);
+      }
+      return null;
+    }
+    return bestMatch.element;
   }
 
   private _findClickableChild(element: HTMLElement): HTMLElement | null {

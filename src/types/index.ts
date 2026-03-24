@@ -5,7 +5,8 @@ export type ActionType =
   | 'fillForm'
   | 'submitForm'
   | 'screenshot'
-  | 'wait';
+  | 'wait'
+  | 'press';
 
 export interface ActionCommand {
   readonly type: ActionType;
@@ -226,6 +227,12 @@ export interface WaitOptions {
   readonly selector?: string;
   readonly condition?: 'visible' | 'hidden' | 'enabled' | 'disabled';
   readonly timeout?: number;
+}
+
+export interface PressOptions {
+  readonly key: string;
+  readonly selector?: string;
+  readonly description?: string;
 }
 
 export const DEFAULT_CONFIG: AutomationConfig = {

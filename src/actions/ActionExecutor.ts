@@ -7,6 +7,7 @@ import type {
   ExecutionResult,
   FillOptions,
   NavigationOptions,
+  PressOptions,
   WaitOptions,
 } from '@/types';
 import { AutomationError } from '@/types';
@@ -95,6 +96,8 @@ export class ActionExecutor {
           return this._executeScreenshot(action);
         case 'wait':
           return this._executeWait(action);
+        case 'press':
+          return this._executePress(action);
         default:
           throw new AutomationError(
             `Unsupported action type: ${action.type}`,
@@ -245,6 +248,25 @@ export class ActionExecutor {
     };
 
     return this._domActions.wait(options);
+  }
+
+  private async _executePress(action: ActionCommand): Promise<void> {
+    const key = action.parameters.key;
+    if (!key) {
+      throw new AutomationError(
+        'Press action requires key parameter',
+        'VALIDATION_FAILED',
+        { action }
+      );
+    }
+
+    const options: PressOptions = {
+      key,
+      selector: action.parameters.selector,
+      description: action.parameters.description,
+    };
+
+    return this._domActions.press(options);
   }
 
   private async _withTimeout<T>(
