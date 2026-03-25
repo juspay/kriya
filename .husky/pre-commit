@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run lint-staged for formatting and linting
+npx lint-staged
+
+# Run security check if available
+if [ -f "scripts/security-check.cjs" ]; then
+  echo "🔒 Running security checks..."
+  node scripts/security-check.cjs --quick 2>/dev/null || true
+fi

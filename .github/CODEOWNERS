@@ -1,0 +1,48 @@
+# CODEOWNERS file for @juspay/kriya
+# Each line is a file pattern followed by one or more owners.
+# These owners will be the default assignees for pull requests.
+
+# Global owners
+* @juspay/maintainers
+
+# Core library and SDK
+/src/lib/ @juspay/core
+/src/lib/core/ @juspay/core
+
+# Services
+/src/services/ @juspay/core
+/src/shelly/services/ @juspay/core
+
+# CLI
+/src/cli/ @juspay/cli
+/src/shelly/cli/ @juspay/cli
+/src/shelly/commands/ @juspay/cli
+
+# Configuration and build
+/package.json @juspay/maintainers
+/tsconfig*.json @juspay/maintainers
+/.changeset/ @juspay/maintainers
+
+# GitHub workflows and settings
+/.github/ @juspay/maintainers
+/.github/workflows/ @juspay/devops
+
+# Documentation
+/docs/ @juspay/docs
+/README.md @juspay/docs
+/CHANGELOG.md @juspay/docs
+/CONTRIBUTING.md @juspay/docs
+
+# Tests
+/test/ @juspay/testing
+/tests/ @juspay/testing
+
+# Examples and demos
+/examples/ @juspay/docs
+
+# Scripts and tools
+/scripts/ @juspay/devops
+/tools/ @juspay/devops
+
+# Memory bank and AI context
+/memory-bank/ @juspay/docs

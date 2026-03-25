@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Validate commit message format
+# Uses custom commit-validation script if available, falls back to commitlint
+if [ -f "scripts/commit-validation.cjs" ]; then
+  COMMIT_MSG_FILE="$1" node scripts/commit-validation.cjs
+else
+  npx --no -- commitlint --edit "${1}"
+fi
