@@ -4,6 +4,7 @@ import type {
   FillOptions,
   NavigationOptions,
   WaitOptions,
+  PressOptions,
 } from '@/types';
 import { AutomationError } from '@/types';
 
@@ -143,9 +144,75 @@ export class DOMActions {
   public async fill(options: FillOptions): Promise<void> {
     this._ensureInitialized();
 
-    const element = await this._findElement(options.selector, options.description);
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Description: "${options.description}"`);
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Value to fill: "${options.value}"`);
 
-    if (!this._isElementFillable(element)) {
+    // For fill, prioritize finding input elements
+    const searchTarget = (options.selector || options.description || '').toString();
+    let element: HTMLElement | null = await this._findElementByText(searchTarget, true);
+    
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Found element:`, element);
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Element tag: ${element?.tagName}`);
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Element type: ${(element as HTMLInputElement)?.type}`);
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Is fillable: ${element ? this._isElementFillable(element) : 'NO ELEMENT'}`);
+
+    // If element is not fillable, try to find the associated input from label
+    if (!element || !this._isElementFillable(element)) {
+      this.forcelog(`[KRIYA DEBUG] Element not fillable, trying to find associated input from label...`);
+
+      // Try to find the input associated with this label
+      const labelElement = element ? (element.tagName.toLowerCase() === 'label' ? element : element.closest('label')) : null;
+      if (labelElement) {
+        const forAttr = labelElement.getAttribute('for');
+        if (forAttr) {
+          const associatedInput = document.getElementById(forAttr) as HTMLElement;
+          if (associatedInput && this._isElementFillable(associatedInput)) {
+            this.forcelog(`[KRIYA DEBUG] Found associated input via label 'for' attribute:`, associatedInput);
+            element = associatedInput;
+          }
+        }
+        
+        // If still not found, look for input inside label
+        if (!element || !this._isElementFillable(element)) {
+          const inputInside = labelElement.querySelector('input, textarea, select') as HTMLElement;
+          if (inputInside && this._isElementFillable(inputInside)) {
+            this.forcelog(`[KRIYA DEBUG] Found input inside label:`, inputInside);
+            element = inputInside;
+          }
+        }
+      }
+
+      // Try to find sibling input element
+      if (!element || !this._isElementFillable(element)) {
+        const siblingInput = element?.nextElementSibling as HTMLElement;
+        if (siblingInput && this._isElementFillable(siblingInput)) {
+          this.forcelog(`[KRIYA DEBUG] Found sibling input:`, siblingInput);
+          element = siblingInput;
+        }
+      }
+    }
+
+    // FINAL CHECK: If still not fillable, try to find any input in the same container/form
+    if (!element || !this._isElementFillable(element)) {
+      this.forcelog(`[KRIYA DEBUG] Element still not fillable, searching for input in surrounding context...`);
+
+      // Look for input in parent elements (up to 3 levels)
+      let parent = element?.parentElement;
+      for (let i = 0; i < 3 && parent && element && !this._isElementFillable(element); i++) {
+        const inputs = parent.querySelectorAll('input, textarea, select');
+        for (const input of inputs) {
+          if (this._isElementFillable(input as HTMLElement)) {
+            this.forcelog(`[KRIYA DEBUG] Found fillable input in parent context:`, input);
+            element = input as HTMLElement;
+            break;
+          }
+        }
+        parent = parent.parentElement;
+      }
+    }
+
+    if (!element || !this._isElementFillable(element)) {
+      this.forcelog(`[KRIYA DEBUG] Fill failed - Element is not fillable:`, element);
       throw new AutomationError(
         'Element is not fillable',
         'ELEMENT_NOT_FOUND',
@@ -156,12 +223,18 @@ export class DOMActions {
     try {
       const inputElement = element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
+      this.forcelog(`[KRIYA DEBUG] Filling element:`, inputElement);
+      this.forcelog(`[KRIYA DEBUG] Current value: "${inputElement.value}"`);
+
       if (options.clearFirst) {
         this._clearElement(inputElement);
       }
 
       this._fillElement(inputElement, options.value, options.triggerEvents);
+      
+      this.forcelog(`[KRIYA DEBUG] Fill completed - New value: "${inputElement.value}"`);
     } catch (error) {
+      this.forcelog(`[KRIYA DEBUG] Fill failed with error:`, error);
       throw new AutomationError(
         `Fill failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'EXECUTION_FAILED',
@@ -188,6 +261,83 @@ export class DOMActions {
       'VALIDATION_FAILED',
       { options }
     );
+  }
+
+  public async press(options: PressOptions): Promise<void> {
+    this._ensureInitialized();
+
+    const { key, selector, description } = options;
+
+    // Find the target element
+    let element: HTMLElement | null = null;
+    if (selector) {
+      element = document.querySelector(selector) as HTMLElement;
+    } else if (description) {
+      element = await this._findElementByText(description, true);
+      if (!element) {
+        element = this._findElementByDescription(description);
+      }
+    }
+
+    // If no specific element, try document.activeElement — but only if it's a real input,
+    // not body (which is the fallback after blur fires during fill)
+    if (!element) {
+      const active = document.activeElement as HTMLElement;
+      if (active && active !== document.body && this._isElementFillable(active)) {
+        element = active;
+      } else {
+        // Last resort: find the most recently interacted visible input
+        const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), textarea')) as HTMLElement[];
+        element = inputs.find(el => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden';
+        }) || document.body;
+      }
+    }
+
+    const targetElement = element as HTMLElement;
+
+    this.forcelog(`[KRIYA] Pressing key "${key}" on element:`, targetElement);
+
+    // Focus the resolved element before dispatching key events
+    if (targetElement && targetElement.focus) {
+      targetElement.focus();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Create and dispatch keyboard events
+    const keydownEvent = new KeyboardEvent('keydown', {
+      key,
+      code: key === 'Enter' ? 'Enter' : key,
+      keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
+      which: key === 'Enter' ? 13 : key.charCodeAt(0),
+      bubbles: true,
+      cancelable: true,
+    });
+
+    const keypressEvent = new KeyboardEvent('keypress', {
+      key,
+      code: key === 'Enter' ? 'Enter' : key,
+      keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
+      which: key === 'Enter' ? 13 : key.charCodeAt(0),
+      bubbles: true,
+      cancelable: true,
+    });
+
+    const keyupEvent = new KeyboardEvent('keyup', {
+      key,
+      code: key === 'Enter' ? 'Enter' : key,
+      keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
+      which: key === 'Enter' ? 13 : key.charCodeAt(0),
+      bubbles: true,
+      cancelable: true,
+    });
+
+    targetElement.dispatchEvent(keydownEvent);
+    targetElement.dispatchEvent(keypressEvent);
+    targetElement.dispatchEvent(keyupEvent);
+
+    this.forcelog(`[KRIYA] Key "${key}" pressed successfully`);
   }
 
   public dispose(): void {
@@ -291,7 +441,16 @@ export class DOMActions {
       this.forcelog(`[KRIYA DEBUG] No element found with score > 0`);
     }
 
-    return bestMatch && bestMatch.score > 0 ? bestMatch.element : null;
+    // Require minimum score threshold to avoid clicking wrong elements
+    // Low-scoring matches (e.g., logo link with score < 10) indicate poor match
+    const MIN_SCORE_THRESHOLD = 10;
+    if (!bestMatch || bestMatch.score < MIN_SCORE_THRESHOLD) {
+      if (this._config.debugMode) {
+        this.forcelog(`[KRIYA DEBUG] No element found with score >= ${MIN_SCORE_THRESHOLD}. Best score was: ${bestMatch?.score || 0}`);
+      }
+      return null;
+    }
+    return bestMatch.element;
   }
 
   private _findClickableChild(element: HTMLElement): HTMLElement | null {
@@ -407,8 +566,20 @@ export class DOMActions {
     const id = element.id?.toLowerCase() ?? '';
     const className = String(element.className || '').toLowerCase();
 
-    // Normalize the description as well
-    const normalizedDescription = description.toLowerCase().trim().replace(/\s+/g, ' ');
+    // Normalize the description as well - strip asterisks first, then normalize whitespace
+    const normalizedDescription = description.toLowerCase().trim().replace(/\*/g, '').replace(/\s+/g, ' ');
+    
+    // Check data attributes for button text and other descriptive content
+    const dataButtonText = element.getAttribute('data-button-text')?.toLowerCase() ?? '';
+    const dataLabel = element.getAttribute('data-label')?.toLowerCase() ?? '';
+    const dataTitle = element.getAttribute('data-title')?.toLowerCase() ?? '';
+    const dataName = element.getAttribute('data-name')?.toLowerCase() ?? '';
+    const dataTestId = element.getAttribute('data-testid')?.toLowerCase() ?? '';
+    const dataButtonFor = element.getAttribute('data-button-for')?.toLowerCase() ?? '';
+    const dataBreadcrumb = element.getAttribute('data-breadcrumb')?.toLowerCase() ?? '';
+    const dataDesignSystem = element.getAttribute('data-design-system')?.toLowerCase() ?? '';
+    const dataNumberinput = element.getAttribute('data-numberinput')?.toLowerCase() ?? '';
+    const dataField = element.getAttribute('data-field')?.toLowerCase() ?? '';
 
     // DEBUG: Log text comparison for problematic elements
     if (this._config.debugMode && (textContent.includes('bulk') || textContent.includes('operation'))) {
@@ -421,16 +592,6 @@ export class DOMActions {
       this.forcelog(`  Element: `, element);
     }
     
-    // Check data attributes for button text and other descriptive content
-    const dataButtonText = element.getAttribute('data-button-text')?.toLowerCase() ?? '';
-    const dataLabel = element.getAttribute('data-label')?.toLowerCase() ?? '';
-    const dataTitle = element.getAttribute('data-title')?.toLowerCase() ?? '';
-    const dataName = element.getAttribute('data-name')?.toLowerCase() ?? '';
-    const dataTestId = element.getAttribute('data-testid')?.toLowerCase() ?? '';
-    const dataButtonFor = element.getAttribute('data-button-for')?.toLowerCase() ?? '';
-    const dataBreadcrumb = element.getAttribute('data-breadcrumb')?.toLowerCase() ?? '';
-    const dataDesignSystem = element.getAttribute('data-design-system')?.toLowerCase() ?? '';
-
     // Enhanced ReScript SelectBox detection
     const isSelectBoxComponent = this._detectSelectBoxComponent(element);
     const isFormRendererField = this._detectFormRendererField(element);
@@ -530,6 +691,10 @@ export class DOMActions {
     if (dataName.includes(description)) score += 5;
     if (dataTestId.includes(description)) score += 5;
     if (dataDesignSystem.includes(description) && dataDesignSystem !== 'true') score += 5; // Avoid generic 'true' values
+    
+    // New: data-numberinput and data-field support
+    if (dataNumberinput.includes(description)) score += 5;
+    if (dataField.includes(description)) score += 5;
     
     // Lower priority matches (structural identifiers)
     if (id.includes(description)) score += 3;
@@ -970,13 +1135,25 @@ export class DOMActions {
       }
     } else {
       // Handle standard input/textarea elements
-      element.value = value;
+      // Use native setter to bypass React's controlled component tracking,
+      // so React reconciles its internal state with the new value.
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        element.tagName.toLowerCase() === 'textarea'
+          ? window.HTMLTextAreaElement.prototype
+          : window.HTMLInputElement.prototype,
+        'value'
+      )?.set;
+
+      if (nativeInputValueSetter) {
+        nativeInputValueSetter.call(element, value);
+      } else {
+        (element as HTMLInputElement | HTMLTextAreaElement).value = value;
+      }
     }
 
     if (triggerEvents) {
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
-      element.dispatchEvent(new Event('blur', { bubbles: true }));
     }
   }
 
@@ -1093,8 +1270,16 @@ export class DOMActions {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWait) {
-      const element = document.querySelector(selector) as HTMLElement;
-      
+      let element: HTMLElement | null = null;
+
+      // First try as CSS selector
+      element = document.querySelector(selector) as HTMLElement;
+
+      // If not found by CSS selector, try text-based search (like _findElement does)
+      if (!element) {
+        element = await this._findElementByText(selector);
+      }
+
       if (this._checkCondition(element, condition)) {
         return;
       }
@@ -1107,6 +1292,162 @@ export class DOMActions {
       'EXECUTION_TIMEOUT',
       { selector, condition }
     );
+  }
+
+  private async _findElementByText(text: string, preferInput: boolean = false): Promise<HTMLElement | null> {
+    this.forcelog(`[KRIYA DEBUG] _findElementByText searching for: "${text}", preferInput: ${preferInput}`);
+
+    // Create case-insensitive text matcher
+    const searchText = text.toLowerCase().trim();
+
+    // For fill operations, prioritize finding the actual input, not the label
+    if (preferInput) {
+      // First, find all input/textarea/select elements
+      const inputs = document.querySelectorAll('input, textarea, select');
+      for (const input of inputs) {
+        const el = input as HTMLElement;
+        // Check if input has matching attributes
+        if (
+          el.getAttribute('placeholder')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('aria-label')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-testid')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-label')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-numberinput')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-field')?.toLowerCase().includes(searchText) ||
+          el.id?.toLowerCase().includes(searchText) ||
+          (el as HTMLInputElement).name?.toLowerCase().includes(searchText)
+        ) {
+          this.forcelog(`[KRIYA DEBUG] _findElementByText found INPUT by attribute:`, el);
+          return el;
+        }
+      }
+
+      // Try to find label with matching text, then get associated input
+      const labels = document.querySelectorAll('label');
+      for (const label of labels) {
+        const labelText = (label.textContent || '').toLowerCase().trim();
+        if (labelText.includes(searchText)) {
+          // Try to find associated input
+          const forAttr = label.getAttribute('for');
+          if (forAttr) {
+            const inputById = document.getElementById(forAttr) as HTMLInputElement;
+            if (inputById && this._isElementFillable(inputById)) {
+              this.forcelog(`[KRIYA DEBUG] _findElementByText found input via label for:`, inputById);
+              return inputById;
+            }
+          }
+          // Try to find input inside label
+          const inputInside = label.querySelector('input, textarea, select') as HTMLInputElement;
+          if (inputInside && this._isElementFillable(inputInside)) {
+            this.forcelog(`[KRIYA DEBUG] _findElementByText found input inside label:`, inputInside);
+            return inputInside;
+          }
+        }
+      }
+
+      // Look for input in same container as matching label
+      const allLabels = document.querySelectorAll('label, span, div');
+      for (const el of allLabels) {
+        const elText = (el.textContent || '').toLowerCase().trim();
+        if (elText.includes(searchText)) {
+          // Look for sibling or parent input
+          let parent = el.parentElement;
+          for (let i = 0; i < 3; i++) {
+            if (!parent) break;
+            const nearbyInput = parent.querySelector('input, textarea, select') as HTMLInputElement;
+            if (nearbyInput && this._isElementFillable(nearbyInput)) {
+              this.forcelog(`[KRIYA DEBUG] _findElementByText found input near label:`, nearbyInput);
+              return nearbyInput;
+            }
+            parent = parent.parentElement;
+          }
+        }
+      }
+    }
+
+    // Search strategies in order of priority (for non-fill or when fill fails)
+    const selectors = [
+      // Data attributes
+      `[data-label*="${searchText}" i]`,
+      `[data-placeholder*="${searchText}" i]`,
+      `[aria-label*="${searchText}" i]`,
+      `[data-testid*="${searchText}" i]`,
+      `[data-id*="${searchText}" i]`,
+      `[data-element*="${searchText}" i]`,
+      // Button/text content
+      `button:contains("${text}")`,
+      `[role="button"]:contains("${text}")`,
+    ];
+
+    // Try exact match first
+    for (const sel of selectors) {
+      try {
+        const el = document.querySelector(sel) as HTMLElement;
+        if (el && this._isElementClickable(el)) {
+          this.forcelog(`[KRIYA DEBUG] _findElementByText found via ${sel}:`, el);
+          return el;
+        }
+      } catch (e) {
+        // Skip invalid selectors
+      }
+    }
+
+    // Fallback: walk the DOM looking for matching text - but prioritize INPUT first
+    // First pass: find matching INPUT elements
+    const inputElements = document.querySelectorAll('input, textarea, select');
+    for (const input of inputElements) {
+      const el = input as HTMLElement;
+      if (
+        el.getAttribute('placeholder')?.toLowerCase().includes(searchText) ||
+        el.getAttribute('aria-label')?.toLowerCase().includes(searchText) ||
+        el.getAttribute('data-testid')?.toLowerCase().includes(searchText) ||
+        el.getAttribute('data-label')?.toLowerCase().includes(searchText)
+      ) {
+        this.forcelog(`[KRIYA DEBUG] _findElementByText found INPUT in DOM walk:`, el);
+        return el;
+      }
+    }
+
+    // Second pass: find non-link elements with matching text
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_ELEMENT,
+      null
+    );
+
+    let node: Node | null = walker.nextNode();
+    while (node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        const elText = (el.textContent || el.innerText || '').toLowerCase().trim();
+        const tagName = el.tagName.toLowerCase();
+
+        // Skip non-clickable elements
+        if (tagName === 'a' || tagName === 'script' || tagName === 'style') {
+          node = walker.nextNode();
+          continue;
+        }
+
+        // Check for matches in various attributes
+        if (
+          elText === searchText ||
+          el.getAttribute('data-label')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-placeholder')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('aria-label')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-testid')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-id')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-element')?.toLowerCase().includes(searchText) ||
+          el.getAttribute('data-button')?.toLowerCase().includes(searchText)
+        ) {
+          this.forcelog(`[KRIYA DEBUG] _findElementByText found via DOM walk:`, el);
+          return el;
+        }
+      }
+      node = walker.nextNode();
+    }
+
+    this.forcelog(`[KRIYA DEBUG] _findElementByText - no element found for: "${text}"`);
+    return null;
   }
 
   private _checkCondition(element: HTMLElement | null, condition: WaitOptions['condition']): boolean {
