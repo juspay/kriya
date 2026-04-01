@@ -31,6 +31,8 @@ class EnvironmentValidator {
     this.envExampleVars = new Map();
     this.envVars = new Map();
     this.codeEnvVars = new Set();
+    // Detect CI environment (GitHub Actions, Travis, CircleCI, etc.)
+    this.isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
   }
 
   /**
@@ -117,7 +119,10 @@ class EnvironmentValidator {
     const envPath = path.join(this.projectRoot, '.env');
 
     if (!fs.existsSync(envPath)) {
-      this.addIssue('warning', 'Configuration', 'No .env file found', 'Copy .env.example to .env and fill in your values');
+      // In CI, .env files are not expected - env vars come from CI secrets
+      if (!this.isCI) {
+        this.addIssue('warning', 'Configuration', 'No .env file found', 'Copy .env.example to .env and fill in your values');
+      }
       return this.envVars;
     }
 
@@ -323,6 +328,14 @@ class EnvironmentValidator {
    * Check for consistency between .env.example and .env
    */
   checkEnvironmentConsistency() {
+    // In CI environments, .env files don't exist - env vars are set via CI secrets
+    // Skip the "missing from .env" checks in CI
+    if (this.isCI) {
+      // In CI, just log an info message that we're skipping .env consistency checks
+      this.addIssue('info', 'CI Mode', 'Running in CI environment - skipping .env file consistency checks', 'Environment variables should be configured via CI secrets');
+      return;
+    }
+
     // Check for vars in .env.example but missing from .env
     for (const [name, meta] of this.envExampleVars) {
       if (!this.envVars.has(name)) {
@@ -431,6 +444,9 @@ class EnvironmentValidator {
   run() {
     this.log('\nEnvironment Configuration Validator', 'cyan');
     this.log('Scanning project: ' + this.projectRoot, 'dim');
+    if (this.isCI) {
+      this.log('Running in CI mode', 'magenta');
+    }
     console.log('\n');
 
     // Parse environment files
