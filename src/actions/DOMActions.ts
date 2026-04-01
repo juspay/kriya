@@ -214,6 +214,7 @@ export class DOMActions {
           ) as HTMLElement;
           if (associatedInput && this._isElementFillable(associatedInput)) {
             this.forcelog(
+              // eslint-disable-next-line quotes
               "[KRIYA DEBUG] Found associated input via label 'for' attribute:",
               associatedInput
             );
