@@ -16,19 +16,19 @@ const path = require('path');
 
 // Semantic commit types
 const SEMANTIC_TYPES = [
-  'feat',     // New feature
-  'fix',      // Bug fix
-  'docs',     // Documentation changes
-  'style',    // Code style changes (formatting, semicolons, etc.)
+  'feat', // New feature
+  'fix', // Bug fix
+  'docs', // Documentation changes
+  'style', // Code style changes (formatting, semicolons, etc.)
   'refactor', // Code refactoring without feature/fix
-  'test',     // Adding or updating tests
-  'chore',    // Maintenance tasks
-  'perf',     // Performance improvements
-  'ci',       // CI/CD changes
-  'build',    // Build system changes
-  'revert',   // Reverting previous commits
-  'wip',      // Work in progress
-  'hotfix'    // Critical production fixes
+  'test', // Adding or updating tests
+  'chore', // Maintenance tasks
+  'perf', // Performance improvements
+  'ci', // CI/CD changes
+  'build', // Build system changes
+  'revert', // Reverting previous commits
+  'wip', // Work in progress
+  'hotfix', // Critical production fixes
 ];
 
 // Semantic commit pattern: type(scope): description
@@ -45,7 +45,7 @@ const COLORS = {
   cyan: '\x1b[36m',
   white: '\x1b[37m',
   bold: '\x1b[1m',
-  dim: '\x1b[2m'
+  dim: '\x1b[2m',
 };
 
 class CommitValidator {
@@ -94,14 +94,20 @@ class CommitValidator {
         try {
           return fs.readFileSync(arg, 'utf8').trim();
         } catch (err) {
-          this.log(`Warning: Could not read commit message file: ${arg}`, 'yellow');
+          this.log(
+            `Warning: Could not read commit message file: ${arg}`,
+            'yellow'
+          );
         }
       }
       return arg;
     }
 
     // 2. Check COMMIT_MSG_FILE environment variable (set by husky hook)
-    if (process.env.COMMIT_MSG_FILE && fs.existsSync(process.env.COMMIT_MSG_FILE)) {
+    if (
+      process.env.COMMIT_MSG_FILE &&
+      fs.existsSync(process.env.COMMIT_MSG_FILE)
+    ) {
       try {
         return fs.readFileSync(process.env.COMMIT_MSG_FILE, 'utf8').trim();
       } catch (err) {
@@ -118,7 +124,7 @@ class CommitValidator {
     try {
       const message = execSync('git log -1 --pretty=%B', {
         encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
       return message;
     } catch (err) {
@@ -170,7 +176,9 @@ class CommitValidator {
     const match = subject.match(SEMANTIC_COMMIT_PATTERN);
 
     if (!match) {
-      this.addError('Commit message does not follow semantic format: type(scope): description');
+      this.addError(
+        'Commit message does not follow semantic format: type(scope): description'
+      );
       this.addError(`  Received: "${subject}"`);
       return false;
     }
@@ -193,11 +201,16 @@ class CommitValidator {
 
     // Validate description length (should be concise)
     if (description.length > 100) {
-      this.addWarning(`Description is too long (${description.length} chars). Consider keeping it under 100 characters.`);
+      this.addWarning(
+        `Description is too long (${description.length} chars). Consider keeping it under 100 characters.`
+      );
     }
 
     // Validate description starts with lowercase (convention)
-    if (description[0] === description[0].toUpperCase() && description[0] !== description[0].toLowerCase()) {
+    if (
+      description[0] === description[0].toUpperCase() &&
+      description[0] !== description[0].toLowerCase()
+    ) {
       this.addWarning('Description should start with lowercase letter');
     }
 
@@ -220,14 +233,29 @@ class CommitValidator {
 
     // Anti-patterns to check
     const antiPatterns = [
-      { pattern: /^(fix|update|change|modify)$/i, reason: 'Too vague - describe what was fixed/updated' },
+      {
+        pattern: /^(fix|update|change|modify)$/i,
+        reason: 'Too vague - describe what was fixed/updated',
+      },
       { pattern: /^wip$/i, reason: 'WIP commits should include a description' },
       { pattern: /^\.+$/, reason: 'Commit message cannot be just dots' },
       { pattern: /^-+$/, reason: 'Commit message cannot be just dashes' },
-      { pattern: /^\s*$/, reason: 'Commit message cannot be empty or whitespace' },
-      { pattern: /^(asdf|qwerty|test123|aaa+|xxx+)$/i, reason: 'Placeholder commit messages are not allowed' },
-      { pattern: /^fixup!/i, reason: 'Fixup commits should be squashed before merging' },
-      { pattern: /^squash!/i, reason: 'Squash commits should be squashed before merging' }
+      {
+        pattern: /^\s*$/,
+        reason: 'Commit message cannot be empty or whitespace',
+      },
+      {
+        pattern: /^(asdf|qwerty|test123|aaa+|xxx+)$/i,
+        reason: 'Placeholder commit messages are not allowed',
+      },
+      {
+        pattern: /^fixup!/i,
+        reason: 'Fixup commits should be squashed before merging',
+      },
+      {
+        pattern: /^squash!/i,
+        reason: 'Squash commits should be squashed before merging',
+      },
     ];
 
     for (const { pattern, reason } of antiPatterns) {
@@ -241,16 +269,18 @@ class CommitValidator {
     const match = subject.match(SEMANTIC_COMMIT_PATTERN);
     const description = match ? match[3] : null;
     if (description && description.length < 3) {
-      this.addWarning('Description is very short. Consider being more descriptive.');
+      this.addWarning(
+        'Description is very short. Consider being more descriptive.'
+      );
     }
 
     // Check for common typos in types
     const commonTypos = {
-      'feat': ['feature', 'feat:', 'feta', 'feat.'],
-      'fix': ['fixed', 'fixes', 'fxi', 'fix:'],
-      'docs': ['doc', 'documentation', 'docs:'],
-      'chore': ['chores', 'chor', 'chore:'],
-      'refactor': ['refact', 'refacor', 'refactor:']
+      feat: ['feature', 'feat:', 'feta', 'feat.'],
+      fix: ['fixed', 'fixes', 'fxi', 'fix:'],
+      docs: ['doc', 'documentation', 'docs:'],
+      chore: ['chores', 'chor', 'chore:'],
+      refactor: ['refact', 'refacor', 'refactor:'],
     };
 
     const firstWord = subject.split(/[(:]/)[0].toLowerCase();
@@ -284,13 +314,20 @@ class CommitValidator {
     }
 
     // Initial commit
-    if (subject === 'initial commit' || subject === 'init' || subject === 'first commit') {
+    if (
+      subject === 'initial commit' ||
+      subject === 'init' ||
+      subject === 'first commit'
+    ) {
       this.log('Skipping validation for initial commit', 'cyan');
       return true;
     }
 
     // Release commits (often auto-generated)
-    if (subject.match(/^chore\(release\):/i) || subject.match(/^\d+\.\d+\.\d+/)) {
+    if (
+      subject.match(/^chore\(release\):/i) ||
+      subject.match(/^\d+\.\d+\.\d+/)
+    ) {
       this.log('Skipping validation for release commit', 'cyan');
       return true;
     }
@@ -306,16 +343,43 @@ class CommitValidator {
     this.log('', 'reset');
 
     const examples = [
-      { msg: 'feat(auth): add OAuth2 login support', desc: 'New feature with scope' },
-      { msg: 'fix(api): resolve null pointer in user service', desc: 'Bug fix with scope' },
-      { msg: 'docs: update README installation steps', desc: 'Documentation without scope' },
-      { msg: 'refactor(core): simplify error handling logic', desc: 'Code refactoring' },
-      { msg: 'test(utils): add unit tests for date helpers', desc: 'Adding tests' },
-      { msg: 'chore(deps): upgrade lodash to v4.17.21', desc: 'Maintenance task' },
-      { msg: 'perf(db): optimize query execution time', desc: 'Performance improvement' },
+      {
+        msg: 'feat(auth): add OAuth2 login support',
+        desc: 'New feature with scope',
+      },
+      {
+        msg: 'fix(api): resolve null pointer in user service',
+        desc: 'Bug fix with scope',
+      },
+      {
+        msg: 'docs: update README installation steps',
+        desc: 'Documentation without scope',
+      },
+      {
+        msg: 'refactor(core): simplify error handling logic',
+        desc: 'Code refactoring',
+      },
+      {
+        msg: 'test(utils): add unit tests for date helpers',
+        desc: 'Adding tests',
+      },
+      {
+        msg: 'chore(deps): upgrade lodash to v4.17.21',
+        desc: 'Maintenance task',
+      },
+      {
+        msg: 'perf(db): optimize query execution time',
+        desc: 'Performance improvement',
+      },
       { msg: 'ci: add GitHub Actions workflow', desc: 'CI/CD changes' },
-      { msg: 'build: configure webpack for production', desc: 'Build system changes' },
-      { msg: 'hotfix(payment): fix critical checkout bug', desc: 'Critical fix' }
+      {
+        msg: 'build: configure webpack for production',
+        desc: 'Build system changes',
+      },
+      {
+        msg: 'hotfix(payment): fix critical checkout bug',
+        desc: 'Critical fix',
+      },
     ];
 
     for (const { msg, desc } of examples) {
@@ -326,9 +390,18 @@ class CommitValidator {
     this.log('\n📋 Commit message format:', 'cyan');
     this.log('  type(scope): description', 'white');
     this.log('', 'reset');
-    this.log(`  ${COLORS.dim}type${COLORS.reset}    - One of: ${SEMANTIC_TYPES.join(', ')}`, 'reset');
-    this.log(`  ${COLORS.dim}scope${COLORS.reset}   - Optional context (e.g., component name)`, 'reset');
-    this.log(`  ${COLORS.dim}description${COLORS.reset} - Brief summary of the change`, 'reset');
+    this.log(
+      `  ${COLORS.dim}type${COLORS.reset}    - One of: ${SEMANTIC_TYPES.join(', ')}`,
+      'reset'
+    );
+    this.log(
+      `  ${COLORS.dim}scope${COLORS.reset}   - Optional context (e.g., component name)`,
+      'reset'
+    );
+    this.log(
+      `  ${COLORS.dim}description${COLORS.reset} - Brief summary of the change`,
+      'reset'
+    );
   }
 
   /**
@@ -377,8 +450,14 @@ class CommitValidator {
       this.addError('No commit message found');
       this.log('\nUsage:', 'cyan');
       this.log('  node commit-validation.cjs <commit-message>', 'white');
-      this.log('  node commit-validation.cjs <path-to-commit-msg-file>', 'white');
-      this.log('  COMMIT_MSG="your message" node commit-validation.cjs', 'white');
+      this.log(
+        '  node commit-validation.cjs <path-to-commit-msg-file>',
+        'white'
+      );
+      this.log(
+        '  COMMIT_MSG="your message" node commit-validation.cjs',
+        'white'
+      );
       this.printResults();
       return 1;
     }

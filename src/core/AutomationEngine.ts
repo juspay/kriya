@@ -63,42 +63,49 @@ export class AutomationEngine {
     this._ensureInitialized();
     this._validateAction(action);
 
-    this._emitEvent('action_started', { action: action.type, parameters: action.parameters });
+    this._emitEvent('action_started', {
+      action: action.type,
+      parameters: action.parameters,
+    });
 
     try {
       const result = await this._actionExecutor.executeAction(action);
-      
+
       if (result.success) {
-        this._emitEvent('action_completed', { 
-          action: action.type, 
-          result: result.data 
+        this._emitEvent('action_completed', {
+          action: action.type,
+          result: result.data,
         });
       } else {
-        this._emitEvent('action_failed', { 
-          action: action.type, 
-          error: result.error 
+        this._emitEvent('action_failed', {
+          action: action.type,
+          error: result.error,
         });
       }
 
       return result;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this._emitEvent('action_failed', { 
-        action: action.type, 
-        error: errorMessage 
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this._emitEvent('action_failed', {
+        action: action.type,
+        error: errorMessage,
       });
 
       return {
         success: false,
         status: 'failed',
         error: errorMessage,
-        errorCode: error instanceof AutomationError ? error.code : 'EXECUTION_FAILED',
+        errorCode:
+          error instanceof AutomationError ? error.code : 'EXECUTION_FAILED',
         timestamp: Date.now(),
       };
     }
   }
 
-  public async executeActions(actions: readonly ActionCommand[]): Promise<readonly ExecutionResult[]> {
+  public async executeActions(
+    actions: readonly ActionCommand[]
+  ): Promise<readonly ExecutionResult[]> {
     this._ensureInitialized();
 
     if (actions.length === 0) {
@@ -124,9 +131,9 @@ export class AutomationEngine {
 
     try {
       const context = await this._contextCapture.capturePageContext();
-      this._emitEvent('context_captured', { 
+      this._emitEvent('context_captured', {
         formsFound: context.totalFormsFound,
-        elementsFound: context.elements.length 
+        elementsFound: context.elements.length,
       });
       return context;
     } catch (error) {
@@ -141,7 +148,10 @@ export class AutomationEngine {
   public registerForm(formId: string, formElement: HTMLFormElement): void {
     this._ensureInitialized();
     this._formRegistry.registerForm(formId, formElement);
-    this._emitEvent('form_registered', { formId, formElement: formElement.tagName });
+    this._emitEvent('form_registered', {
+      formId,
+      formElement: formElement.tagName,
+    });
   }
 
   public unregisterForm(formId: string): void {
@@ -157,7 +167,10 @@ export class AutomationEngine {
     this._eventListeners.get(eventType)!.add(callback);
   }
 
-  public removeEventListener(eventType: EventType, callback: EventCallback): void {
+  public removeEventListener(
+    eventType: EventType,
+    callback: EventCallback
+  ): void {
     const listeners = this._eventListeners.get(eventType);
     if (listeners) {
       listeners.delete(callback);
@@ -210,7 +223,16 @@ export class AutomationEngine {
       );
     }
 
-    const validActionTypes = ['navigate', 'click', 'fill', 'fillForm', 'submitForm', 'screenshot', 'wait', 'press'];
+    const validActionTypes = [
+      'navigate',
+      'click',
+      'fill',
+      'fillForm',
+      'submitForm',
+      'screenshot',
+      'wait',
+      'press',
+    ];
     if (!validActionTypes.includes(action.type)) {
       throw new AutomationError(
         `Invalid action type: ${action.type}. Valid types: ${validActionTypes.join(', ')}`,
@@ -221,20 +243,32 @@ export class AutomationEngine {
   }
 
   private _setupEventHandlers(): void {
-    this._actionExecutor.addEventListener = (eventType: EventType, callback: EventCallback): void => {
+    this._actionExecutor.addEventListener = (
+      eventType: EventType,
+      callback: EventCallback
+    ): void => {
       this.addEventListener(eventType, callback);
     };
 
-    this._contextCapture.addEventListener = (eventType: EventType, callback: EventCallback): void => {
+    this._contextCapture.addEventListener = (
+      eventType: EventType,
+      callback: EventCallback
+    ): void => {
       this.addEventListener(eventType, callback);
     };
 
-    this._formRegistry.addEventListener = (eventType: EventType, callback: EventCallback): void => {
+    this._formRegistry.addEventListener = (
+      eventType: EventType,
+      callback: EventCallback
+    ): void => {
       this.addEventListener(eventType, callback);
     };
   }
 
-  private _emitEvent(eventType: EventType, data?: Readonly<Record<string, unknown>>): void {
+  private _emitEvent(
+    eventType: EventType,
+    data?: Readonly<Record<string, unknown>>
+  ): void {
     const event: AutomationEvent = {
       type: eventType,
       timestamp: Date.now(),
@@ -243,7 +277,7 @@ export class AutomationEngine {
 
     const listeners = this._eventListeners.get(eventType);
     if (listeners) {
-      listeners.forEach(callback => {
+      listeners.forEach((callback) => {
         try {
           callback(event);
         } catch (error) {

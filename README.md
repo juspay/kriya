@@ -66,7 +66,14 @@ Action commands are simple JSON objects that describe what to do:
 
 ```typescript
 interface ActionCommand {
-  type: 'navigate' | 'click' | 'fill' | 'fillForm' | 'submitForm' | 'screenshot' | 'wait';
+  type:
+    | 'navigate'
+    | 'click'
+    | 'fill'
+    | 'fillForm'
+    | 'submitForm'
+    | 'screenshot'
+    | 'wait';
   parameters: Record<string, string>;
   timeout?: number;
   description?: string;
@@ -80,6 +87,7 @@ User Message → Your AI → Action Commands → Kriya Executes
 ```
 
 Example:
+
 1. User: "Fill the registration form with John Doe"
 2. Your AI: `[{type: "fillForm", parameters: {"fields": "{\"name\": \"John Doe\"}"}}]`
 3. Kriya: Executes form filling automatically
@@ -117,6 +125,7 @@ engine.addEventListener('action_completed', (event) => {
 ### Action Types
 
 #### Navigate
+
 ```typescript
 {
   type: 'navigate',
@@ -128,6 +137,7 @@ engine.addEventListener('action_completed', (event) => {
 ```
 
 #### Click Elements
+
 ```typescript
 {
   type: 'click',
@@ -140,6 +150,7 @@ engine.addEventListener('action_completed', (event) => {
 ```
 
 #### Fill Form Fields
+
 ```typescript
 {
   type: 'fill',
@@ -152,6 +163,7 @@ engine.addEventListener('action_completed', (event) => {
 ```
 
 #### Fill Entire Forms
+
 ```typescript
 {
   type: 'fillForm',
@@ -166,6 +178,7 @@ engine.addEventListener('action_completed', (event) => {
 ```
 
 #### Submit Forms
+
 ```typescript
 {
   type: 'submitForm',
@@ -176,6 +189,7 @@ engine.addEventListener('action_completed', (event) => {
 ```
 
 #### Take Screenshots
+
 ```typescript
 {
   type: 'screenshot',
@@ -187,6 +201,7 @@ engine.addEventListener('action_completed', (event) => {
 ```
 
 #### Wait/Delay
+
 ```typescript
 {
   type: 'wait',
@@ -213,20 +228,27 @@ const automationEngine = createAutomationEngine();
 async function handleUserMessage(message: string) {
   // 1. Capture page context
   const context = await automationEngine.capturePageContext();
-  
+
   // 2. Send to OpenAI
   const completion = await openai.chat.completions.create({
     model: 'gpt-4',
     messages: [
-      { role: 'system', content: 'You are a web automation assistant. Return action commands as JSON.' },
-      { role: 'user', content: `${message}\n\nPage context: ${JSON.stringify(context)}` }
-    ]
+      {
+        role: 'system',
+        content:
+          'You are a web automation assistant. Return action commands as JSON.',
+      },
+      {
+        role: 'user',
+        content: `${message}\n\nPage context: ${JSON.stringify(context)}`,
+      },
+    ],
   });
-  
+
   // 3. Execute actions
   const actions = JSON.parse(completion.choices[0].message.content);
   const results = await automationEngine.executeActions(actions);
-  
+
   return results;
 }
 ```
@@ -239,17 +261,17 @@ import { createAutomationEngine } from '@juspay/kriya';
 // React component
 function MyForm() {
   const formRef = useRef(null);
-  
+
   useEffect(() => {
     if (formRef.current) {
       automationEngine.registerForm('my-form', formRef.current);
-      
+
       return () => {
         automationEngine.unregisterForm('my-form');
       };
     }
   }, []);
-  
+
   return (
     <form ref={formRef}>
       {/* Your form fields */}
@@ -262,10 +284,10 @@ function MyForm() {
 
 ```typescript
 interface AutomationConfig {
-  timeout: number;              // Default action timeout (5000ms)
-  retryAttempts: number;        // Retry failed actions (3)
-  screenshotOnError: boolean;   // Capture screenshots on errors (true)
-  debugMode: boolean;           // Enable debug logging (false)
+  timeout: number; // Default action timeout (5000ms)
+  retryAttempts: number; // Retry failed actions (3)
+  screenshotOnError: boolean; // Capture screenshots on errors (true)
+  debugMode: boolean; // Enable debug logging (false)
   formDetectionEnabled: boolean; // Auto-detect forms (true)
   contextCaptureEnabled: boolean; // Enable context capture (true)
 }
@@ -276,7 +298,7 @@ interface AutomationConfig {
 ```typescript
 try {
   const result = await automationEngine.executeAction(action);
-  
+
   if (!result.success) {
     console.error('Action failed:', result.error, result.errorCode);
   }

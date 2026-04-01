@@ -20,7 +20,9 @@ export class ActionExecutor {
   private readonly _domActions: DOMActions;
   private _formRegistry: FormRegistry | null;
   private _contextCapture: ContextCapture | null;
-  public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
+  public addEventListener:
+    | ((eventType: EventType, callback: EventCallback) => void)
+    | null;
 
   constructor(config: AutomationConfig) {
     this._config = config;
@@ -30,7 +32,10 @@ export class ActionExecutor {
     this.addEventListener = null;
   }
 
-  public initialize(formRegistry: FormRegistry, contextCapture: ContextCapture): void {
+  public initialize(
+    formRegistry: FormRegistry,
+    contextCapture: ContextCapture
+  ): void {
     this._formRegistry = formRegistry;
     this._contextCapture = contextCapture;
     this._domActions.initialize();
@@ -41,7 +46,7 @@ export class ActionExecutor {
 
     try {
       const result = await this._executeActionInternal(action);
-      
+
       return {
         success: true,
         status: 'completed',
@@ -57,8 +62,10 @@ export class ActionExecutor {
         }
       }
 
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      const errorCode = error instanceof AutomationError ? error.code : 'EXECUTION_FAILED';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorCode =
+        error instanceof AutomationError ? error.code : 'EXECUTION_FAILED';
 
       return {
         success: false,
@@ -77,7 +84,9 @@ export class ActionExecutor {
     this.addEventListener = null;
   }
 
-  private async _executeActionInternal(action: ActionCommand): Promise<unknown> {
+  private async _executeActionInternal(
+    action: ActionCommand
+  ): Promise<unknown> {
     const timeout = action.timeout ?? this._config.timeout;
 
     return this._withTimeout(async () => {
@@ -188,7 +197,8 @@ export class ActionExecutor {
     // Allow any value type, not just strings - supports arrays, objects, etc.
     let fields: Record<string, any>;
     try {
-      fields = typeof fieldsParam === 'string' ? JSON.parse(fieldsParam) : fieldsParam;
+      fields =
+        typeof fieldsParam === 'string' ? JSON.parse(fieldsParam) : fieldsParam;
     } catch (error) {
       throw new AutomationError(
         'Invalid fields parameter format',
@@ -270,23 +280,25 @@ export class ActionExecutor {
   }
 
   private async _withTimeout<T>(
-    operation: () => Promise<T>, 
+    operation: () => Promise<T>,
     timeout: number
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        reject(new AutomationError(
-          `Operation timed out after ${timeout}ms`,
-          'EXECUTION_TIMEOUT'
-        ));
+        reject(
+          new AutomationError(
+            `Operation timed out after ${timeout}ms`,
+            'EXECUTION_TIMEOUT'
+          )
+        );
       }, timeout);
 
       operation()
-        .then(result => {
+        .then((result) => {
           clearTimeout(timeoutId);
           resolve(result);
         })
-        .catch(error => {
+        .catch((error) => {
           clearTimeout(timeoutId);
           reject(error);
         });

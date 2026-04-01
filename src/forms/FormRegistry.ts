@@ -21,7 +21,9 @@ export class FormRegistry {
   private readonly _formElements: Map<string, HTMLFormElement>;
   private _formLibrary: FormLibrary | null;
   private _initialized: boolean;
-  public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
+  public addEventListener:
+    | ((eventType: EventType, callback: EventCallback) => void)
+    | null;
 
   constructor(config: AutomationConfig) {
     this._config = config;
@@ -44,7 +46,10 @@ export class FormRegistry {
 
   public initialize(formLibrary?: FormLibrary): void {
     if (this._initialized) {
-      throw new AutomationError('FormRegistry is already initialized', 'INVALID_CONFIGURATION');
+      throw new AutomationError(
+        'FormRegistry is already initialized',
+        'INVALID_CONFIGURATION'
+      );
     }
 
     this._formLibrary = formLibrary ?? null;
@@ -96,9 +101,13 @@ export class FormRegistry {
     this._ensureInitialized();
 
     if (!this._forms.has(formId)) {
-      throw new AutomationError(`Form with ID '${formId}' is not registered`, 'FORM_NOT_FOUND', {
-        formId,
-      });
+      throw new AutomationError(
+        `Form with ID '${formId}' is not registered`,
+        'FORM_NOT_FOUND',
+        {
+          formId,
+        }
+      );
     }
 
     this._forms.delete(formId);
@@ -109,20 +118,29 @@ export class FormRegistry {
     }
   }
 
-  public async fillForm(formId: string, fields: Record<string, any>): Promise<FormFillResult> {
+  public async fillForm(
+    formId: string,
+    fields: Record<string, any>
+  ): Promise<FormFillResult> {
     this._ensureInitialized();
 
     const formApi = this._forms.get(formId);
     if (!formApi) {
-      throw new AutomationError(`Form with ID '${formId}' is not registered`, 'FORM_NOT_FOUND', {
-        formId,
-      });
+      throw new AutomationError(
+        `Form with ID '${formId}' is not registered`,
+        'FORM_NOT_FOUND',
+        {
+          formId,
+        }
+      );
     }
 
     return this._fillFormInternal(formApi, fields, formId);
   }
 
-  public async fillAnyForm(fields: Record<string, any>): Promise<FormFillResult> {
+  public async fillAnyForm(
+    fields: Record<string, any>
+  ): Promise<FormFillResult> {
     this._ensureInitialized();
 
     this._forceLog(`🔍 Starting fillAnyForm with fields:`, Object.keys(fields));
@@ -140,7 +158,9 @@ export class FormRegistry {
     if (this._forms.size === 0) {
       this._forceLog('🔄 No forms registered, attempting to detect forms...');
       this._detectAndRegisterForms();
-      this._forceLog(`📊 After detection: ${this._forms.size} forms registered`);
+      this._forceLog(
+        `📊 After detection: ${this._forms.size} forms registered`
+      );
     }
 
     // Still no forms found
@@ -157,16 +177,28 @@ export class FormRegistry {
     this._forceLog('🔄 PRIORITY 2: Trying traditional form matching...');
     const bestMatch = this._findBestFormMatch(fields);
     if (bestMatch) {
-      this._forceLog(`✅ Found best match: ${bestMatch.formId} (score: ${(bestMatch as any).score})`);
-      return this._fillFormInternal(bestMatch.formApi, fields, bestMatch.formId);
+      this._forceLog(
+        `✅ Found best match: ${bestMatch.formId} (score: ${(bestMatch as any).score})`
+      );
+      return this._fillFormInternal(
+        bestMatch.formApi,
+        fields,
+        bestMatch.formId
+      );
     }
 
     // PRIORITY 3: Try alternative matching strategies
-    this._forceLog('🔄 PRIORITY 3: Trying alternative field matching strategies...');
+    this._forceLog(
+      '🔄 PRIORITY 3: Trying alternative field matching strategies...'
+    );
     const alternativeMatch = this._findAlternativeFormMatch(fields);
     if (alternativeMatch) {
       this._forceLog('✅ Found form using alternative matching');
-      return this._fillFormInternal(alternativeMatch.formApi, fields, alternativeMatch.formId);
+      return this._fillFormInternal(
+        alternativeMatch.formApi,
+        fields,
+        alternativeMatch.formId
+      );
     }
 
     // Log detailed field mismatch info
@@ -187,9 +219,13 @@ export class FormRegistry {
 
     const formApi = this._forms.get(formId);
     if (!formApi) {
-      throw new AutomationError(`Form with ID '${formId}' is not registered`, 'FORM_NOT_FOUND', {
-        formId,
-      });
+      throw new AutomationError(
+        `Form with ID '${formId}' is not registered`,
+        'FORM_NOT_FOUND',
+        {
+          formId,
+        }
+      );
     }
 
     try {
@@ -209,16 +245,21 @@ export class FormRegistry {
 
       return result;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
 
       if (this.addEventListener) {
         this.addEventListener('form_submitted', (() => {}) as EventCallback);
       }
 
-      throw new AutomationError(`Form submission failed: ${errorMessage}`, 'EXECUTION_FAILED', {
-        formId,
-        originalError: error,
-      });
+      throw new AutomationError(
+        `Form submission failed: ${errorMessage}`,
+        'EXECUTION_FAILED',
+        {
+          formId,
+          originalError: error,
+        }
+      );
     }
   }
 
@@ -231,7 +272,10 @@ export class FormRegistry {
 
     const firstFormEntry = this._forms.entries().next().value;
     if (!firstFormEntry) {
-      throw new AutomationError('No forms available for submission', 'FORM_NOT_FOUND');
+      throw new AutomationError(
+        'No forms available for submission',
+        'FORM_NOT_FOUND'
+      );
     }
 
     const [formId, formApi] = firstFormEntry;
@@ -303,14 +347,21 @@ export class FormRegistry {
           this._forceLog(`🔄 Retrying with unique ID: ${uniqueFormId}`);
           this.registerForm(uniqueFormId, form);
           successCount++;
-          this._forceLog(`✅ Successfully registered form with unique ID: ${uniqueFormId}`);
+          this._forceLog(
+            `✅ Successfully registered form with unique ID: ${uniqueFormId}`
+          );
         } catch (retryError) {
-          this._forceLog(`❌ Final attempt failed for form ${uniqueFormId}:`, retryError);
+          this._forceLog(
+            `❌ Final attempt failed for form ${uniqueFormId}:`,
+            retryError
+          );
         }
       }
     });
 
-    this._forceLog(`📊 Form detection complete: ${successCount} registered, ${failCount} failed`);
+    this._forceLog(
+      `📊 Form detection complete: ${successCount} registered, ${failCount} failed`
+    );
     this._forceLog(`📊 Total forms now registered: ${this._forms.size}`);
   }
 
@@ -322,7 +373,9 @@ export class FormRegistry {
       return this._createEnhancedFormAPI(reactFormAPI, formElement);
     }
 
-    this._forceLog('🔄 No React Final Form detected, creating native wrapper API');
+    this._forceLog(
+      '🔄 No React Final Form detected, creating native wrapper API'
+    );
     return this._createNativeWrapperAPI(formElement);
   }
 
@@ -330,7 +383,9 @@ export class FormRegistry {
     try {
       // Look for React fiber node on the form element
       const reactKey = Object.keys(formElement).find(
-        key => key.startsWith('__reactInternalInstance') || key.startsWith('__reactFiber')
+        (key) =>
+          key.startsWith('__reactInternalInstance') ||
+          key.startsWith('__reactFiber')
       );
 
       if (!reactKey) {
@@ -350,7 +405,9 @@ export class FormRegistry {
 
         // Check if this fiber has form-related props or state
         if (fiber.memoizedProps?.onSubmit) {
-          this._forceLog(`🎯 Found component with onSubmit at attempt ${attempts}`);
+          this._forceLog(
+            `🎯 Found component with onSubmit at attempt ${attempts}`
+          );
 
           // Look for React Final Form API in various locations
           const formAPI = this._extractFormAPIFromFiber(fiber);
@@ -362,10 +419,14 @@ export class FormRegistry {
 
         // Check for React Final Form context
         if (fiber.type?.displayName === 'Form' || fiber.type?.name === 'Form') {
-          this._forceLog(`🎯 Found Form component: ${fiber.type.displayName || fiber.type.name}`);
+          this._forceLog(
+            `🎯 Found Form component: ${fiber.type.displayName || fiber.type.name}`
+          );
           const formAPI = this._extractFormAPIFromFiber(fiber);
           if (formAPI) {
-            this._forceLog('✅ Successfully extracted React Final Form API from Form component');
+            this._forceLog(
+              '✅ Successfully extracted React Final Form API from Form component'
+            );
             return formAPI;
           }
         }
@@ -443,16 +504,24 @@ export class FormRegistry {
     }
   }
 
-  private _createEnhancedFormAPI(reactFormAPI: any, formElement: HTMLFormElement): FormAPI {
+  private _createEnhancedFormAPI(
+    reactFormAPI: any,
+    formElement: HTMLFormElement
+  ): FormAPI {
     // Create enhanced API that uses React Final Form methods
     return {
       // Use React Final Form's initialize method for setting initial values
       initialize: (values: Record<string, unknown>): void => {
-        this._forceLog('🚀 Initializing form with values:', Object.keys(values));
+        this._forceLog(
+          '🚀 Initializing form with values:',
+          Object.keys(values)
+        );
         if (reactFormAPI.initialize) {
           reactFormAPI.initialize(values);
         } else {
-          this._forceLog('⚠️ Form API missing initialize method, falling back to batch change');
+          this._forceLog(
+            '⚠️ Form API missing initialize method, falling back to batch change'
+          );
           this._batchFillFields(reactFormAPI, values);
         }
       },
@@ -462,7 +531,9 @@ export class FormRegistry {
         if (reactFormAPI.change) {
           reactFormAPI.change(field, value);
         } else {
-          this._forceLog('⚠️ Form API missing change method, using DOM fallback');
+          this._forceLog(
+            '⚠️ Form API missing change method, using DOM fallback'
+          );
           this._fillFieldDirectly(formElement, field, value);
         }
       },
@@ -472,7 +543,9 @@ export class FormRegistry {
         if (reactFormAPI.submit) {
           return reactFormAPI.submit();
         } else {
-          this._forceLog('⚠️ Form API missing submit method, using DOM fallback');
+          this._forceLog(
+            '⚠️ Form API missing submit method, using DOM fallback'
+          );
           return this._submitFormDirectly(formElement);
         }
       },
@@ -504,7 +577,9 @@ export class FormRegistry {
         if (reactFormAPI.batch) {
           reactFormAPI.batch(updates);
         } else {
-          this._forceLog('⚠️ Form API missing batch method, executing updates directly');
+          this._forceLog(
+            '⚠️ Form API missing batch method, executing updates directly'
+          );
           updates();
         }
       },
@@ -590,7 +665,9 @@ export class FormRegistry {
 
       // Check if this is a React Final Form with initialize method
       if (formApi.initialize && typeof formApi.initialize === 'function') {
-        this._forceLog('✨ Using React Final Form initialize() for efficient bulk filling');
+        this._forceLog(
+          '✨ Using React Final Form initialize() for efficient bulk filling'
+        );
 
         try {
           // Use initialize for bulk setting of values (more efficient for React Final Form)
@@ -600,27 +677,45 @@ export class FormRegistry {
           filledFields.push(...Object.keys(validFields));
 
           // Mark invalid fields as failed
-          const invalidFields = Object.keys(fields).filter(key => !validFields.hasOwnProperty(key));
+          const invalidFields = Object.keys(fields).filter(
+            (key) => !validFields.hasOwnProperty(key)
+          );
           failedFields.push(...invalidFields);
 
           this._forceLog(
             `✅ Successfully initialized ${filledFields.length} fields via initialize()`
           );
           if (invalidFields.length > 0) {
-            this._forceLog(`⚠️ Skipped invalid fields: ${invalidFields.join(', ')}`);
+            this._forceLog(
+              `⚠️ Skipped invalid fields: ${invalidFields.join(', ')}`
+            );
           }
         } catch (error) {
-          this._forceLog('⚠️ Initialize method failed, falling back to individual field changes');
+          this._forceLog(
+            '⚠️ Initialize method failed, falling back to individual field changes'
+          );
           this._forceLog('❌ Initialize error:', error);
 
           // Fallback to individual field changes if initialize fails
-          await this._fillFieldsIndividually(formApi, validFields, filledFields, failedFields);
+          await this._fillFieldsIndividually(
+            formApi,
+            validFields,
+            filledFields,
+            failedFields
+          );
         }
       } else {
-        this._forceLog('🔄 Using individual field changes (no initialize method available)');
+        this._forceLog(
+          '🔄 Using individual field changes (no initialize method available)'
+        );
 
         // For native forms or React Final Form without initialize, use individual changes
-        await this._fillFieldsIndividually(formApi, validFields, filledFields, failedFields);
+        await this._fillFieldsIndividually(
+          formApi,
+          validFields,
+          filledFields,
+          failedFields
+        );
       }
 
       const result: FormFillResult = {
@@ -658,7 +753,8 @@ export class FormRegistry {
     fields: Record<string, any>
   ): { formApi: FormAPI; formId: string } | null {
     const fieldNames = Object.keys(fields);
-    let bestMatch: { formApi: FormAPI; formId: string; score: number } | null = null;
+    let bestMatch: { formApi: FormAPI; formId: string; score: number } | null =
+      null;
 
     for (const [formId, formElement] of this._formElements) {
       const formApi = this._forms.get(formId)!;
@@ -666,7 +762,7 @@ export class FormRegistry {
 
       let score = 0;
       for (const fieldName of fieldNames) {
-        if (formFields.some(field => field.name === fieldName)) {
+        if (formFields.some((field) => field.name === fieldName)) {
           score++;
         }
       }
@@ -679,25 +775,33 @@ export class FormRegistry {
     return bestMatch || null;
   }
 
-  private _extractFormFields(formElement: HTMLFormElement): readonly FormFieldContext[] {
+  private _extractFormFields(
+    formElement: HTMLFormElement
+  ): readonly FormFieldContext[] {
     const fields: FormFieldContext[] = [];
     const elements = formElement.querySelectorAll('input, textarea, select');
 
-    elements.forEach(element => {
-      const htmlElement = element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    elements.forEach((element) => {
+      const htmlElement = element as
+        | HTMLInputElement
+        | HTMLTextAreaElement
+        | HTMLSelectElement;
 
       if (!htmlElement.name && !this._formConfig.includeHiddenFields) {
         return;
       }
 
-      if (htmlElement.type === 'hidden' && !this._formConfig.includeHiddenFields) {
+      if (
+        htmlElement.type === 'hidden' &&
+        !this._formConfig.includeHiddenFields
+      ) {
         return;
       }
 
       // Create proper FormFieldValue objects
       const currentValue = this.createFormFieldValue(htmlElement);
       const initialValue = this.extractFormInitialValue(htmlElement);
-      
+
       const field: FormFieldContext = {
         name: htmlElement.name || htmlElement.id || '',
         type: htmlElement.type || htmlElement.tagName.toLowerCase(),
@@ -744,11 +848,16 @@ export class FormRegistry {
     return submitButtons.length > 0;
   }
 
-  private _findFormField(formElement: HTMLFormElement, fieldName: string): HTMLElement | null {
+  private _findFormField(
+    formElement: HTMLFormElement,
+    fieldName: string
+  ): HTMLElement | null {
     this._forceLog(`🔍 FormRegistry: Looking for field "${fieldName}"`);
 
     // Strategy 1: Find by exact name attribute
-    let element = formElement.querySelector(`[name="${fieldName}"]`) as HTMLElement;
+    let element = formElement.querySelector(
+      `[name="${fieldName}"]`
+    ) as HTMLElement;
     if (element) {
       this._forceLog(`✅ Found field "${fieldName}" by name attribute`);
       return element;
@@ -769,16 +878,22 @@ export class FormRegistry {
       `[data-component-field-wrapper="${fieldWithPrefix}"]`
     ) as HTMLElement;
     if (element) {
-      this._forceLog(`✅ Found field "${fieldName}" by wrapper with prefix: "${fieldWithPrefix}"`);
+      this._forceLog(
+        `✅ Found field "${fieldName}" by wrapper with prefix: "${fieldWithPrefix}"`
+      );
       return element;
     }
 
     // Strategy 4: Search globally for field wrappers (exact and with prefix)
-    const allWrappers = document.querySelectorAll('[data-component-field-wrapper]');
+    const allWrappers = document.querySelectorAll(
+      '[data-component-field-wrapper]'
+    );
     for (const wrapper of allWrappers) {
       const wrapperName = wrapper.getAttribute('data-component-field-wrapper');
       if (wrapperName === fieldName || wrapperName === fieldWithPrefix) {
-        this._forceLog(`✅ Found field "${fieldName}" globally by wrapper: "${wrapperName}"`);
+        this._forceLog(
+          `✅ Found field "${fieldName}" globally by wrapper: "${wrapperName}"`
+        );
         element = wrapper.querySelector(
           'input, textarea, select, button[data-value]'
         ) as HTMLElement;
@@ -808,7 +923,8 @@ export class FormRegistry {
   private _fillElementAdvanced(element: HTMLElement, value: string): void {
     // Detect if this is a ReScript SelectBox component
     const isSelectBox =
-      this._detectSelectBoxComponent(element) || element.closest('[data-selectbox-value]') !== null;
+      this._detectSelectBoxComponent(element) ||
+      element.closest('[data-selectbox-value]') !== null;
 
     if (isSelectBox) {
       this._fillReScriptSelectBox(element, value);
@@ -824,7 +940,7 @@ export class FormRegistry {
     } else if (tagName === 'select') {
       const selectElement = element as HTMLSelectElement;
       const option = Array.from(selectElement.options).find(
-        opt => opt.value === value || opt.textContent === value
+        (opt) => opt.value === value || opt.textContent === value
       );
 
       if (option) {
@@ -841,9 +957,15 @@ export class FormRegistry {
 
     // Check if element is a button within a SelectBox
     if (element.tagName.toLowerCase() === 'button') {
-      if (element.hasAttribute('data-value') && element.querySelector('[data-button-text]'))
+      if (
+        element.hasAttribute('data-value') &&
+        element.querySelector('[data-button-text]')
+      )
         return true;
-      if (element.hasAttribute('data-value') && element.closest('[data-selectbox-value]'))
+      if (
+        element.hasAttribute('data-value') &&
+        element.closest('[data-selectbox-value]')
+      )
         return true;
     }
 
@@ -874,11 +996,15 @@ export class FormRegistry {
     }
 
     const currentValue = triggerButton.getAttribute('data-value');
-    this._forceLog(`✅ Found trigger button with current value: "${currentValue}"`);
+    this._forceLog(
+      `✅ Found trigger button with current value: "${currentValue}"`
+    );
 
     // Check if the value is already set correctly
     if (currentValue && currentValue.toLowerCase() === value.toLowerCase()) {
-      this._forceLog(`✅ Value "${value}" already set correctly, no need to change`);
+      this._forceLog(
+        `✅ Value "${value}" already set correctly, no need to change`
+      );
       return;
     }
 
@@ -907,11 +1033,13 @@ export class FormRegistry {
       let optionToSelect: HTMLElement | null = null;
 
       // Look for exact data-dropdown-value match (case-insensitive)
-      optionToSelect = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
+      optionToSelect = dropdown.querySelector(
+        `[data-dropdown-value="${value}"]`
+      ) as HTMLElement;
       if (!optionToSelect) {
         // Try case-insensitive search
         const allOptions = dropdown.querySelectorAll('[data-dropdown-value]');
-        optionToSelect = Array.from(allOptions).find(option => {
+        optionToSelect = Array.from(allOptions).find((option) => {
           const dataValue = option.getAttribute('data-dropdown-value');
           return dataValue && dataValue.toLowerCase() === value.toLowerCase();
         }) as HTMLElement;
@@ -928,9 +1056,11 @@ export class FormRegistry {
         const options = dropdown.querySelectorAll(
           '[data-dropdown-value], [role="option"], li, div[class*="option"]'
         );
-        optionToSelect = Array.from(options).find(option => {
+        optionToSelect = Array.from(options).find((option) => {
           const text = option.textContent?.trim().toLowerCase();
-          const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
+          const dataValue = option
+            .getAttribute('data-dropdown-value')
+            ?.toLowerCase();
           const targetValue = value.toLowerCase();
 
           return text === targetValue || dataValue === targetValue;
@@ -948,12 +1078,16 @@ export class FormRegistry {
         const options = dropdown.querySelectorAll(
           '[data-dropdown-value], [role="option"], li, div[class*="option"]'
         );
-        optionToSelect = Array.from(options).find(option => {
+        optionToSelect = Array.from(options).find((option) => {
           const text = option.textContent?.trim().toLowerCase();
-          const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
+          const dataValue = option
+            .getAttribute('data-dropdown-value')
+            ?.toLowerCase();
           const targetValue = value.toLowerCase();
 
-          return text?.includes(targetValue) || dataValue?.includes(targetValue);
+          return (
+            text?.includes(targetValue) || dataValue?.includes(targetValue)
+          );
         }) as HTMLElement;
 
         if (optionToSelect) {
@@ -964,7 +1098,9 @@ export class FormRegistry {
       }
 
       if (optionToSelect) {
-        this._forceLog(`🖱️ Clicking option: "${optionToSelect.textContent?.trim()}"`);
+        this._forceLog(
+          `🖱️ Clicking option: "${optionToSelect.textContent?.trim()}"`
+        );
 
         // Click the selected option
         optionToSelect.click();
@@ -979,7 +1115,8 @@ export class FormRegistry {
         triggerButton.setAttribute('data-value', selectedValue);
 
         // Update button text
-        const buttonTextElement = triggerButton.querySelector('[data-button-text]');
+        const buttonTextElement =
+          triggerButton.querySelector('[data-button-text]');
         if (buttonTextElement) {
           const newText = optionToSelect.textContent?.trim() || value;
           this._forceLog(`🔄 Updating button text to: "${newText}"`);
@@ -989,7 +1126,9 @@ export class FormRegistry {
 
         // Trigger change events
         this._forceLog(`📢 Triggering change events`);
-        selectBoxContainer.dispatchEvent(new Event('change', { bubbles: true }));
+        selectBoxContainer.dispatchEvent(
+          new Event('change', { bubbles: true })
+        );
         selectBoxContainer.dispatchEvent(
           new CustomEvent('select', {
             detail: { value: selectedValue },
@@ -1005,7 +1144,7 @@ export class FormRegistry {
         const allOptions = dropdown.querySelectorAll('[data-dropdown-value]');
         this._forceLog(
           `📋 Available options:`,
-          Array.from(allOptions).map(opt => ({
+          Array.from(allOptions).map((opt) => ({
             value: opt.getAttribute('data-dropdown-value'),
             text: opt.textContent?.trim(),
           }))
@@ -1014,7 +1153,10 @@ export class FormRegistry {
     }, 150); // Increased timeout slightly
   }
 
-  private _batchFillFields(reactFormAPI: any, values: Record<string, unknown>): void {
+  private _batchFillFields(
+    reactFormAPI: any,
+    values: Record<string, unknown>
+  ): void {
     this._forceLog('📦 Batch filling fields using formApi.change()');
     if (reactFormAPI.batch) {
       reactFormAPI.batch(() => {
@@ -1040,7 +1182,11 @@ export class FormRegistry {
     }
   }
 
-  private _fillFieldDirectly(formElement: HTMLFormElement, field: string, value: unknown): void {
+  private _fillFieldDirectly(
+    formElement: HTMLFormElement,
+    field: string,
+    value: unknown
+  ): void {
     this._forceLog(`🔍 Direct DOM fill for field "${field}"`);
     const element = this._findFormField(formElement, field);
 
@@ -1048,7 +1194,9 @@ export class FormRegistry {
       try {
         this._fillElementAdvanced(element, String(value));
       } catch (error) {
-        this._forceLog(`❌ Advanced fill failed for "${field}", using basic fill`);
+        this._forceLog(
+          `❌ Advanced fill failed for "${field}", using basic fill`
+        );
         // Fallback to basic filling for standard elements
         if (
           element.tagName.toLowerCase() === 'input' ||
@@ -1065,7 +1213,9 @@ export class FormRegistry {
     }
   }
 
-  private async _submitFormDirectly(formElement: HTMLFormElement): Promise<void> {
+  private async _submitFormDirectly(
+    formElement: HTMLFormElement
+  ): Promise<void> {
     this._forceLog('📤 Direct form submission via DOM');
     return new Promise<void>((resolve, reject) => {
       const handleSubmit = (event: Event): void => {
@@ -1094,7 +1244,9 @@ export class FormRegistry {
     });
   }
 
-  private _extractFormData(formElement: HTMLFormElement): Record<string, unknown> {
+  private _extractFormData(
+    formElement: HTMLFormElement
+  ): Record<string, unknown> {
     const formData = new FormData(formElement);
     const values: Record<string, unknown> = {};
 
@@ -1117,14 +1269,18 @@ export class FormRegistry {
   // Debugging methods to help diagnose form detection issues
   private _logPageFormInfo(): void {
     const allForms = document.querySelectorAll('form');
-    this._forceLog(`📋 Page Analysis: Found ${allForms.length} <form> elements on page`);
+    this._forceLog(
+      `📋 Page Analysis: Found ${allForms.length} <form> elements on page`
+    );
 
     allForms.forEach((form, index) => {
       const id = form.id || 'no-id';
       const name = form.name || 'no-name';
       const action = form.action || 'no-action';
       const method = form.method || 'GET';
-      const fieldCount = form.querySelectorAll('input, textarea, select').length;
+      const fieldCount = form.querySelectorAll(
+        'input, textarea, select'
+      ).length;
 
       this._forceLog(
         `  📝 Form ${index}: id="${id}", name="${name}", action="${action}", method="${method}", fields=${fieldCount}`
@@ -1132,7 +1288,9 @@ export class FormRegistry {
 
       // Check for React fiber
       const reactKey = Object.keys(form).find(
-        key => key.startsWith('__reactInternalInstance') || key.startsWith('__reactFiber')
+        (key) =>
+          key.startsWith('__reactInternalInstance') ||
+          key.startsWith('__reactFiber')
       );
 
       if (reactKey) {
@@ -1153,7 +1311,7 @@ export class FormRegistry {
       this._forceLog(`    🔧 Method: ${formElement.method}`);
       this._forceLog(`    📋 Fields (${fields.length}):`);
 
-      fields.forEach(field => {
+      fields.forEach((field) => {
         this._forceLog(
           `      • ${field.name} (${field.type})${field.required ? ' *required' : ''}`
         );
@@ -1171,7 +1329,9 @@ export class FormRegistry {
       const firstFormEntry = this._forms.entries().next().value;
       if (firstFormEntry) {
         const [formId, formApi] = firstFormEntry;
-        this._forceLog(`✅ Using first available form: ${formId} (relaxed matching)`);
+        this._forceLog(
+          `✅ Using first available form: ${formId} (relaxed matching)`
+        );
         return { formApi, formId };
       }
     }
@@ -1181,7 +1341,9 @@ export class FormRegistry {
       const allInputs = formElement.querySelectorAll('input, textarea, select');
       if (allInputs.length > 0) {
         const formApi = this._forms.get(formId)!;
-        this._forceLog(`✅ Found form with ${allInputs.length} input fields: ${formId}`);
+        this._forceLog(
+          `✅ Found form with ${allInputs.length} input fields: ${formId}`
+        );
         return { formApi, formId };
       }
     }
@@ -1195,14 +1357,22 @@ export class FormRegistry {
 
     for (const [formId, formElement] of this._formElements) {
       const formFields = this._extractFormFields(formElement);
-      const formFieldNames = formFields.map(f => f.name).filter(name => name.length > 0);
+      const formFieldNames = formFields
+        .map((f) => f.name)
+        .filter((name) => name.length > 0);
 
-      this._forceLog(`  📝 Form ${formId} available fields: ${formFieldNames.join(', ')}`);
+      this._forceLog(
+        `  📝 Form ${formId} available fields: ${formFieldNames.join(', ')}`
+      );
 
       // Show field matches
       const requestedFields = Object.keys(fields);
-      const matches = requestedFields.filter(field => formFieldNames.includes(field));
-      const misses = requestedFields.filter(field => !formFieldNames.includes(field));
+      const matches = requestedFields.filter((field) =>
+        formFieldNames.includes(field)
+      );
+      const misses = requestedFields.filter(
+        (field) => !formFieldNames.includes(field)
+      );
 
       if (matches.length > 0) {
         this._forceLog(`    ✅ Matching fields: ${matches.join(', ')}`);
@@ -1213,12 +1383,22 @@ export class FormRegistry {
     }
   }
 
-  private _getFormSummary(): Array<{ formId: string; fieldCount: number; fieldNames: string[] }> {
-    const summary: Array<{ formId: string; fieldCount: number; fieldNames: string[] }> = [];
+  private _getFormSummary(): Array<{
+    formId: string;
+    fieldCount: number;
+    fieldNames: string[];
+  }> {
+    const summary: Array<{
+      formId: string;
+      fieldCount: number;
+      fieldNames: string[];
+    }> = [];
 
     for (const [formId, formElement] of this._formElements) {
       const fields = this._extractFormFields(formElement);
-      const fieldNames = fields.map(f => f.name).filter(name => name.length > 0);
+      const fieldNames = fields
+        .map((f) => f.name)
+        .filter((name) => name.length > 0);
 
       summary.push({
         formId,
@@ -1251,7 +1431,9 @@ export class FormRegistry {
 
       // Skip empty values (but allow non-empty strings)
       if (fieldValue === null || fieldValue === undefined) {
-        this._forceLog(`⚠️ Skipping field "${fieldName}" with null/undefined value`);
+        this._forceLog(
+          `⚠️ Skipping field "${fieldName}" with null/undefined value`
+        );
         continue;
       }
 
@@ -1282,11 +1464,13 @@ export class FormRegistry {
   ): Promise<void> {
     this._forceLog('🔄 Filling fields individually with batch operation');
 
-    return new Promise<void>(resolve => {
+    return new Promise<void>((resolve) => {
       formApi.batch(() => {
         for (const [fieldName, fieldValue] of Object.entries(fields)) {
           try {
-            this._forceLog(`🔄 Attempting to change field "${fieldName}" to "${fieldValue}"`);
+            this._forceLog(
+              `🔄 Attempting to change field "${fieldName}" to "${fieldValue}"`
+            );
             formApi.change(fieldName, fieldValue);
             filledFields.push(fieldName);
             this._forceLog(`✅ Successfully changed field "${fieldName}"`);
@@ -1303,34 +1487,41 @@ export class FormRegistry {
   /**
    * Create a proper FormFieldValue object from an HTML element
    */
-  private createFormFieldValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FormFieldValue {
+  private createFormFieldValue(
+    element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  ): FormFieldValue {
     if (element.type === 'checkbox') {
       return {
         type: 'boolean',
-        value: (element as HTMLInputElement).checked
+        value: (element as HTMLInputElement).checked,
       };
     } else if (element.type === 'radio') {
       return {
-        type: 'boolean', 
-        value: (element as HTMLInputElement).checked
+        type: 'boolean',
+        value: (element as HTMLInputElement).checked,
       };
-    } else if (element.tagName === 'SELECT' && (element as HTMLSelectElement).multiple) {
+    } else if (
+      element.tagName === 'SELECT' &&
+      (element as HTMLSelectElement).multiple
+    ) {
       const select = element as HTMLSelectElement;
-      const selectedValues = Array.from(select.selectedOptions).map(option => option.value);
+      const selectedValues = Array.from(select.selectedOptions).map(
+        (option) => option.value
+      );
       return {
         type: 'array',
-        value: selectedValues
+        value: selectedValues,
       };
     } else if (element.type === 'number') {
       const numValue = parseFloat(element.value) || 0;
       return {
         type: 'number',
-        value: numValue
+        value: numValue,
       };
     } else {
       return {
         type: 'string',
-        value: element.value || ''
+        value: element.value || '',
       };
     }
   }
@@ -1338,56 +1529,61 @@ export class FormRegistry {
   /**
    * Extract initial value for a form field
    */
-  private extractFormInitialValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FormFieldValue {
+  private extractFormInitialValue(
+    element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  ): FormFieldValue {
     if (element.type === 'checkbox') {
       return {
         type: 'boolean',
-        value: (element as HTMLInputElement).defaultChecked
+        value: (element as HTMLInputElement).defaultChecked,
       };
     } else if (element.type === 'radio') {
       return {
         type: 'boolean',
-        value: (element as HTMLInputElement).defaultChecked
+        value: (element as HTMLInputElement).defaultChecked,
       };
     } else if (element.tagName === 'SELECT') {
       const select = element as HTMLSelectElement;
       if (select.multiple) {
         const defaultValues = Array.from(select.options)
-          .filter(option => option.defaultSelected)
-          .map(option => option.value);
+          .filter((option) => option.defaultSelected)
+          .map((option) => option.value);
         return {
           type: 'array',
-          value: defaultValues
+          value: defaultValues,
         };
       } else {
         const defaultOption = Array.from(select.options).find(
-          option => option.defaultSelected
+          (option) => option.defaultSelected
         );
         return {
           type: 'string',
-          value: defaultOption ? defaultOption.value : ''
+          value: defaultOption ? defaultOption.value : '',
         };
       }
     } else if (element.tagName === 'TEXTAREA') {
       return {
         type: 'string',
-        value: (element as HTMLTextAreaElement).defaultValue || ''
+        value: (element as HTMLTextAreaElement).defaultValue || '',
       };
     } else if (element.type === 'number') {
-      const defaultValue = parseFloat((element as HTMLInputElement).defaultValue) || 0;
+      const defaultValue =
+        parseFloat((element as HTMLInputElement).defaultValue) || 0;
       return {
         type: 'number',
-        value: defaultValue
+        value: defaultValue,
       };
     } else {
       return {
         type: 'string',
-        value: (element as HTMLInputElement).defaultValue || ''
+        value: (element as HTMLInputElement).defaultValue || '',
       };
     }
   }
 
-  private _tryEnhancedFormDetector(fields: Record<string, string>): FormFillResult | null {
+  private _tryEnhancedFormDetector(
+    fields: Record<string, string>
+  ): FormFillResult | null {
     try {
       this._forceLog('🔬 Initializing Enhanced Form Detector...');
       const enhancedDetector = new EnhancedFormDetector({
@@ -1398,39 +1594,50 @@ export class FormRegistry {
 
       // Get all detected forms to see what we have
       const detectedForms = enhancedDetector.getForms();
-      this._forceLog(`🔍 Enhanced detector found ${detectedForms.length} forms:`);
-      
-      detectedForms.forEach(form => {
-        this._forceLog(`  📝 ${form.id} (${form.formLibrary})${form.formApi ? ' - WITH API' : ' - no API'}`);
+      this._forceLog(
+        `🔍 Enhanced detector found ${detectedForms.length} forms:`
+      );
+
+      detectedForms.forEach((form) => {
+        this._forceLog(
+          `  📝 ${form.id} (${form.formLibrary})${form.formApi ? ' - WITH API' : ' - no API'}`
+        );
         if (form.formApi) {
           this._forceLog(`    🔧 API methods:`, Object.keys(form.formApi));
         }
-        this._forceLog(`    📋 Fields: ${Array.from(form.fields.keys()).join(', ')}`);
+        this._forceLog(
+          `    📋 Fields: ${Array.from(form.fields.keys()).join(', ')}`
+        );
       });
 
       const success = enhancedDetector.fillAnyForm(fields);
-      
+
       // Enhanced detector should succeed if it fills ANY fields, not just ALL fields
       // The "success" from fillAnyForm only indicates if it found a suitable form
       if (success !== false) {
-        const validFieldCount = Object.keys(fields).filter(key => 
-          key && key.trim().length > 0 && !key.match(/^field--?\d*$/)
+        const validFieldCount = Object.keys(fields).filter(
+          (key) => key && key.trim().length > 0 && !key.match(/^field--?\d*$/)
         ).length;
-        
-        this._forceLog(`✅ Enhanced Form Detector filled form (${validFieldCount} valid fields attempted)`);
+
+        this._forceLog(
+          `✅ Enhanced Form Detector filled form (${validFieldCount} valid fields attempted)`
+        );
         return {
           success: true,
           fieldsCount: Object.keys(fields).length,
-          filledFields: Object.keys(fields).filter(key => 
-            key && key.trim().length > 0 && !key.match(/^field--?\d*$/)
+          filledFields: Object.keys(fields).filter(
+            (key) => key && key.trim().length > 0 && !key.match(/^field--?\d*$/)
           ),
-          failedFields: Object.keys(fields).filter(key => 
-            !key || key.trim().length === 0 || key.match(/^field--?\d*$/)
+          failedFields: Object.keys(fields).filter(
+            (key) =>
+              !key || key.trim().length === 0 || key.match(/^field--?\d*$/)
           ),
           formId: 'enhanced-detector-form',
         };
       } else {
-        this._forceLog('❌ Enhanced Form Detector could not find suitable form');
+        this._forceLog(
+          '❌ Enhanced Form Detector could not find suitable form'
+        );
         return null;
       }
     } catch (error) {

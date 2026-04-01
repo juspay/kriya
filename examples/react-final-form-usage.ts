@@ -4,7 +4,7 @@ import { createAutomationEngine } from '../src/index';
 const engine = createAutomationEngine({
   timeout: 10000,
   debugMode: true, // Enable console logging to see React Final Form detection
-  formDetectionEnabled: true
+  formDetectionEnabled: true,
 });
 
 // Initialize the engine (this will auto-detect forms on the page)
@@ -12,7 +12,7 @@ engine.initialize();
 
 /**
  * Example 1: Fill Any Form (Automatic Detection)
- * 
+ *
  * This will automatically:
  * 1. Detect React Final Form vs native forms
  * 2. Use formApi.initialize() for React Final Form (efficient bulk filling)
@@ -24,22 +24,24 @@ async function fillAnyFormExample() {
       type: 'fillForm',
       parameters: {
         fields: JSON.stringify({
-          // These values will be applied as "initial values" 
+          // These values will be applied as "initial values"
           // for React Final Form using formApi.initialize()
           firstName: 'John',
-          lastName: 'Doe', 
+          lastName: 'Doe',
           email: 'john.doe@example.com',
           phone: '+1-555-0123',
           country: 'United States',
-          city: 'New York'
-        })
-      }
+          city: 'New York',
+        }),
+      },
     });
 
     console.log('Form fill result:', result);
-    
+
     if (result.success) {
-      console.log(`✅ Successfully filled ${result.data.filledFields.length} fields`);
+      console.log(
+        `✅ Successfully filled ${result.data.filledFields.length} fields`
+      );
       console.log('Filled fields:', result.data.filledFields);
     } else {
       console.log('❌ Form filling failed:', result.error);
@@ -66,9 +68,9 @@ async function fillSpecificFormExample() {
           password: 'securePassword',
           confirmPassword: 'securePassword',
           agreeToTerms: 'true',
-          newsletter: 'false'
-        })
-      }
+          newsletter: 'false',
+        }),
+      },
     });
 
     console.log('Specific form fill result:', result);
@@ -88,18 +90,18 @@ async function fillAndSubmitExample() {
       parameters: {
         fields: JSON.stringify({
           loginEmail: 'user@example.com',
-          loginPassword: 'myPassword123'
-        })
-      }
+          loginPassword: 'myPassword123',
+        }),
+      },
     });
 
     if (fillResult.success) {
       console.log('✅ Form filled successfully, now submitting...');
-      
+
       // Then submit the form
       const submitResult = await engine.executeAction({
         type: 'submitForm',
-        parameters: {} // Will submit the first available form
+        parameters: {}, // Will submit the first available form
       });
 
       if (submitResult.success) {
@@ -119,21 +121,23 @@ async function fillAndSubmitExample() {
 async function captureFormsExample() {
   try {
     const context = await engine.capturePageContext();
-    
+
     console.log(`📊 Page Analysis:`);
     console.log(`- Total forms found: ${context.totalFormsFound}`);
     console.log(`- Registered forms: ${context.forms.length}`);
-    
+
     context.forms.forEach((form, index) => {
       console.log(`\n📝 Form ${index + 1}:`);
       console.log(`  - ID: ${form.formId}`);
       console.log(`  - Method: ${form.method}`);
       console.log(`  - Fields: ${form.fields.length}`);
       console.log(`  - Has Submit Button: ${form.hasSubmitButton}`);
-      
+
       // Show field details
-      form.fields.forEach(field => {
-        console.log(`    • ${field.name} (${field.type})${field.required ? ' *required' : ''}`);
+      form.fields.forEach((field) => {
+        console.log(
+          `    • ${field.name} (${field.type})${field.required ? ' *required' : ''}`
+        );
       });
     });
   } catch (error) {
@@ -153,30 +157,30 @@ async function complexFieldTypesExample() {
           // Text inputs
           fullName: 'John William Doe',
           bio: 'Software engineer with 5+ years of experience...',
-          
+
           // Select/Dropdown fields (including ReScript SelectBox components)
           country: 'United States',
           state: 'California',
           jobTitle: 'Senior Developer',
-          
+
           // Number inputs
           age: '30',
           salary: '120000',
-          
+
           // Boolean/Checkbox inputs
           isActive: 'true',
           receiveEmails: 'false',
           agreeToTerms: 'true',
-          
+
           // Date inputs
           birthDate: '1994-01-15',
           startDate: '2024-01-01',
-          
+
           // Array/Multi-select (will be converted appropriately)
           skills: 'JavaScript,TypeScript,React,ReScript',
-          languages: 'English,Spanish'
-        })
-      }
+          languages: 'English,Spanish',
+        }),
+      },
     });
 
     console.log('Complex form fill result:', result);
@@ -191,15 +195,15 @@ export {
   fillSpecificFormExample,
   fillAndSubmitExample,
   captureFormsExample,
-  complexFieldTypesExample
+  complexFieldTypesExample,
 };
 
 /**
  * Usage in browser console or application:
- * 
+ *
  * // Basic usage
  * fillAnyFormExample();
- * 
+ *
  * // Or run all examples
  * async function runAllExamples() {
  *   await captureFormsExample();     // See what forms are detected
@@ -207,20 +211,20 @@ export {
  *   await fillSpecificFormExample(); // Fill specific form
  *   await complexFieldTypesExample(); // Test complex field types
  * }
- * 
+ *
  * runAllExamples();
  */
 
 /**
  * Console Output Examples:
- * 
+ *
  * When React Final Form is detected:
  * ✅ Found React Final Form API, using enhanced API
  * 🚀 Filling form auto-detected-form-0 with 6 fields
  * ✨ Using React Final Form initialize() for efficient bulk filling
  * ✅ Successfully initialized 6 fields via initialize()
  * 📊 Form fill result: 6/6 fields filled successfully
- * 
+ *
  * When native form is detected:
  * 🔄 No React Final Form detected, creating native wrapper API
  * 🚀 Filling form auto-detected-form-1 with 4 fields

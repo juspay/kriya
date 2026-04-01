@@ -11,7 +11,9 @@ const path = require('path');
 function getChangedFiles() {
   try {
     // Get only staged files (files that have been git add'ed)
-    const stagedFiles = execSync('git diff --cached --name-only', { encoding: 'utf8' })
+    const stagedFiles = execSync('git diff --cached --name-only', {
+      encoding: 'utf8',
+    })
       .split('\n')
       .filter((file) => file.trim());
 

@@ -7,24 +7,29 @@ The enhanced `@juspay/kriya` package with React Final Form initial values suppor
 ## 📦 Installation in Your Project
 
 ### 1. Navigate to Your Dashboard Project
+
 ```bash
 cd /path/to/your/rescript-euler-dashboard
 # or wherever your project is located
 ```
 
 ### 2. Install from Yalc
+
 ```bash
 yalc add @juspay/kriya
 ```
 
 ### 3. Install Dependencies (if needed)
+
 ```bash
 npm install
 # or yarn install
 ```
 
 ### 4. Verify Installation
+
 Check that the package appears in your `package.json`:
+
 ```json
 {
   "dependencies": {
@@ -36,18 +41,20 @@ Check that the package appears in your `package.json`:
 ## 🧪 Testing the Enhanced Features
 
 ### 1. Basic Import and Usage
+
 ```typescript
 import { createAutomationEngine } from '@juspay/kriya';
 
 const engine = createAutomationEngine({
   debugMode: true, // Enable detailed console logging
-  formDetectionEnabled: true
+  formDetectionEnabled: true,
 });
 
 engine.initialize();
 ```
 
 ### 2. Test Form Filling with Debug Output
+
 ```typescript
 // This will show detailed debugging information
 await engine.executeAction({
@@ -56,14 +63,16 @@ await engine.executeAction({
     fields: JSON.stringify({
       // Use actual field names from your forms
       username: 'testuser',
-      email: 'test@example.com'
-    })
-  }
+      email: 'test@example.com',
+    }),
+  },
 });
 ```
 
 ### 3. Check Console Logs
+
 You should see detailed output like:
+
 ```
 🔍 Starting fillAnyForm with fields: ["username", "email"]
 📊 Currently registered forms: 1
@@ -77,6 +86,7 @@ You should see detailed output like:
 When I make updates to the package:
 
 1. **Re-publish from kriya directory:**
+
    ```bash
    cd /Users/navipriya.s/kriya
    yalc publish
@@ -93,13 +103,15 @@ When I make updates to the package:
 ### If "No suitable form found" error persists:
 
 1. **Enable debug mode:**
+
    ```typescript
    const engine = createAutomationEngine({
-     debugMode: true
+     debugMode: true,
    });
    ```
 
 2. **Check what forms are detected:**
+
    ```typescript
    const context = await engine.capturePageContext();
    console.log('Available forms:', context.forms);
@@ -114,6 +126,7 @@ When I make updates to the package:
 ### If forms aren't being detected:
 
 1. **Manual re-scan:**
+
    ```typescript
    engine.dispose();
    engine.initialize();

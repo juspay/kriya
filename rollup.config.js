@@ -35,9 +35,9 @@ const buildConfig = {
       exports: 'named',
       sourcemap: true,
       globals: {
-        'react': 'React',
+        react: 'React',
         'react-final-form': 'ReactFinalForm',
-        'html2canvas': 'html2canvas',
+        html2canvas: 'html2canvas',
       },
     },
   ],
@@ -63,15 +63,16 @@ const buildConfig = {
       declaration: false,
       declarationMap: false,
     }),
-    production && terser({
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-      mangle: {
-        reserved: ['WebAutomata'],
-      },
-    }),
+    production &&
+      terser({
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+        mangle: {
+          reserved: ['WebAutomata'],
+        },
+      }),
   ].filter(Boolean),
 };
 
