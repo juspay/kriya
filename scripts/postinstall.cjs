@@ -113,25 +113,43 @@ function setupDirectories() {
  * Show welcome message.
  */
 function showWelcome() {
-  if (!config.showWelcome || process.env.CI || process.env.npm_config_loglevel === 'silent') {
+  if (
+    !config.showWelcome ||
+    process.env.CI ||
+    process.env.npm_config_loglevel === 'silent'
+  ) {
     return;
   }
 
   console.log('');
-  console.log(`${colors.cyan}${colors.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
-  console.log(`${colors.cyan}${colors.bold}  Welcome to @juspay/kriya!${colors.reset}`);
-  console.log(`${colors.cyan}${colors.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+  console.log(
+    `${colors.cyan}${colors.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`
+  );
+  console.log(
+    `${colors.cyan}${colors.bold}  Welcome to @juspay/kriya!${colors.reset}`
+  );
+  console.log(
+    `${colors.cyan}${colors.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`
+  );
   console.log('');
   console.log(`${colors.dim}  Quick Start:${colors.reset}`);
-  console.log(`${colors.dim}  1. Configure your .env file with API keys${colors.reset}`);
+  console.log(
+    `${colors.dim}  1. Configure your .env file with API keys${colors.reset}`
+  );
   console.log(`${colors.dim}  2. Run: npm run build${colors.reset}`);
   console.log(`${colors.dim}  3. Run: npm start${colors.reset}`);
   console.log('');
   console.log(`${colors.dim}  Commands:${colors.reset}`);
-  console.log(`${colors.dim}  npm run dev        - Start development mode${colors.reset}`);
+  console.log(
+    `${colors.dim}  npm run dev        - Start development mode${colors.reset}`
+  );
   console.log(`${colors.dim}  npm run test       - Run tests${colors.reset}`);
-  console.log(`${colors.dim}  npm run lint       - Check code quality${colors.reset}`);
-  console.log(`${colors.dim}  npm run doctor     - Diagnose project setup${colors.reset}`);
+  console.log(
+    `${colors.dim}  npm run lint       - Check code quality${colors.reset}`
+  );
+  console.log(
+    `${colors.dim}  npm run doctor     - Diagnose project setup${colors.reset}`
+  );
   console.log('');
   console.log(`${colors.dim}  Documentation: README.md${colors.reset}`);
   console.log(`${colors.dim}  AI Config: CLAUDE.md${colors.reset}`);

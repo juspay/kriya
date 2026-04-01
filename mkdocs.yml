@@ -1,4 +1,4 @@
-site_name: @juspay/kriya
+site_name: '@juspay/kriya'
 site_description: Pure automation execution engine for web actions - no AI, no UI. Execute action commands from any AI.
 site_author: juspay-maintainers
 site_url: https://kriya.github.io/
@@ -107,25 +107,25 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started:
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quick-start.md
-    - Configuration: getting-started/configuration.md
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+      - Configuration: getting-started/configuration.md
   - User Guide:
-    - Overview: user-guide/overview.md
-    - Features: user-guide/features.md
-    - Examples: user-guide/examples.md
+      - Overview: user-guide/overview.md
+      - Features: user-guide/features.md
+      - Examples: user-guide/examples.md
   - API Reference:
-    - Overview: api/overview.md
-    - Methods: api/methods.md
-    - Types: api/types.md
+      - Overview: api/overview.md
+      - Methods: api/methods.md
+      - Types: api/types.md
   - Development:
-    - Contributing: development/contributing.md
-    - Architecture: development/architecture.md
-    - Testing: development/testing.md
+      - Contributing: development/contributing.md
+      - Architecture: development/architecture.md
+      - Testing: development/testing.md
   - About:
-    - License: about/license.md
-    - Changelog: about/changelog.md
-    - Support: about/support.md
+      - License: about/license.md
+      - Changelog: about/changelog.md
+      - Support: about/support.md
 
 # Extra CSS
 extra_css:

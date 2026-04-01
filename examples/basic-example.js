@@ -1,6 +1,6 @@
 /**
  * Basic Example for @juspay/kriya
- * 
+ *
  * This example demonstrates the core functionality of @juspay/kriya.
  */
 

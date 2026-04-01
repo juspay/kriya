@@ -1,14 +1,14 @@
 name: Feature Request
 description: Suggest an idea for @juspay/kriya
-title: "[FEATURE] "
-labels: ["enhancement"]
+title: '[FEATURE] '
+labels: ['enhancement']
 assignees: []
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for taking the time to suggest a new feature for @juspay/kriya!
-        
+
   - type: textarea
     id: problem
     attributes:
@@ -17,7 +17,7 @@ body:
       placeholder: Ex. I'm always frustrated when [...]
     validations:
       required: true
-      
+
   - type: textarea
     id: solution
     attributes:
@@ -25,7 +25,7 @@ body:
       description: A clear and concise description of what you want to happen.
     validations:
       required: true
-      
+
   - type: textarea
     id: alternatives
     attributes:
@@ -33,7 +33,7 @@ body:
       description: A clear and concise description of any alternative solutions or features you've considered.
     validations:
       required: false
-      
+
   - type: textarea
     id: use-case
     attributes:
@@ -41,7 +41,7 @@ body:
       description: Describe the use case for this feature. Who would benefit from it and how?
     validations:
       required: true
-      
+
   - type: dropdown
     id: priority
     attributes:
@@ -54,7 +54,7 @@ body:
         - Critical
     validations:
       required: true
-      
+
   - type: textarea
     id: implementation
     attributes:
@@ -62,7 +62,7 @@ body:
       description: If you have ideas on how this could be implemented, please share them here.
     validations:
       required: false
-      
+
   - type: textarea
     id: acceptance-criteria
     attributes:
@@ -74,7 +74,7 @@ body:
         - [ ] Edge case handling
     validations:
       required: false
-      
+
   - type: textarea
     id: additional-context
     attributes:

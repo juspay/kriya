@@ -31,6 +31,9 @@ class EnvironmentValidator {
     this.envExampleVars = new Map();
     this.envVars = new Map();
     this.codeEnvVars = new Set();
+    // Detect CI environment (GitHub Actions, Travis, CircleCI, etc.)
+    this.isCI =
+      process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
   }
 
   /**
@@ -67,7 +70,12 @@ class EnvironmentValidator {
     const envExamplePath = path.join(this.projectRoot, '.env.example');
 
     if (!fs.existsSync(envExamplePath)) {
-      this.addIssue('warning', 'Configuration', 'No .env.example file found', 'Create a .env.example file to document required environment variables');
+      this.addIssue(
+        'warning',
+        'Configuration',
+        'No .env.example file found',
+        'Create a .env.example file to document required environment variables'
+      );
       return this.envExampleVars;
     }
 
@@ -85,7 +93,8 @@ class EnvironmentValidator {
 
       // Check for section comments
       if (trimmedLine.startsWith('#') && trimmedLine.includes('---')) {
-        currentSection = trimmedLine.replace(/#/g, '').replace(/-/g, '').trim() || 'General';
+        currentSection =
+          trimmedLine.replace(/#/g, '').replace(/-/g, '').trim() || 'General';
         continue;
       }
 
@@ -117,7 +126,15 @@ class EnvironmentValidator {
     const envPath = path.join(this.projectRoot, '.env');
 
     if (!fs.existsSync(envPath)) {
-      this.addIssue('warning', 'Configuration', 'No .env file found', 'Copy .env.example to .env and fill in your values');
+      // In CI, .env files are not expected - env vars come from CI secrets
+      if (!this.isCI) {
+        this.addIssue(
+          'warning',
+          'Configuration',
+          'No .env file found',
+          'Copy .env.example to .env and fill in your values'
+        );
+      }
       return this.envVars;
     }
 
@@ -150,7 +167,12 @@ class EnvironmentValidator {
   validateEnvVariable(name, value, section = 'General', lineNumber = 0) {
     // Check for empty values
     if (!value || value === '""' || value === "''") {
-      this.addIssue('critical', section, `${name} is empty or not set`, `Provide a valid value for ${name}`);
+      this.addIssue(
+        'critical',
+        section,
+        `${name} is empty or not set`,
+        `Provide a valid value for ${name}`
+      );
       return;
     }
 
@@ -169,37 +191,85 @@ class EnvironmentValidator {
 
     for (const pattern of placeholderPatterns) {
       if (pattern.test(value)) {
-        this.addIssue('critical', section, `${name} contains a placeholder value: "${value}"`, `Replace with actual value for ${name}`);
+        this.addIssue(
+          'critical',
+          section,
+          `${name} contains a placeholder value: "${value}"`,
+          `Replace with actual value for ${name}`
+        );
         return;
       }
     }
 
     // Validate API keys
     if (name.includes('OPENAI') && name.includes('KEY')) {
-      if (!value.startsWith('sk-') && !value.startsWith('sk-proj-') && !value.startsWith('sk-admin-')) {
-        this.addIssue('warning', section, `${name} doesn't match expected OpenAI API key format (should start with 'sk-', 'sk-proj-', or 'sk-admin-')`, 'Verify your OpenAI API key is correct');
+      if (
+        !value.startsWith('sk-') &&
+        !value.startsWith('sk-proj-') &&
+        !value.startsWith('sk-admin-')
+      ) {
+        this.addIssue(
+          'warning',
+          section,
+          `${name} doesn't match expected OpenAI API key format (should start with 'sk-', 'sk-proj-', or 'sk-admin-')`,
+          'Verify your OpenAI API key is correct'
+        );
       }
     }
 
     if (name.includes('ANTHROPIC') && name.includes('KEY')) {
       if (!value.startsWith('sk-ant-')) {
-        this.addIssue('warning', section, `${name} doesn't match expected Anthropic API key format (should start with 'sk-ant-')`, 'Verify your Anthropic API key is correct');
+        this.addIssue(
+          'warning',
+          section,
+          `${name} doesn't match expected Anthropic API key format (should start with 'sk-ant-')`,
+          'Verify your Anthropic API key is correct'
+        );
       }
     }
 
     // Validate URLs
-    if (name.includes('URL') || name.includes('ENDPOINT') || name.includes('HOST')) {
-      const hasValidScheme = /^(https?|postgres|mysql|mongodb|redis|amqp|ws|wss|ftp|ssh|file):\/\//.test(value);
-      if (value && !hasValidScheme && !value.startsWith('localhost') && !value.match(/^\d+\.\d+\.\d+\.\d+/)) {
-        this.addIssue('warning', section, `${name} doesn't appear to be a valid URL: "${value}"`, 'URLs should start with http:// or https://');
+    if (
+      name.includes('URL') ||
+      name.includes('ENDPOINT') ||
+      name.includes('HOST')
+    ) {
+      const hasValidScheme =
+        /^(https?|postgres|mysql|mongodb|redis|amqp|ws|wss|ftp|ssh|file):\/\//.test(
+          value
+        );
+      if (
+        value &&
+        !hasValidScheme &&
+        !value.startsWith('localhost') &&
+        !value.match(/^\d+\.\d+\.\d+\.\d+/)
+      ) {
+        this.addIssue(
+          'warning',
+          section,
+          `${name} doesn't appear to be a valid URL: "${value}"`,
+          'URLs should start with http:// or https://'
+        );
       }
     }
 
     // Validate boolean values
-    if (name.includes('ENABLED') || name.includes('DISABLED') || name.includes('DEBUG') || name.startsWith('IS_') || name.startsWith('HAS_') || name.startsWith('USE_')) {
+    if (
+      name.includes('ENABLED') ||
+      name.includes('DISABLED') ||
+      name.includes('DEBUG') ||
+      name.startsWith('IS_') ||
+      name.startsWith('HAS_') ||
+      name.startsWith('USE_')
+    ) {
       const validBooleans = ['true', 'false', '1', '0', 'yes', 'no'];
       if (!validBooleans.includes(value.toLowerCase())) {
-        this.addIssue('warning', section, `${name} should be a boolean value, got: "${value}"`, 'Use true/false, 1/0, or yes/no');
+        this.addIssue(
+          'warning',
+          section,
+          `${name} should be a boolean value, got: "${value}"`,
+          'Use true/false, 1/0, or yes/no'
+        );
       }
     }
 
@@ -207,7 +277,12 @@ class EnvironmentValidator {
     if (name.includes('PORT')) {
       const port = parseInt(value, 10);
       if (isNaN(port) || port < 1 || port > 65535) {
-        this.addIssue('critical', section, `${name} has invalid port number: "${value}"`, 'Port must be a number between 1 and 65535');
+        this.addIssue(
+          'critical',
+          section,
+          `${name} has invalid port number: "${value}"`,
+          'Port must be a number between 1 and 65535'
+        );
       }
     }
 
@@ -215,13 +290,28 @@ class EnvironmentValidator {
     if (name === 'NODE_ENV') {
       const validEnvs = ['development', 'production', 'test', 'staging'];
       if (!validEnvs.includes(value.toLowerCase())) {
-        this.addIssue('warning', section, `${name} has non-standard value: "${value}"`, `Consider using one of: ${validEnvs.join(', ')}`);
+        this.addIssue(
+          'warning',
+          section,
+          `${name} has non-standard value: "${value}"`,
+          `Consider using one of: ${validEnvs.join(', ')}`
+        );
       }
     }
 
     // Check for secrets in wrong format
-    if ((name.includes('SECRET') || name.includes('PASSWORD') || name.includes('TOKEN')) && value.length < 8) {
-      this.addIssue('warning', section, `${name} seems too short for a secret (${value.length} chars)`, 'Secrets should typically be at least 8 characters');
+    if (
+      (name.includes('SECRET') ||
+        name.includes('PASSWORD') ||
+        name.includes('TOKEN')) &&
+      value.length < 8
+    ) {
+      this.addIssue(
+        'warning',
+        section,
+        `${name} seems too short for a secret (${value.length} chars)`,
+        'Secrets should typically be at least 8 characters'
+      );
     }
   }
 
@@ -231,7 +321,16 @@ class EnvironmentValidator {
    */
   getSourceFiles() {
     const sourceFiles = [];
-    const ignoreDirs = ['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', 'vendor'];
+    const ignoreDirs = [
+      'node_modules',
+      '.git',
+      'dist',
+      'build',
+      'coverage',
+      '.next',
+      '.nuxt',
+      'vendor',
+    ];
     const extensions = ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'];
 
     const walkDir = (dir) => {
@@ -298,7 +397,20 @@ class EnvironmentValidator {
     this.extractEnvVarsFromCode();
 
     // Skip common Node.js built-in env vars
-    const builtInVars = new Set(['NODE_ENV', 'PATH', 'HOME', 'USER', 'SHELL', 'PWD', 'TERM', 'LANG', 'TZ', 'CI', 'npm_package_version', 'npm_package_name']);
+    const builtInVars = new Set([
+      'NODE_ENV',
+      'PATH',
+      'HOME',
+      'USER',
+      'SHELL',
+      'PWD',
+      'TERM',
+      'LANG',
+      'TZ',
+      'CI',
+      'npm_package_version',
+      'npm_package_name',
+    ]);
 
     for (const envVar of this.codeEnvVars) {
       if (!this.envExampleVars.has(envVar) && !builtInVars.has(envVar)) {
@@ -314,7 +426,12 @@ class EnvironmentValidator {
     // Check for documented vars not used in code
     for (const [name] of this.envExampleVars) {
       if (!this.codeEnvVars.has(name) && !builtInVars.has(name)) {
-        this.addIssue('info', 'Documentation', `Environment variable ${name} is documented but may not be used in code`, 'Verify if this variable is still needed');
+        this.addIssue(
+          'info',
+          'Documentation',
+          `Environment variable ${name} is documented but may not be used in code`,
+          'Verify if this variable is still needed'
+        );
       }
     }
   }
@@ -323,13 +440,36 @@ class EnvironmentValidator {
    * Check for consistency between .env.example and .env
    */
   checkEnvironmentConsistency() {
+    // In CI environments, .env files don't exist - env vars are set via CI secrets
+    // Skip the "missing from .env" checks in CI
+    if (this.isCI) {
+      // In CI, just log an info message that we're skipping .env consistency checks
+      this.addIssue(
+        'info',
+        'CI Mode',
+        'Running in CI environment - skipping .env file consistency checks',
+        'Environment variables should be configured via CI secrets'
+      );
+      return;
+    }
+
     // Check for vars in .env.example but missing from .env
     for (const [name, meta] of this.envExampleVars) {
       if (!this.envVars.has(name)) {
         if (meta.required) {
-          this.addIssue('critical', 'Missing', `Required variable ${name} is missing from .env`, `Add ${name} to your .env file`);
+          this.addIssue(
+            'critical',
+            'Missing',
+            `Required variable ${name} is missing from .env`,
+            `Add ${name} to your .env file`
+          );
         } else {
-          this.addIssue('info', 'Missing', `Optional variable ${name} is not set in .env`, `Consider adding ${name} if needed`);
+          this.addIssue(
+            'info',
+            'Missing',
+            `Optional variable ${name} is not set in .env`,
+            `Consider adding ${name} if needed`
+          );
         }
       }
     }
@@ -337,7 +477,12 @@ class EnvironmentValidator {
     // Check for vars in .env but not in .env.example
     for (const [name] of this.envVars) {
       if (!this.envExampleVars.has(name)) {
-        this.addIssue('warning', 'Undocumented', `Variable ${name} in .env is not documented in .env.example`, `Add ${name} to .env.example for documentation`);
+        this.addIssue(
+          'warning',
+          'Undocumented',
+          `Variable ${name} in .env is not documented in .env.example`,
+          `Add ${name} to .env.example for documentation`
+        );
       }
     }
   }
@@ -349,14 +494,17 @@ class EnvironmentValidator {
     const duration = Date.now() - this.startTime;
 
     console.log('\n');
-    this.log('=' .repeat(60), 'cyan');
+    this.log('='.repeat(60), 'cyan');
     this.log('  Environment Validation Results', 'bold');
-    this.log('=' .repeat(60), 'cyan');
+    this.log('='.repeat(60), 'cyan');
     console.log('\n');
 
     // Print critical issues
     if (this.issues.length > 0) {
-      this.log(`  ${colors.bold}Critical Issues (${this.issues.length})${colors.reset}`, 'red');
+      this.log(
+        `  ${colors.bold}Critical Issues (${this.issues.length})${colors.reset}`,
+        'red'
+      );
       this.log('-'.repeat(40), 'red');
       for (const issue of this.issues) {
         this.log(`  [${issue.category}] ${issue.message}`, 'red');
@@ -370,7 +518,10 @@ class EnvironmentValidator {
     // Print warnings
     const warnings = this.warnings.filter((w) => w.severity === 'warning');
     if (warnings.length > 0) {
-      this.log(`  ${colors.bold}Warnings (${warnings.length})${colors.reset}`, 'yellow');
+      this.log(
+        `  ${colors.bold}Warnings (${warnings.length})${colors.reset}`,
+        'yellow'
+      );
       this.log('-'.repeat(40), 'yellow');
       for (const warning of warnings) {
         this.log(`  [${warning.category}] ${warning.message}`, 'yellow');
@@ -396,9 +547,9 @@ class EnvironmentValidator {
     }
 
     // Summary
-    this.log('=' .repeat(60), 'cyan');
+    this.log('='.repeat(60), 'cyan');
     this.log('  Summary', 'bold');
-    this.log('=' .repeat(60), 'cyan');
+    this.log('='.repeat(60), 'cyan');
 
     const totalVars = this.envExampleVars.size;
     const setVars = this.envVars.size;
@@ -407,8 +558,14 @@ class EnvironmentValidator {
     this.log(`  Documented variables:     ${totalVars}`, 'white');
     this.log(`  Variables in .env:        ${setVars}`, 'white');
     this.log(`  Variables used in code:   ${codeVars}`, 'white');
-    this.log(`  Critical issues:          ${this.issues.length}`, this.issues.length > 0 ? 'red' : 'green');
-    this.log(`  Warnings:                 ${warnings.length}`, warnings.length > 0 ? 'yellow' : 'green');
+    this.log(
+      `  Critical issues:          ${this.issues.length}`,
+      this.issues.length > 0 ? 'red' : 'green'
+    );
+    this.log(
+      `  Warnings:                 ${warnings.length}`,
+      warnings.length > 0 ? 'yellow' : 'green'
+    );
     this.log(`  Completed in:             ${duration}ms`, 'dim');
 
     console.log('\n');
@@ -416,7 +573,10 @@ class EnvironmentValidator {
     if (this.issues.length === 0 && warnings.length === 0) {
       this.log('  All environment variables are properly configured!', 'green');
     } else if (this.issues.length === 0) {
-      this.log('  No critical issues found, but review warnings above.', 'yellow');
+      this.log(
+        '  No critical issues found, but review warnings above.',
+        'yellow'
+      );
     } else {
       this.log('  Please fix critical issues before proceeding.', 'red');
     }
@@ -431,6 +591,9 @@ class EnvironmentValidator {
   run() {
     this.log('\nEnvironment Configuration Validator', 'cyan');
     this.log('Scanning project: ' + this.projectRoot, 'dim');
+    if (this.isCI) {
+      this.log('Running in CI mode', 'magenta');
+    }
     console.log('\n');
 
     // Parse environment files

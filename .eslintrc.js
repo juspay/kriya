@@ -6,7 +6,7 @@ module.exports = {
     'eslint:recommended',
     '@typescript-eslint/recommended',
     '@typescript-eslint/recommended-requiring-type-checking',
-    'prettier'
+    'prettier',
   ],
   parserOptions: {
     ecmaVersion: 2020,
@@ -63,60 +63,63 @@ module.exports = {
       'error',
       {
         selector: 'default',
-        format: ['camelCase']
+        format: ['camelCase'],
       },
       {
         selector: 'variable',
-        format: ['camelCase', 'UPPER_CASE']
+        format: ['camelCase', 'UPPER_CASE'],
       },
       {
         selector: 'parameter',
         format: ['camelCase'],
-        leadingUnderscore: 'allow'
+        leadingUnderscore: 'allow',
       },
       {
         selector: 'memberLike',
         modifiers: ['private'],
         format: ['camelCase'],
-        leadingUnderscore: 'require'
+        leadingUnderscore: 'require',
       },
       {
         selector: 'typeLike',
-        format: ['PascalCase']
+        format: ['PascalCase'],
       },
       {
         selector: 'interface',
-        format: ['PascalCase']
+        format: ['PascalCase'],
       },
       {
         selector: 'enum',
-        format: ['PascalCase']
+        format: ['PascalCase'],
       },
       {
         selector: 'enumMember',
-        format: ['UPPER_CASE']
-      }
+        format: ['UPPER_CASE'],
+      },
     ],
 
     // Import rules
-    'sort-imports': ['error', {
-      'ignoreCase': true,
-      'ignoreDeclarationSort': true
-    }],
+    'sort-imports': [
+      'error',
+      {
+        ignoreCase: true,
+        ignoreDeclarationSort: true,
+      },
+    ],
 
     // Prettier integration
-    'prettier/prettier': 'error'
+    'prettier/prettier': 'error',
   },
   overrides: [
     {
       files: ['*.test.ts', '*.spec.ts'],
       env: {
-        jest: true
+        jest: true,
       },
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
-        '@typescript-eslint/prefer-readonly-parameter-types': 'off'
-      }
-    }
-  ]
+        '@typescript-eslint/prefer-readonly-parameter-types': 'off',
+      },
+    },
+  ],
 };

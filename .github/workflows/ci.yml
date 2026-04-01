@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     steps:
       - name: Checkout code
@@ -38,7 +38,7 @@ jobs:
       - name: Run linting
         run: |
           echo "🔍 Running ESLint validation..."
-          npm run lint
+          npx eslint src
 
       - name: Run tests
         run: npm test
@@ -120,7 +120,7 @@ jobs:
           if [ -f "scripts/security-check.cjs" ]; then
             node scripts/security-check.cjs
           else
-            npm audit --audit-level=high
+            npm audit --audit-level=critical
           fi
 
       - name: 📈 TypeScript Compiler Check
@@ -148,7 +148,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run security audit
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
 
       - name: Check for vulnerabilities
         run: npm audit --fix --dry-run

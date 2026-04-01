@@ -44,7 +44,6 @@ async function basicExample(): Promise<void> {
     const screenshot = await automationEngine.captureScreenshot();
     // eslint-disable-next-line no-console
     console.log('Screenshot captured, length:', screenshot.length);
-
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Automation error:', error);
@@ -89,12 +88,11 @@ async function multipleActionsExample(): Promise<void> {
     ];
 
     const results = await automationEngine.executeActions(actions);
-    
+
     results.forEach((result, index) => {
       // eslint-disable-next-line no-console
       console.log(`Action ${index + 1} result:`, result);
     });
-
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Automation error:', error);
@@ -135,7 +133,6 @@ async function eventListenerExample(): Promise<void> {
     };
 
     await automationEngine.executeAction(action);
-
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Automation error:', error);
