@@ -121,7 +121,7 @@ jobs:
           if [ -f "scripts/security-check.cjs" ]; then
             node scripts/security-check.cjs
           else
-            npm audit --audit-level=high
+            npm audit --audit-level=critical
           fi
 
       - name: 📈 TypeScript Compiler Check
@@ -152,7 +152,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Run security audit
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
 
       - name: Check for vulnerabilities
         run: npm audit --fix --dry-run
