@@ -43,7 +43,7 @@ Kriya is a pure automation execution engine for web actions. It executes action 
 
 ### 5. File Organization
 
-```
+```text
 src/
 ├── types/           # Type definitions only
 ├── core/           # Core automation engine

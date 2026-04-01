@@ -6,7 +6,7 @@ This document explains the comprehensive form filling mechanism in the Kriya aut
 
 The form filling system is built around 4 key components:
 
-```
+```text
 AutomationEngine
     ↓
 ActionExecutor

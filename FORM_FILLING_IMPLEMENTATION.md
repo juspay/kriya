@@ -31,7 +31,7 @@ formApi.initialize(allFields); // Bulk initialization (efficient)
 
 // When native form or no initialize method:
 formApi.batch(() => {
-  for (field in fields) {
+  for (const field in fields) {
     formApi.change(field, value); // Individual field changes
   }
 });
@@ -134,7 +134,7 @@ await engine.executeAction({ type: 'submitForm', parameters: {} });
 
 ### **React Final Form Detected:**
 
-```
+```text
 ✅ Found React Final Form API, using enhanced API
 🚀 Filling form auto-detected-form-0 with 6 fields
 ✨ Using React Final Form initialize() for efficient bulk filling
@@ -144,7 +144,7 @@ await engine.executeAction({ type: 'submitForm', parameters: {} });
 
 ### **Native Form Detected:**
 
-```
+```text
 🔄 No React Final Form detected, creating native wrapper API
 🚀 Filling form auto-detected-form-1 with 4 fields
 🔄 Using individual field changes (no initialize method available)
