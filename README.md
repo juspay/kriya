@@ -82,7 +82,7 @@ interface ActionCommand {
 
 ### 2. User Flow
 
-```
+```text
 User Message → Your AI → Action Commands → Kriya Executes
 ```
 

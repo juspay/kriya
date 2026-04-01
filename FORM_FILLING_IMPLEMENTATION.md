@@ -172,6 +172,7 @@ await engine.executeAction({ type: 'submitForm', parameters: {} });
    ```
 
 3. **DOM-based field filling** ← _Fallback 2_
+
    ```typescript
    element.value = value;
    element.dispatchEvent(new Event('change'));
