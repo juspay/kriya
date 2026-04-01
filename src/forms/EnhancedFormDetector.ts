@@ -245,7 +245,7 @@ export class EnhancedFormDetector {
           this._forceLog(
             `✅ Found useForm() hook #${foundFormApis} on element ${index} (${element.tagName})`
           );
-          this._forceLog(`🔍 useForm() API methods:`, Object.keys(formApi));
+          this._forceLog('🔍 useForm() API methods:', Object.keys(formApi));
 
           // Find the nearest form element or use this element
           const formElement =
@@ -295,7 +295,7 @@ export class EnhancedFormDetector {
           // Check if this looks like React Final Form API
           if (state.change && state.submit && state.batch && state.getState) {
             this._forceLog(
-              `🎯 Found useForm() hook with methods:`,
+              '🎯 Found useForm() hook with methods:',
               Object.keys(state)
             );
             return state;
@@ -303,7 +303,7 @@ export class EnhancedFormDetector {
 
           // Check for nested form API
           if (state.form && state.form.change && state.form.submit) {
-            this._forceLog(`🎯 Found nested form API in useForm() hook`);
+            this._forceLog('🎯 Found nested form API in useForm() hook');
             return state.form;
           }
         }
@@ -314,7 +314,7 @@ export class EnhancedFormDetector {
     // Check component props for finalFormInstanceHolder
     if (reactInstance.memoizedProps?.finalFormInstanceHolder) {
       this._forceLog(
-        `🎯 Found finalFormInstanceHolder prop - this component uses React Final Form`
+        '🎯 Found finalFormInstanceHolder prop - this component uses React Final Form'
       );
       // The form API should be in the hooks
       return this.searchForUseFormHook(reactInstance);
@@ -385,7 +385,7 @@ export class EnhancedFormDetector {
       // Skip if this exact element was already detected as React Final Form, Formik, etc.
       if (alreadyDetectedElements.has(formElement)) {
         this._forceLog(
-          `⏭️ Form element already detected by previous detection phases - skipping native detection`
+          '⏭️ Form element already detected by previous detection phases - skipping native detection'
         );
         return;
       }
@@ -562,7 +562,7 @@ export class EnhancedFormDetector {
     }
 
     if (!name) {
-      this._forceLog(`⚠️ Skipping element without name/id:`, element);
+      this._forceLog('⚠️ Skipping element without name/id:', element);
       return null; // Skip elements without identifiers
     }
 
@@ -721,7 +721,7 @@ export class EnhancedFormDetector {
     }
 
     // Strategy 2: Search for form API in the form container/parent elements
-    let container =
+    const container =
       element.closest('form') ||
       element.closest('[data-react-final-form]') ||
       element.closest('[id*="form"]');
@@ -1092,11 +1092,11 @@ export class EnhancedFormDetector {
           `❌ React Final Form API change() failed for ${fieldName}:`,
           error
         );
-        this._forceLog(`⚠️ Falling back to DOM manipulation`);
+        this._forceLog('⚠️ Falling back to DOM manipulation');
       }
     } else {
       this._forceLog(
-        `⚠️ No React Final Form API available, falling back to DOM manipulation`
+        '⚠️ No React Final Form API available, falling back to DOM manipulation'
       );
     }
 
@@ -1125,7 +1125,7 @@ export class EnhancedFormDetector {
     }
 
     this._forceLog(
-      `⚠️ No Formik API available, falling back to DOM manipulation`
+      '⚠️ No Formik API available, falling back to DOM manipulation'
     );
     // Fallback to direct DOM manipulation
     const field = form.fields.get(fieldName);
@@ -1218,7 +1218,7 @@ export class EnhancedFormDetector {
       button.closest('[data-selectbox-value]');
 
     if (!container) {
-      this._forceLog(`❌ SelectBox container not found`);
+      this._forceLog('❌ SelectBox container not found');
       return false;
     }
 
@@ -1229,7 +1229,7 @@ export class EnhancedFormDetector {
     }
 
     // Click to open dropdown
-    this._forceLog(`🖱️ Clicking SelectBox to open dropdown`);
+    this._forceLog('🖱️ Clicking SelectBox to open dropdown');
     button.click();
 
     // Wait and select option with enhanced dropdown detection
@@ -1292,7 +1292,7 @@ export class EnhancedFormDetector {
           this._forceLog(`❌ Option "${value}" not found in dropdown`);
         }
       } else {
-        this._forceLog(`❌ Dropdown not found after clicking`);
+        this._forceLog('❌ Dropdown not found after clicking');
       }
     }, 100);
 
@@ -1403,7 +1403,7 @@ export class EnhancedFormDetector {
     if (node.memoizedProps?.form) {
       this._forceLog(`✅ Found form API in memoizedProps at depth ${depth}`);
       this._forceLog(
-        `🔍 Form API methods:`,
+        '🔍 Form API methods:',
         Object.keys(node.memoizedProps.form)
       );
       return node.memoizedProps.form;
@@ -1484,7 +1484,7 @@ export class EnhancedFormDetector {
           ) {
             this._forceLog(`✅ Found form API in hooks at depth ${depth}`);
             this._forceLog(
-              `🔍 Hook form API methods:`,
+              '🔍 Hook form API methods:',
               Object.keys(hook.memoizedState)
             );
             return hook.memoizedState;

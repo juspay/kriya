@@ -991,7 +991,7 @@ export class ContextCapture {
         const fieldName = this._extractInputFieldName(input, index);
         let fieldType = 'text';
         let currentValue = '';
-        let options: string[] = [];
+        const options: string[] = [];
 
         if (input.tagName.toLowerCase() === 'select') {
           fieldType = 'select';
@@ -1229,7 +1229,7 @@ export class ContextCapture {
     }
 
     // For MultiSelect, check for selected chips
-    let selectedValues: string[] = [];
+    const selectedValues: string[] = [];
     if (isMultiSelect) {
       const chips = wrapper.querySelectorAll('.chip, .tag, [data-chip-value]');
       chips.forEach((chip) => {
@@ -1566,7 +1566,7 @@ export class ContextCapture {
     const fieldName = this._extractInputFieldName(input, index);
     let fieldType = 'text';
     let currentValue = '';
-    let options: string[] = [];
+    const options: string[] = [];
 
     if (input.tagName.toLowerCase() === 'select') {
       fieldType = 'select';

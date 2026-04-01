@@ -143,7 +143,7 @@ export class FormRegistry {
   ): Promise<FormFillResult> {
     this._ensureInitialized();
 
-    this._forceLog(`🔍 Starting fillAnyForm with fields:`, Object.keys(fields));
+    this._forceLog('🔍 Starting fillAnyForm with fields:', Object.keys(fields));
     this._forceLog(`📊 Currently registered forms: ${this._forms.size}`);
 
     // 🚀 PRIORITY 1: Try Enhanced Form Detector FIRST
@@ -644,7 +644,7 @@ export class FormRegistry {
         const preview = value == null ? '' : String(value);
         return `${name}: "${preview}" (${preview.length} chars)`;
       });
-      this._forceLog(`📋 Field details:`, fieldSummaries);
+      this._forceLog('📋 Field details:', fieldSummaries);
 
       // Filter out invalid field names and empty values
       const validFields = this._filterValidFields(fields);
@@ -981,17 +981,17 @@ export class FormRegistry {
       (element.hasAttribute('data-selectbox-value') ? element : null);
 
     if (!selectBoxContainer) {
-      this._forceLog(`❌ SelectBox container not found`);
+      this._forceLog('❌ SelectBox container not found');
       return;
     }
-    this._forceLog(`✅ Found SelectBox container`);
+    this._forceLog('✅ Found SelectBox container');
 
     // Find the trigger button for the dropdown
     const triggerButton = selectBoxContainer.querySelector(
       'button[data-value]'
     ) as HTMLButtonElement;
     if (!triggerButton) {
-      this._forceLog(`❌ Trigger button not found`);
+      this._forceLog('❌ Trigger button not found');
       return;
     }
 
@@ -1009,12 +1009,12 @@ export class FormRegistry {
     }
 
     // Click the button to open the dropdown
-    this._forceLog(`🖱️ Clicking button to open dropdown`);
+    this._forceLog('🖱️ Clicking button to open dropdown');
     triggerButton.click();
 
     // Wait a moment for the dropdown to open, then select the option
     setTimeout(() => {
-      this._forceLog(`⏳ Looking for dropdown after timeout`);
+      this._forceLog('⏳ Looking for dropdown after timeout');
 
       // Look for the dropdown options
       const dropdown =
@@ -1024,10 +1024,10 @@ export class FormRegistry {
         document.querySelector('[class*="options"]');
 
       if (!dropdown) {
-        this._forceLog(`❌ Dropdown not found after opening`);
+        this._forceLog('❌ Dropdown not found after opening');
         return;
       }
-      this._forceLog(`✅ Found dropdown`);
+      this._forceLog('✅ Found dropdown');
 
       // Find the option to select
       let optionToSelect: HTMLElement | null = null;
@@ -1125,7 +1125,7 @@ export class FormRegistry {
         }
 
         // Trigger change events
-        this._forceLog(`📢 Triggering change events`);
+        this._forceLog('📢 Triggering change events');
         selectBoxContainer.dispatchEvent(
           new Event('change', { bubbles: true })
         );
@@ -1136,14 +1136,14 @@ export class FormRegistry {
           })
         );
 
-        this._forceLog(`✅ SelectBox fill completed successfully`);
+        this._forceLog('✅ SelectBox fill completed successfully');
       } else {
         this._forceLog(`❌ Option "${value}" not found in dropdown`);
 
         // Log all available options for debugging
         const allOptions = dropdown.querySelectorAll('[data-dropdown-value]');
         this._forceLog(
-          `📋 Available options:`,
+          '📋 Available options:',
           Array.from(allOptions).map((opt) => ({
             value: opt.getAttribute('data-dropdown-value'),
             text: opt.textContent?.trim(),
@@ -1296,7 +1296,7 @@ export class FormRegistry {
       if (reactKey) {
         this._forceLog(`    ⚛️ Has React fiber: ${reactKey}`);
       } else {
-        this._forceLog(`    📄 No React fiber detected`);
+        this._forceLog('    📄 No React fiber detected');
       }
     });
   }
@@ -1352,7 +1352,7 @@ export class FormRegistry {
   }
 
   private _logFieldMismatchDetails(fields: Record<string, string>): void {
-    this._forceLog(`🔍 Field Mismatch Analysis:`);
+    this._forceLog('🔍 Field Mismatch Analysis:');
     this._forceLog(`  🎯 Requested fields: ${Object.keys(fields).join(', ')}`);
 
     for (const [formId, formElement] of this._formElements) {
@@ -1416,7 +1416,7 @@ export class FormRegistry {
     for (const [fieldName, fieldValue] of Object.entries(fields)) {
       // Skip empty or whitespace-only field names
       if (!fieldName || fieldName.trim().length === 0) {
-        this._forceLog(`⚠️ Skipping empty field name`);
+        this._forceLog('⚠️ Skipping empty field name');
         continue;
       }
 
@@ -1603,7 +1603,7 @@ export class FormRegistry {
           `  📝 ${form.id} (${form.formLibrary})${form.formApi ? ' - WITH API' : ' - no API'}`
         );
         if (form.formApi) {
-          this._forceLog(`    🔧 API methods:`, Object.keys(form.formApi));
+          this._forceLog('    🔧 API methods:', Object.keys(form.formApi));
         }
         this._forceLog(
           `    📋 Fields: ${Array.from(form.fields.keys()).join(', ')}`
