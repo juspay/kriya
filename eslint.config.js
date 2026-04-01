@@ -5,7 +5,15 @@ import eslintPluginPrettier from 'eslint-plugin-prettier';
 
 export default [
   {
-    ignores: ['node_modules', 'dist', 'build', 'coverage', '.next', '.nuxt', '*.cjs'],
+    ignores: [
+      'node_modules',
+      'dist',
+      'build',
+      'coverage',
+      '.next',
+      '.nuxt',
+      '*.cjs',
+    ],
   },
   ...tseslint.configs.recommended,
   {
@@ -31,7 +39,10 @@ export default [
       'no-console': ['warn', { allow: ['warn', 'error', 'log', 'info'] }],
       'prefer-const': 'error',
       'no-var': 'error',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
