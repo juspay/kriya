@@ -1324,8 +1324,24 @@ export class FormRegistry {
   ): { formApi: FormAPI; formId: string } | null {
     this._forceLog('🔍 Trying alternative matching strategies...');
 
-    // Strategy 1: Try any form if we have any registered (relaxed matching)
+    // Strategy 1: Prefer a form exposing formApi.initialize() — those are React
+    // Final Form / Formik instances that can receive the whole values tree
+    // atomically. Falling back to the first available form often picks a native
+    // <form> wrapper (e.g. a stepper) that can't handle nested payloads.
     if (this._forms.size > 0) {
+      for (const [formId, formApi] of this._forms.entries()) {
+        if (
+          formApi &&
+          typeof (formApi as unknown as { initialize?: unknown }).initialize ===
+            'function'
+        ) {
+          this._forceLog(
+            `✅ Using form with initialize(): ${formId} (preferred for complex payloads)`
+          );
+          return { formApi, formId };
+        }
+      }
+      // Last-resort relaxed matching
       const firstFormEntry = this._forms.entries().next().value;
       if (firstFormEntry) {
         const [formId, formApi] = firstFormEntry;
@@ -1582,7 +1598,7 @@ export class FormRegistry {
   }
 
   private _tryEnhancedFormDetector(
-    fields: Record<string, string>
+    fields: Record<string, any>
   ): FormFillResult | null {
     try {
       this._forceLog('🔬 Initializing Enhanced Form Detector...');

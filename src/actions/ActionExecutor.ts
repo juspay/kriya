@@ -184,11 +184,27 @@ export class ActionExecutor {
     }
 
     const formId = action.parameters.formId;
-    const fieldsParam = action.parameters.fields;
+    // Two supported payload shapes:
+    //   1. Nested envelope: { fields: { fieldA: ..., fieldB: ... } }
+    //   2. Flat: { fieldA: ..., fieldB: ... } — each top-level key (minus
+    //      reserved names like formId/fields/values) is a form field name
+    //      and its value is the field value. This matches how users commonly
+    //      author payloads where a form has a top-level field named "json"
+    //      that holds the real state tree.
+    const params = action.parameters as Record<string, unknown>;
+    const RESERVED = new Set(['formId', 'fields', 'values']);
+    let fieldsParam: unknown = params.fields ?? params.values;
+    if (fieldsParam === undefined) {
+      const flat: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (!RESERVED.has(k)) flat[k] = v;
+      }
+      if (Object.keys(flat).length > 0) fieldsParam = flat;
+    }
 
     if (!fieldsParam) {
       throw new AutomationError(
-        'FillForm action requires fields parameter',
+        'FillForm action requires fields (either a `fields`/`values` object or top-level field entries in `parameters`)',
         'VALIDATION_FAILED',
         { action }
       );
