@@ -21,7 +21,7 @@ export class ActionExecutor {
   private _formRegistry: FormRegistry | null;
   private _contextCapture: ContextCapture | null;
   public addEventListener:
-    | ((eventType: EventType, callback: EventCallback) => void)
+    | ((_eventType: EventType, _callback: EventCallback) => void)
     | null;
 
   constructor(config: AutomationConfig) {
@@ -57,7 +57,7 @@ export class ActionExecutor {
       if (this._config.screenshotOnError && this._contextCapture) {
         try {
           await this._contextCapture.captureScreenshot();
-        } catch (screenshotError) {
+        } catch (_screenshotError) {
           // Silently ignore screenshot errors
         }
       }
@@ -145,7 +145,9 @@ export class ActionExecutor {
     };
 
     if (action.parameters.x && action.parameters.y) {
-      (options as any).position = {
+      (
+        options as ClickOptions & { position?: { x: number; y: number } }
+      ).position = {
         x: parseInt(action.parameters.x, 10),
         y: parseInt(action.parameters.y, 10),
       };
@@ -211,7 +213,7 @@ export class ActionExecutor {
     }
 
     // Allow any value type, not just strings - supports arrays, objects, etc.
-    let fields: Record<string, any>;
+    let fields: Record<string, unknown>;
     try {
       fields =
         typeof fieldsParam === 'string' ? JSON.parse(fieldsParam) : fieldsParam;
