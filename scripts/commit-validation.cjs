@@ -94,20 +94,14 @@ class CommitValidator {
         try {
           return fs.readFileSync(arg, 'utf8').trim();
         } catch (err) {
-          this.log(
-            `Warning: Could not read commit message file: ${arg}`,
-            'yellow'
-          );
+          this.log(`Warning: Could not read commit message file: ${arg}`, 'yellow');
         }
       }
       return arg;
     }
 
     // 2. Check COMMIT_MSG_FILE environment variable (set by husky hook)
-    if (
-      process.env.COMMIT_MSG_FILE &&
-      fs.existsSync(process.env.COMMIT_MSG_FILE)
-    ) {
+    if (process.env.COMMIT_MSG_FILE && fs.existsSync(process.env.COMMIT_MSG_FILE)) {
       try {
         return fs.readFileSync(process.env.COMMIT_MSG_FILE, 'utf8').trim();
       } catch (err) {
@@ -176,9 +170,7 @@ class CommitValidator {
     const match = subject.match(SEMANTIC_COMMIT_PATTERN);
 
     if (!match) {
-      this.addError(
-        'Commit message does not follow semantic format: type(scope): description'
-      );
+      this.addError('Commit message does not follow semantic format: type(scope): description');
       this.addError(`  Received: "${subject}"`);
       return false;
     }
@@ -269,9 +261,7 @@ class CommitValidator {
     const match = subject.match(SEMANTIC_COMMIT_PATTERN);
     const description = match ? match[3] : null;
     if (description && description.length < 3) {
-      this.addWarning(
-        'Description is very short. Consider being more descriptive.'
-      );
+      this.addWarning('Description is very short. Consider being more descriptive.');
     }
 
     // Check for common typos in types
@@ -314,20 +304,13 @@ class CommitValidator {
     }
 
     // Initial commit
-    if (
-      subject === 'initial commit' ||
-      subject === 'init' ||
-      subject === 'first commit'
-    ) {
+    if (subject === 'initial commit' || subject === 'init' || subject === 'first commit') {
       this.log('Skipping validation for initial commit', 'cyan');
       return true;
     }
 
     // Release commits (often auto-generated)
-    if (
-      subject.match(/^chore\(release\):/i) ||
-      subject.match(/^\d+\.\d+\.\d+/)
-    ) {
+    if (subject.match(/^chore\(release\):/i) || subject.match(/^\d+\.\d+\.\d+/)) {
       this.log('Skipping validation for release commit', 'cyan');
       return true;
     }
@@ -398,10 +381,7 @@ class CommitValidator {
       `  ${COLORS.dim}scope${COLORS.reset}   - Optional context (e.g., component name)`,
       'reset'
     );
-    this.log(
-      `  ${COLORS.dim}description${COLORS.reset} - Brief summary of the change`,
-      'reset'
-    );
+    this.log(`  ${COLORS.dim}description${COLORS.reset} - Brief summary of the change`, 'reset');
   }
 
   /**
@@ -450,14 +430,8 @@ class CommitValidator {
       this.addError('No commit message found');
       this.log('\nUsage:', 'cyan');
       this.log('  node commit-validation.cjs <commit-message>', 'white');
-      this.log(
-        '  node commit-validation.cjs <path-to-commit-msg-file>',
-        'white'
-      );
-      this.log(
-        '  COMMIT_MSG="your message" node commit-validation.cjs',
-        'white'
-      );
+      this.log('  node commit-validation.cjs <path-to-commit-msg-file>', 'white');
+      this.log('  COMMIT_MSG="your message" node commit-validation.cjs', 'white');
       this.printResults();
       return 1;
     }

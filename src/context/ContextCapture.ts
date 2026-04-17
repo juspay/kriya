@@ -4,6 +4,8 @@ import type {
   ElementContext,
   EventCallback,
   EventType,
+  FormContext,
+  FormFieldContext,
   FormFieldValue,
   PageContext,
   ScreenshotOptions,
@@ -13,14 +15,27 @@ import { DEFAULT_CONTEXT_CAPTURE_CONFIG } from '@/types';
 import { AutomationError } from '@/types';
 import html2canvas from 'html2canvas';
 
+/**
+ * A loosely-structured description of a custom-detected form field.
+ * Custom design systems expose wildly different DOM patterns; the detector
+ * returns heterogeneous shapes that share a common core (name, type, value).
+ */
+type CustomFieldInfo = Record<string, unknown>;
+
+/**
+ * Minimal shape of the FormRegistry surface used by ContextCapture.
+ * Typed loosely here to avoid a circular import with FormRegistry.
+ */
+interface FormRegistryLike {
+  getFormContext?: () => readonly FormContext[];
+}
+
 export class ContextCapture {
   private readonly _config: AutomationConfig;
   private readonly _captureConfig: ContextCaptureConfig;
   private _initialized: boolean;
-  private _formRegistry: any = null;
-  public addEventListener:
-    | ((eventType: EventType, callback: EventCallback) => void)
-    | null;
+  private _formRegistry: FormRegistryLike | null = null;
+  public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
 
   constructor(config: AutomationConfig) {
     this._config = config;
@@ -29,16 +44,30 @@ export class ContextCapture {
     this.addEventListener = null;
   }
 
-  public setFormRegistry(formRegistry: any): void {
+  public setFormRegistry(formRegistry: FormRegistryLike): void {
     this._formRegistry = formRegistry;
+  }
+
+  /**
+   * Gated debug log — emits to the browser console only when the consumer
+   * opts in via `AutomationConfig.debugMode`. Library code must not pollute
+   * callers' devtools on every capture.
+   */
+  private _log(...args: readonly unknown[]): void {
+    if (this._config.debugMode) {
+      console.info('📋 Kriya:', ...args);
+    }
+  }
+
+  private _warn(...args: readonly unknown[]): void {
+    if (this._config.debugMode) {
+      console.warn('📋 Kriya:', ...args);
+    }
   }
 
   public initialize(): void {
     if (this._initialized) {
-      throw new AutomationError(
-        'ContextCapture is already initialized',
-        'INVALID_CONFIGURATION'
-      );
+      throw new AutomationError('ContextCapture is already initialized', 'INVALID_CONFIGURATION');
     }
 
     this._ensureBrowserSupport();
@@ -50,48 +79,36 @@ export class ContextCapture {
 
     try {
       const viewport = this._getViewportInfo();
-      const elements = this._captureConfig.includeElementData
-        ? this._extractElementContext()
-        : [];
+      const elements = this._captureConfig.includeElementData ? this._extractElementContext() : [];
 
       // Enhanced form detection for both FormRegistry and custom design system
-      let forms: any[] = [];
+      let forms: FormContext[] = [];
 
       // First, try to get forms from FormRegistry
-      if (
-        this._formRegistry &&
-        typeof this._formRegistry.getFormContext === 'function'
-      ) {
+      if (this._formRegistry && typeof this._formRegistry.getFormContext === 'function') {
         try {
-          forms = this._formRegistry.getFormContext();
-          console.log(
-            `📋 Kriya: Found ${forms.length} forms from FormRegistry`
-          );
+          const registryForms = this._formRegistry.getFormContext();
+          forms = registryForms ? [...registryForms] : [];
+          this._log(`Found ${forms.length} forms from FormRegistry`);
         } catch (error) {
-          console.warn(
-            '📋 Kriya: Failed to get forms from FormRegistry:',
-            error
-          );
+          this._warn('Failed to get forms from FormRegistry:', error);
         }
       }
 
       // Always also detect custom design system components (whether or not FormRegistry found forms)
       const customForms = this._detectCustomDesignSystemForms();
-      console.log(
-        `📋 Kriya: Detected ${customForms.length} custom design system forms`
-      );
+      this._log(`Detected ${customForms.length} custom design system forms`);
 
-      // Combine forms from both sources
-      forms = forms.concat(customForms);
+      // Narrow each loose custom-detected form into a real FormContext so
+      // downstream consumers of PageContext.forms[i].fields[j] get the actual
+      // FormFieldContext shape, not an unchecked double-cast.
+      forms = forms.concat(customForms.map(f => this._toFormContext(f)));
 
       const context: PageContext = {
         pageUrl: window.location.href,
         title: document.title,
         timestamp: Date.now(),
-        totalFormsFound: Math.max(
-          document.querySelectorAll('form').length,
-          forms.length
-        ),
+        totalFormsFound: Math.max(document.querySelectorAll('form').length, forms.length),
         forms: forms,
         elements,
         viewport,
@@ -111,9 +128,7 @@ export class ContextCapture {
     }
   }
 
-  public async captureScreenshot(
-    options: Partial<ScreenshotOptions> = {}
-  ): Promise<string> {
+  public async captureScreenshot(options: Partial<ScreenshotOptions> = {}): Promise<string> {
     this._ensureInitialized();
 
     if (!this._captureConfig.includeScreenshot) {
@@ -192,19 +207,12 @@ export class ContextCapture {
     }
 
     if (typeof document === 'undefined') {
-      throw new AutomationError(
-        'ContextCapture requires DOM access',
-        'BROWSER_NOT_SUPPORTED'
-      );
+      throw new AutomationError('ContextCapture requires DOM access', 'BROWSER_NOT_SUPPORTED');
     }
   }
 
-  private async _captureScreenshotInternal(
-    options: ScreenshotOptions
-  ): Promise<HTMLCanvasElement> {
-    const targetElement = options.fullPage
-      ? document.body
-      : document.documentElement;
+  private async _captureScreenshotInternal(options: ScreenshotOptions): Promise<HTMLCanvasElement> {
+    const targetElement = options.fullPage ? document.body : document.documentElement;
 
     const html2canvasOptions = {
       allowTaint: true,
@@ -236,7 +244,9 @@ export class ContextCapture {
 
     let count = 0;
     for (const element of allElements) {
-      if (count >= maxElements) break;
+      if (count >= maxElements) {
+        break;
+      }
 
       const htmlElement = element as HTMLElement;
 
@@ -254,14 +264,7 @@ export class ContextCapture {
     const tagName = element.tagName.toLowerCase();
 
     // Include interactive elements
-    const interactiveTags = [
-      'a',
-      'button',
-      'input',
-      'textarea',
-      'select',
-      'form',
-    ];
+    const interactiveTags = ['a', 'button', 'input', 'textarea', 'select', 'form'];
     if (interactiveTags.includes(tagName)) {
       return true;
     }
@@ -274,7 +277,6 @@ export class ContextCapture {
 
     // Include elements with specific attributes
     const hasId = element.id && element.id.length > 0;
-    const hasClass = element.className && element.className.length > 0;
     const hasAriaLabel = element.getAttribute('aria-label');
 
     if (hasId || hasAriaLabel) {
@@ -329,8 +331,7 @@ export class ContextCapture {
     }
 
     // Check for click event listeners (basic check)
-    const hasClickHandler =
-      element.onclick !== null || element.getAttribute('onclick') !== null;
+    const hasClickHandler = element.onclick !== null || element.getAttribute('onclick') !== null;
 
     if (hasClickHandler) {
       return true;
@@ -351,20 +352,14 @@ export class ContextCapture {
     return false;
   }
 
-  private _detectCustomDesignSystemForms(): any[] {
-    console.log(
-      '📋 Kriya: Starting ReScript Euler dashboard form detection...'
-    );
+  private _detectCustomDesignSystemForms(): CustomFieldInfo[] {
+    this._log('Starting ReScript Euler dashboard form detection...');
 
-    const forms: any[] = [];
-    const processedElements = new Set<HTMLElement>();
+    const forms: CustomFieldInfo[] = [];
 
     // Detect ReScript FormRenderer fields - this is the primary pattern
-    const rescriptFields =
-      this._detectReScriptFormRendererFields(processedElements);
-    console.log(
-      `📋 Kriya: Found ${rescriptFields.length} ReScript FormRenderer fields`
-    );
+    const rescriptFields = this._detectReScriptFormRendererFields();
+    this._log(`Found ${rescriptFields.length} ReScript FormRenderer fields`);
 
     if (rescriptFields.length > 0) {
       forms.push({
@@ -379,21 +374,22 @@ export class ContextCapture {
     }
 
     // Detect standalone React Final Form inputs (only those NOT already detected in ReScript forms)
-    const reactFinalFormFields =
-      this._detectReactFinalFormFields(processedElements);
-    console.log(
-      `📋 Kriya: Found ${reactFinalFormFields.length} standalone React Final Form fields`
-    );
+    const reactFinalFormFields = this._detectReactFinalFormFields();
+    this._log(`Found ${reactFinalFormFields.length} standalone React Final Form fields`);
 
     if (reactFinalFormFields.length > 0) {
-      const existingFieldNames = forms.flatMap((form) =>
-        form.fields.map((field: any) => field.name)
-      );
-      const uniqueFormFields = reactFinalFormFields.filter(
-        (field: any) =>
-          !existingFieldNames.includes(field.name) &&
-          !this._isFieldNameSimilar(field.name, existingFieldNames)
-      );
+      const existingFieldNames = forms.flatMap(form => {
+        const fields = (form as { fields?: readonly CustomFieldInfo[] }).fields;
+        return (
+          fields?.map((field: CustomFieldInfo) => (field as { name?: string }).name ?? '') ?? []
+        );
+      });
+      const uniqueFormFields = reactFinalFormFields.filter((field: CustomFieldInfo) => {
+        const name = (field as { name?: string }).name ?? '';
+        return (
+          !existingFieldNames.includes(name) && !this._isFieldNameSimilar(name, existingFieldNames)
+        );
+      });
 
       if (uniqueFormFields.length > 0) {
         forms.push({
@@ -408,10 +404,76 @@ export class ContextCapture {
       }
     }
 
-    console.log(
-      `📋 Kriya: ReScript detection complete - found ${forms.length} forms with ${forms.reduce((total, form) => total + form.fields.length, 0)} total fields`
+    this._log(
+      `ReScript detection complete - found ${forms.length} forms with ${forms.reduce(
+        (total, form) => {
+          const fields = (form as { fields?: readonly unknown[] }).fields;
+          return total + (fields?.length ?? 0);
+        },
+        0
+      )} total fields`
     );
     return forms;
+  }
+
+  /**
+   * Narrow a loosely-typed custom-detected form description into a real
+   * FormContext. Guarantees every `fields[i]` is a valid FormFieldContext so
+   * consumers of PageContext.forms don't see `undefined`/wrong-shape values
+   * through a cast that lied to the compiler.
+   */
+  private _toFormContext(raw: CustomFieldInfo): FormContext {
+    const formId =
+      typeof raw.formId === 'string' && raw.formId.length > 0
+        ? raw.formId
+        : `custom-form-${Date.now()}`;
+    const action = typeof raw.action === 'string' ? raw.action : undefined;
+    const method = typeof raw.method === 'string' && raw.method.length > 0 ? raw.method : 'POST';
+    const isRegistered = Boolean(raw.isRegistered);
+    const hasSubmitButton = Boolean(raw.hasSubmitButton);
+
+    const rawFields = Array.isArray(raw.fields) ? (raw.fields as readonly unknown[]) : [];
+    const fields: FormFieldContext[] = rawFields
+      .filter((f): f is CustomFieldInfo => !!f && typeof f === 'object')
+      .map(f => this._toFormFieldContext(f));
+
+    return { formId, action, method, fields, isRegistered, hasSubmitButton };
+  }
+
+  /**
+   * Convert a heterogeneous custom-field description into a validated
+   * FormFieldContext. Missing values are filled with safe defaults rather
+   * than left undefined, so no consumer reads an unchecked property.
+   */
+  private _toFormFieldContext(raw: CustomFieldInfo): FormFieldContext {
+    const name = typeof raw.name === 'string' ? raw.name : '';
+    const type = typeof raw.type === 'string' ? raw.type : 'string';
+    const placeholder = typeof raw.placeholder === 'string' ? raw.placeholder : undefined;
+    const label = typeof raw.label === 'string' ? raw.label : undefined;
+    const required = Boolean(raw.required);
+    const disabled = Boolean(raw.disabled);
+
+    const isFormFieldValue = (v: unknown): v is FormFieldValue =>
+      !!v &&
+      typeof v === 'object' &&
+      'type' in (v as Record<string, unknown>) &&
+      'value' in (v as Record<string, unknown>);
+
+    const value = isFormFieldValue(raw.value) ? raw.value : this._toFormFieldValue(type, raw.value);
+    const initialValue = isFormFieldValue(raw.initialValue)
+      ? raw.initialValue
+      : this._toFormFieldValue(type, raw.initialValue ?? raw.value);
+
+    return {
+      name,
+      type,
+      value,
+      initialValue,
+      placeholder,
+      required,
+      disabled,
+      label,
+    };
   }
 
   private _toFormFieldValue(fieldType: string, value: unknown): FormFieldValue {
@@ -427,14 +489,12 @@ export class ContextCapture {
     }
 
     if (Array.isArray(value)) {
-      const normalized = value.map((item) =>
-        item == null ? '' : String(item)
-      );
+      const normalized = value.map(item => String(item ?? ''));
       return { type: 'array', value: normalized };
     }
 
     if (normalizedType.includes('file')) {
-      return { type: 'file', value: value == null ? '' : String(value) };
+      return { type: 'file', value: String(value ?? '') };
     }
 
     if (
@@ -458,13 +518,10 @@ export class ContextCapture {
       };
     }
 
-    return { type: 'string', value: value == null ? '' : String(value) };
+    return { type: 'string', value: String(value ?? '') };
   }
 
-  private _extractCustomFieldInfo(
-    wrapper: HTMLElement,
-    index: number
-  ): any | null {
+  private _extractCustomFieldInfo(wrapper: HTMLElement, index: number): CustomFieldInfo | null {
     // Try multiple strategies to get a meaningful field name
     const fieldName = this._extractFieldName(wrapper, index);
 
@@ -479,12 +536,13 @@ export class ContextCapture {
     const fieldInfo = this._detectFieldTypeAndValue(wrapper);
 
     if (!fieldInfo) {
-      console.log(`📋 Kriya: Could not determine field type for ${fieldName}`);
+      this._log(`Could not determine field type for ${fieldName}`);
       return null;
     }
 
-    console.log(
-      `📋 Kriya: Extracted field "${fieldName}" - type: ${fieldInfo.type}, value: "${fieldInfo.value}"`
+    const fieldType = typeof fieldInfo.type === 'string' ? fieldInfo.type : 'string';
+    this._log(
+      `Extracted field "${fieldName}" - type: ${fieldType}, value: "${String(fieldInfo.value)}"`
     );
 
     const normalizedValue =
@@ -492,25 +550,20 @@ export class ContextCapture {
       typeof fieldInfo.value === 'object' &&
       'type' in fieldInfo.value &&
       'value' in fieldInfo.value
-        ? fieldInfo.value
-        : this._toFormFieldValue(fieldInfo.type, fieldInfo.value);
+        ? (fieldInfo.value as FormFieldValue)
+        : this._toFormFieldValue(fieldType, fieldInfo.value);
     const normalizedInitialValue =
       fieldInfo.initialValue &&
       typeof fieldInfo.initialValue === 'object' &&
       'type' in fieldInfo.initialValue &&
       'value' in fieldInfo.initialValue
-        ? fieldInfo.initialValue
-        : this._toFormFieldValue(
-            fieldInfo.type,
-            fieldInfo.initialValue ?? fieldInfo.value
-          );
-    const normalizedOptions = fieldInfo.options
-      ? fieldInfo.options.map((option: unknown) =>
-          option &&
-          typeof option === 'object' &&
-          'type' in option &&
-          'value' in option
-            ? option
+        ? (fieldInfo.initialValue as FormFieldValue)
+        : this._toFormFieldValue(fieldType, fieldInfo.initialValue ?? fieldInfo.value);
+    const optionsRaw = Array.isArray(fieldInfo.options) ? fieldInfo.options : undefined;
+    const normalizedOptions = optionsRaw
+      ? optionsRaw.map((option: unknown) =>
+          option && typeof option === 'object' && 'type' in option && 'value' in option
+            ? (option as FormFieldValue)
             : this._toFormFieldValue('string', option)
         )
       : undefined;
@@ -528,37 +581,37 @@ export class ContextCapture {
     };
   }
 
-  private _detectFieldTypeAndValue(wrapper: HTMLElement): any | null {
+  private _detectFieldTypeAndValue(wrapper: HTMLElement): CustomFieldInfo | null {
     // Check for SelectBox/Dropdown
     const selectboxValue = wrapper.querySelector('[data-selectbox-value]');
     if (selectboxValue) {
-      const buttonText =
-        selectboxValue.getAttribute('data-selectbox-value') || '';
+      const buttonText = selectboxValue.getAttribute('data-selectbox-value') || '';
 
       // Find the actual selected value from the button
       const selectedButton = wrapper.querySelector('button[data-value]');
       const currentValue = selectedButton?.getAttribute('data-value') || '';
-      const displayText =
-        wrapper.querySelector('[data-button-text]')?.textContent?.trim() || '';
+      const displayText = wrapper.querySelector('[data-button-text]')?.textContent?.trim() || '';
 
       // Look for dropdown options when dropdown is expanded
       const dropdown = wrapper.querySelector('[data-dropdown="dropdown"]');
       const options: string[] = [];
 
       if (dropdown) {
-        const optionElements = dropdown.querySelectorAll(
-          '[data-dropdown-value]'
-        );
-        optionElements.forEach((option) => {
+        const optionElements = dropdown.querySelectorAll('[data-dropdown-value]');
+        optionElements.forEach(option => {
           const value = option.getAttribute('data-dropdown-value');
-          if (value) options.push(value);
+          if (value) {
+            options.push(value);
+          }
         });
       } else {
         // If dropdown is not expanded, try to find options from static elements
         const allButtons = wrapper.querySelectorAll('button[data-value]');
-        allButtons.forEach((button) => {
+        allButtons.forEach(button => {
           const value = button.getAttribute('data-value');
-          if (value) options.push(value);
+          if (value) {
+            options.push(value);
+          }
         });
       }
 
@@ -571,7 +624,7 @@ export class ContextCapture {
         placeholder: buttonText,
         options:
           options.length > 0
-            ? options.map((option) => this._toFormFieldValue('string', option))
+            ? options.map(option => this._toFormFieldValue('string', option))
             : undefined,
       };
     }
@@ -583,10 +636,7 @@ export class ContextCapture {
       return {
         type: input.type || 'text',
         value: this._toFormFieldValue(input.type || 'text', input.value || ''),
-        initialValue: this._toFormFieldValue(
-          input.type || 'text',
-          input.value || ''
-        ),
+        initialValue: this._toFormFieldValue(input.type || 'text', input.value || ''),
         placeholder: (input as HTMLInputElement).placeholder || undefined,
         required: input.required,
         disabled: input.disabled,
@@ -597,9 +647,7 @@ export class ContextCapture {
     const buttonInput = wrapper.querySelector('button[data-value]');
     if (buttonInput) {
       const value = buttonInput.getAttribute('data-value') || '';
-      const buttonText =
-        buttonInput.querySelector('[data-button-text]')?.textContent?.trim() ||
-        '';
+      const buttonText = buttonInput.querySelector('[data-button-text]')?.textContent?.trim() || '';
 
       return {
         type: 'button',
@@ -610,9 +658,7 @@ export class ContextCapture {
     }
 
     // Check for numeric inputs or specialized inputs
-    const numericInput = wrapper.querySelector(
-      '[inputmode="numeric"], [type="number"]'
-    );
+    const numericInput = wrapper.querySelector('[inputmode="numeric"], [type="number"]');
     if (numericInput) {
       const input = numericInput as HTMLInputElement;
       return {
@@ -628,21 +674,18 @@ export class ContextCapture {
     return null;
   }
 
-  private _detectFallbackFields(): any[] {
-    const fields: any[] = [];
+  private _detectFallbackFields(): CustomFieldInfo[] {
+    const fields: CustomFieldInfo[] = [];
 
     // Look for SelectBox components with proper value extraction
-    const selectBoxElements = document.querySelectorAll(
-      '[data-selectbox-value]'
-    );
+    const selectBoxElements = document.querySelectorAll('[data-selectbox-value]');
     selectBoxElements.forEach((element, index) => {
       const buttonText = element.getAttribute('data-selectbox-value') || '';
 
       // Find the actual selected value
       const selectedButton = element.querySelector('button[data-value]');
       const currentValue = selectedButton?.getAttribute('data-value') || '';
-      const displayText =
-        element.querySelector('[data-button-text]')?.textContent?.trim() || '';
+      const displayText = element.querySelector('[data-button-text]')?.textContent?.trim() || '';
 
       // Try to find a meaningful field name from the wrapper or label
       const wrapper = element.closest('[data-component-field-wrapper]');
@@ -689,10 +732,7 @@ export class ContextCapture {
         name: fieldName,
         type: input.type || 'text',
         value: this._toFormFieldValue(input.type || 'text', input.value || ''),
-        initialValue: this._toFormFieldValue(
-          input.type || 'text',
-          input.value || ''
-        ),
+        initialValue: this._toFormFieldValue(input.type || 'text', input.value || ''),
         placeholder: (input as HTMLInputElement).placeholder || undefined,
         required: input.required,
         disabled: input.disabled,
@@ -711,42 +751,30 @@ export class ContextCapture {
 
     // Also check for buttons with submit-related text content
     const allButtons = document.querySelectorAll('button');
-    const textBasedSubmitButtons = Array.from(allButtons).filter((button) => {
+    const textBasedSubmitButtons = Array.from(allButtons).filter(button => {
       const text = button.textContent?.toLowerCase() || '';
-      return (
-        text.includes('submit') ||
-        text.includes('save') ||
-        text.includes('apply')
-      );
+      return text.includes('submit') || text.includes('save') || text.includes('apply');
     });
 
     return submitButtons.length > 0 || textBasedSubmitButtons.length > 0;
   }
 
   // ReScript-specific form detection methods
-  private _detectReScriptFormRendererFields(
-    processedElements: Set<HTMLElement> = new Set()
-  ): any[] {
-    const fields: any[] = [];
-    console.log(
-      '📋 Kriya: Starting comprehensive ReScript InputFields detection...'
-    );
+  private _detectReScriptFormRendererFields(): CustomFieldInfo[] {
+    const fields: CustomFieldInfo[] = [];
+    this._log('Starting comprehensive ReScript InputFields detection...');
 
     // Comprehensive detection for all InputFields.res patterns
 
     // 1. Detect Euler Dashboard Field Wrappers (Primary Pattern)
-    const fieldWrappers = document.querySelectorAll(
-      '[data-component-field-wrapper]'
-    );
-    console.log(`📋 Kriya: Found ${fieldWrappers.length} field wrappers`);
+    const fieldWrappers = document.querySelectorAll('[data-component-field-wrapper]');
+    this._log(`Found ${fieldWrappers.length} field wrappers`);
 
     fieldWrappers.forEach((wrapper, index) => {
       const fieldName = this._extractFieldName(wrapper as HTMLElement, index);
       const labelElement = wrapper.querySelector('[data-form-label]');
       const label =
-        labelElement?.getAttribute('data-form-label') ||
-        labelElement?.textContent?.trim() ||
-        '';
+        labelElement?.getAttribute('data-form-label') || labelElement?.textContent?.trim() || '';
 
       // Detect field type and extract comprehensive information
       const fieldInfo = this._detectComprehensiveFieldType(
@@ -756,23 +784,16 @@ export class ContextCapture {
       );
       if (fieldInfo) {
         fields.push(fieldInfo);
-        console.log(
-          `📋 Kriya: Detected field "${fieldName}" - ${fieldInfo.type}`
-        );
+        this._log(`Detected field "${fieldName}" - ${fieldInfo.type}`);
       }
     });
 
     // 2. Detect standalone React Final Form inputs
-    const formInputs = document.querySelectorAll(
-      'input[name], select[name], textarea[name]'
-    );
-    console.log(`📋 Kriya: Found ${formInputs.length} standard form inputs`);
+    const formInputs = document.querySelectorAll('input[name], select[name], textarea[name]');
+    this._log(`Found ${formInputs.length} standard form inputs`);
 
     formInputs.forEach((element, index) => {
-      const input = element as
-        | HTMLInputElement
-        | HTMLSelectElement
-        | HTMLTextAreaElement;
+      const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
       // Skip if already detected in field wrapper
       if (input.closest('[data-component-field-wrapper]')) {
@@ -781,17 +802,13 @@ export class ContextCapture {
 
       // Check if this is part of a React Final Form
       const formContainer =
-        input.closest('form') ||
-        input.closest('[data-rff-ui]') ||
-        input.closest('[class*="form"]');
+        input.closest('form') || input.closest('[data-rff-ui]') || input.closest('[class*="form"]');
 
       if (formContainer && input.name) {
         const fieldInfo = this._extractStandardFieldInfo(input, index);
         if (fieldInfo) {
           fields.push(fieldInfo);
-          console.log(
-            `📋 Kriya: Detected standard field "${fieldInfo.name}" - ${fieldInfo.type}`
-          );
+          this._log(`Detected standard field "${fieldInfo.name}" - ${fieldInfo.type}`);
         }
       }
     });
@@ -800,38 +817,31 @@ export class ContextCapture {
     const specializedFields = this._detectSpecializedReScriptComponents();
     fields.push(...specializedFields);
 
-    console.log(`📋 Kriya: Total ReScript fields detected: ${fields.length}`);
+    this._log(`Total ReScript fields detected: ${fields.length}`);
     return fields;
   }
 
-  private _detectReScriptSelectBoxFields(): any[] {
-    const fields: any[] = [];
+  private _detectReScriptSelectBoxFields(): CustomFieldInfo[] {
+    const fields: CustomFieldInfo[] = [];
 
     // Primary detection: Look for Euler dashboard SelectBox pattern with data attributes
-    const eulerSelectBoxes = document.querySelectorAll(
-      '[data-selectbox-value]'
-    );
+    const eulerSelectBoxes = document.querySelectorAll('[data-selectbox-value]');
 
     eulerSelectBoxes.forEach((element, index) => {
-      console.log(`📋 Kriya: Found Euler selectbox ${index}:`, element);
+      this._log(`Found Euler selectbox ${index}:`, element);
 
       // Get field wrapper for field name
       const fieldWrapper = element.closest('[data-component-field-wrapper]');
       const fieldName =
-        fieldWrapper?.getAttribute('data-component-field-wrapper') ||
-        `euler-selectbox-${index}`;
+        fieldWrapper?.getAttribute('data-component-field-wrapper') || `euler-selectbox-${index}`;
 
       // Get label from data-form-label
       const labelElement = fieldWrapper?.querySelector('[data-form-label]');
       const label =
-        labelElement?.getAttribute('data-form-label') ||
-        labelElement?.textContent?.trim() ||
-        '';
+        labelElement?.getAttribute('data-form-label') || labelElement?.textContent?.trim() || '';
 
       // Get button and current value
-      const button = element.querySelector(
-        'button[data-value]'
-      ) as HTMLButtonElement;
+      const button = element.querySelector('button[data-value]') as HTMLButtonElement;
       if (button) {
         const currentValue = button.getAttribute('data-value') || '';
 
@@ -843,15 +853,13 @@ export class ContextCapture {
           '';
 
         // Get selectbox placeholder/title
-        const selectboxTitle =
-          element.getAttribute('data-selectbox-value') || '';
+        const selectboxTitle = element.getAttribute('data-selectbox-value') || '';
 
         // Check if required (look for red asterisk)
-        const isRequired =
-          fieldWrapper?.querySelector('.text-red-950') !== null;
+        const isRequired = fieldWrapper?.querySelector('.text-red-950') !== null;
 
-        console.log(
-          `📋 Kriya: Euler selectbox details - Name: ${fieldName}, Label: ${label}, Value: ${currentValue}, Display: ${displayText}`
+        this._log(
+          `Euler selectbox details - Name: ${fieldName}, Label: ${label}, Value: ${currentValue}, Display: ${displayText}`
         );
 
         fields.push({
@@ -863,9 +871,7 @@ export class ContextCapture {
           label: label || undefined,
           placeholder: selectboxTitle,
           required: isRequired,
-          disabled:
-            button.disabled ||
-            button.getAttribute('data-button-status') === 'disabled',
+          disabled: button.disabled || button.getAttribute('data-button-status') === 'disabled',
           framework: 'Euler ReScript SelectBox',
           dataAttributes: {
             'data-selectbox-value': selectboxTitle,
@@ -901,10 +907,7 @@ export class ContextCapture {
           `class-selectbox-${index}`;
 
         // Look for current value in data attributes
-        let currentValue =
-          button.getAttribute('data-value') ||
-          button.getAttribute('value') ||
-          '';
+        let currentValue = button.getAttribute('data-value') || button.getAttribute('value') || '';
 
         // If no data-value, use button text as current value (but exclude placeholder-like text)
         if (
@@ -926,11 +929,9 @@ export class ContextCapture {
           const optionElements = dropdownContainer.querySelectorAll(
             '[role="option"], [data-value], li, div[class*="option"]'
           );
-          optionElements.forEach((option) => {
+          optionElements.forEach(option => {
             const optionValue =
-              option.getAttribute('data-value') ||
-              option.textContent?.trim() ||
-              '';
+              option.getAttribute('data-value') || option.textContent?.trim() || '';
             if (optionValue && !options.includes(optionValue)) {
               options.push(optionValue);
             }
@@ -954,9 +955,7 @@ export class ContextCapture {
           disabled: button.disabled,
           options:
             options.length > 0
-              ? options.map((option) =>
-                  this._toFormFieldValue('string', option)
-                )
+              ? options.map(option => this._toFormFieldValue('string', option))
               : undefined,
           framework: 'Generic ReScript SelectBox',
         });
@@ -966,19 +965,14 @@ export class ContextCapture {
     return fields;
   }
 
-  private _detectReactFinalFormFields(
-    processedElements: Set<HTMLElement> = new Set()
-  ): any[] {
-    const fields: any[] = [];
+  private _detectReactFinalFormFields(): CustomFieldInfo[] {
+    const fields: CustomFieldInfo[] = [];
 
     // Look for React Final Form field patterns
     const formElements = document.querySelectorAll('input, select, textarea');
 
     formElements.forEach((element, index) => {
-      const input = element as
-        | HTMLInputElement
-        | HTMLSelectElement
-        | HTMLTextAreaElement;
+      const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
       // Check if this element has React Final Form characteristics
       const hasRFFCharacteristics =
@@ -998,7 +992,7 @@ export class ContextCapture {
           const selectElement = input as HTMLSelectElement;
           currentValue = selectElement.value;
 
-          Array.from(selectElement.options).forEach((option) => {
+          Array.from(selectElement.options).forEach(option => {
             if (option.value) {
               options.push(option.value);
             }
@@ -1031,9 +1025,7 @@ export class ContextCapture {
           disabled: input.disabled || false,
           options:
             options.length > 0
-              ? options.map((option) =>
-                  this._toFormFieldValue('string', option)
-                )
+              ? options.map(option => this._toFormFieldValue('string', option))
               : undefined,
           framework: 'React Final Form',
         });
@@ -1055,7 +1047,7 @@ export class ContextCapture {
 
     // Also check for buttons with submit-related text content
     const allButtons = document.querySelectorAll('button');
-    const textBasedSubmitButtons = Array.from(allButtons).filter((button) => {
+    const textBasedSubmitButtons = Array.from(allButtons).filter(button => {
       const text = button.textContent?.toLowerCase() || '';
       return (
         text.includes('submit') ||
@@ -1074,7 +1066,7 @@ export class ContextCapture {
     wrapper: HTMLElement,
     fieldName: string,
     label: string
-  ): any | null {
+  ): CustomFieldInfo | null {
     // Check for SelectBox/MultiSelectBox (most common in Euler dashboard)
     const selectboxValue = wrapper.querySelector('[data-selectbox-value]');
     if (selectboxValue) {
@@ -1090,43 +1082,25 @@ export class ContextCapture {
     }
 
     // Check for TextInput
-    const textInput = wrapper.querySelector(
-      'input[type="text"], input:not([type])'
-    );
+    const textInput = wrapper.querySelector('input[type="text"], input:not([type])');
     if (textInput) {
-      return this._extractTextInputInfo(
-        textInput as HTMLInputElement,
-        fieldName,
-        label
-      );
+      return this._extractTextInputInfo(textInput as HTMLInputElement, fieldName, label);
     }
 
     // Check for NumericTextInput
-    const numericInput = wrapper.querySelector(
-      'input[type="number"], input[inputmode="numeric"]'
-    );
+    const numericInput = wrapper.querySelector('input[type="number"], input[inputmode="numeric"]');
     if (numericInput) {
-      return this._extractNumericInputInfo(
-        numericInput as HTMLInputElement,
-        fieldName,
-        label
-      );
+      return this._extractNumericInputInfo(numericInput as HTMLInputElement, fieldName, label);
     }
 
     // Check for MultiLineTextInput (TextArea)
     const textArea = wrapper.querySelector('textarea');
     if (textArea) {
-      return this._extractTextAreaInfo(
-        textArea as HTMLTextAreaElement,
-        fieldName,
-        label
-      );
+      return this._extractTextAreaInfo(textArea as HTMLTextAreaElement, fieldName, label);
     }
 
     // Check for DatePicker/DateRangePicker
-    const datePicker = wrapper.querySelector(
-      'button[data-date-picker], .date-picker'
-    );
+    const datePicker = wrapper.querySelector('button[data-date-picker], .date-picker');
     if (datePicker) {
       return this._extractDatePickerInfo(wrapper, fieldName, label);
     }
@@ -1138,45 +1112,31 @@ export class ContextCapture {
     }
 
     // Check for BoolInput/Checkbox
-    const boolInput = wrapper.querySelector(
-      'input[type="checkbox"], input[type="radio"]'
-    );
+    const boolInput = wrapper.querySelector('input[type="checkbox"], input[type="radio"]');
     if (boolInput) {
-      return this._extractBoolInputInfo(
-        boolInput as HTMLInputElement,
-        fieldName,
-        label
-      );
+      return this._extractBoolInputInfo(boolInput as HTMLInputElement, fieldName, label);
     }
 
     // Check for Button Group Input
-    const buttonGroup = wrapper.querySelector(
-      '.button-group, [data-button-group]'
-    );
+    const buttonGroup = wrapper.querySelector('.button-group, [data-button-group]');
     if (buttonGroup) {
       return this._extractButtonGroupInfo(wrapper, fieldName, label);
     }
 
     // Check for Range/Slider Input
-    const rangeInput = wrapper.querySelector(
-      'input[type="range"], .range-slider'
-    );
+    const rangeInput = wrapper.querySelector('input[type="range"], .range-slider');
     if (rangeInput) {
       return this._extractRangeInputInfo(wrapper, fieldName, label);
     }
 
     // Check for Color Picker
-    const colorPicker = wrapper.querySelector(
-      'input[type="color"], .color-picker'
-    );
+    const colorPicker = wrapper.querySelector('input[type="color"], .color-picker');
     if (colorPicker) {
       return this._extractColorPickerInfo(wrapper, fieldName, label);
     }
 
     // Check for MultiTextInput (Tag Input)
-    const tagInput = wrapper.querySelector(
-      '.tag-input, .chip-input, [data-tag-input]'
-    );
+    const tagInput = wrapper.querySelector('.tag-input, .chip-input, [data-tag-input]');
     if (tagInput) {
       return this._extractTagInputInfo(wrapper, fieldName, label);
     }
@@ -1187,9 +1147,7 @@ export class ContextCapture {
       return this._extractButtonInputInfo(wrapper, fieldName, label);
     }
 
-    console.log(
-      `📋 Kriya: Could not determine field type for wrapper "${fieldName}"`
-    );
+    this._log(`Could not determine field type for wrapper "${fieldName}"`);
     return null;
   }
 
@@ -1198,14 +1156,11 @@ export class ContextCapture {
     fieldName: string,
     label: string,
     isMultiSelect: boolean
-  ): any {
+  ): CustomFieldInfo {
     const selectboxElement = wrapper.querySelector('[data-selectbox-value]');
-    const selectboxTitle =
-      selectboxElement?.getAttribute('data-selectbox-value') || '';
+    const selectboxTitle = selectboxElement?.getAttribute('data-selectbox-value') || '';
 
-    const button = wrapper.querySelector(
-      'button[data-value]'
-    ) as HTMLButtonElement;
+    const button = wrapper.querySelector('button[data-value]') as HTMLButtonElement;
     const currentValue = button?.getAttribute('data-value') || '';
 
     const buttonTextElement = button?.querySelector('[data-button-text]');
@@ -1222,9 +1177,11 @@ export class ContextCapture {
     const dropdown = wrapper.querySelector('[data-dropdown="dropdown"]');
     if (dropdown) {
       const optionElements = dropdown.querySelectorAll('[data-dropdown-value]');
-      optionElements.forEach((option) => {
+      optionElements.forEach(option => {
         const value = option.getAttribute('data-dropdown-value');
-        if (value) options.push(value);
+        if (value) {
+          options.push(value);
+        }
       });
     }
 
@@ -1232,10 +1189,11 @@ export class ContextCapture {
     const selectedValues: string[] = [];
     if (isMultiSelect) {
       const chips = wrapper.querySelectorAll('.chip, .tag, [data-chip-value]');
-      chips.forEach((chip) => {
-        const chipValue =
-          chip.getAttribute('data-chip-value') || chip.textContent?.trim();
-        if (chipValue) selectedValues.push(chipValue);
+      chips.forEach(chip => {
+        const chipValue = chip.getAttribute('data-chip-value') || chip.textContent?.trim();
+        if (chipValue) {
+          selectedValues.push(chipValue);
+        }
       });
     }
 
@@ -1254,12 +1212,10 @@ export class ContextCapture {
       label: label || undefined,
       placeholder: selectboxTitle,
       required: isRequired,
-      disabled:
-        button?.disabled ||
-        button?.getAttribute('data-button-status') === 'disabled',
+      disabled: button?.disabled || button?.getAttribute('data-button-status') === 'disabled',
       options:
         options.length > 0
-          ? options.map((option) => this._toFormFieldValue('string', option))
+          ? options.map(option => this._toFormFieldValue('string', option))
           : undefined,
       framework: 'Euler ReScript SelectBox',
       inputType: 'selectInput',
@@ -1270,7 +1226,7 @@ export class ContextCapture {
     input: HTMLInputElement,
     fieldName: string,
     label: string
-  ): any {
+  ): CustomFieldInfo {
     return {
       name: fieldName,
       type: 'text',
@@ -1290,7 +1246,7 @@ export class ContextCapture {
     input: HTMLInputElement,
     fieldName: string,
     label: string
-  ): any {
+  ): CustomFieldInfo {
     return {
       name: fieldName,
       type: 'number',
@@ -1312,7 +1268,7 @@ export class ContextCapture {
     textarea: HTMLTextAreaElement,
     fieldName: string,
     label: string
-  ): any {
+  ): CustomFieldInfo {
     return {
       name: fieldName,
       type: 'textarea',
@@ -1334,26 +1290,18 @@ export class ContextCapture {
     wrapper: HTMLElement,
     fieldName: string,
     label: string
-  ): any {
+  ): CustomFieldInfo {
     const button = wrapper.querySelector('button') as HTMLButtonElement;
-    const currentValue =
-      button?.getAttribute('data-value') || button?.textContent?.trim() || '';
+    const currentValue = button?.getAttribute('data-value') || button?.textContent?.trim() || '';
 
     // Check if it's a date range picker
-    const isDateRange =
-      wrapper.querySelector('[data-start-date], [data-end-date]') !== null;
+    const isDateRange = wrapper.querySelector('[data-start-date], [data-end-date]') !== null;
 
     return {
       name: fieldName,
       type: isDateRange ? 'daterange' : 'date',
-      value: this._toFormFieldValue(
-        isDateRange ? 'daterange' : 'date',
-        currentValue
-      ),
-      initialValue: this._toFormFieldValue(
-        isDateRange ? 'daterange' : 'date',
-        currentValue
-      ),
+      value: this._toFormFieldValue(isDateRange ? 'daterange' : 'date', currentValue),
+      initialValue: this._toFormFieldValue(isDateRange ? 'daterange' : 'date', currentValue),
       label: label || undefined,
       placeholder: button?.textContent?.trim() || 'Select Date',
       required: wrapper.querySelector('.text-red-950') !== null,
@@ -1367,23 +1315,15 @@ export class ContextCapture {
     wrapper: HTMLElement,
     fieldName: string,
     label: string
-  ): any {
-    const fileInput = wrapper.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement;
+  ): CustomFieldInfo {
+    const fileInput = wrapper.querySelector('input[type="file"]') as HTMLInputElement;
     const button = wrapper.querySelector('button');
 
     return {
       name: fieldName,
       type: 'file',
-      value: this._toFormFieldValue(
-        'file',
-        fileInput?.files?.[0] || fileInput?.files || ''
-      ),
-      initialValue: this._toFormFieldValue(
-        'file',
-        fileInput?.files?.[0] || fileInput?.files || ''
-      ),
+      value: this._toFormFieldValue('file', fileInput?.files?.[0] || fileInput?.files || ''),
+      initialValue: this._toFormFieldValue('file', fileInput?.files?.[0] || fileInput?.files || ''),
       label: label || undefined,
       placeholder: button?.textContent?.trim() || 'Choose File',
       required: wrapper.querySelector('.text-red-950') !== null,
@@ -1399,14 +1339,11 @@ export class ContextCapture {
     input: HTMLInputElement,
     fieldName: string,
     label: string
-  ): any {
+  ): CustomFieldInfo {
     return {
       name: fieldName,
       type: input.type === 'radio' ? 'radio' : 'checkbox',
-      value: this._toFormFieldValue(
-        input.type === 'radio' ? 'radio' : 'checkbox',
-        input.checked
-      ),
+      value: this._toFormFieldValue(input.type === 'radio' ? 'radio' : 'checkbox', input.checked),
       initialValue: this._toFormFieldValue(
         input.type === 'radio' ? 'radio' : 'checkbox',
         input.checked
@@ -1423,21 +1360,18 @@ export class ContextCapture {
     wrapper: HTMLElement,
     fieldName: string,
     label: string
-  ): any {
+  ): CustomFieldInfo {
     const buttons = wrapper.querySelectorAll('button');
-    const selectedButton = wrapper.querySelector(
-      'button.selected, button[data-selected="true"]'
-    );
+    const selectedButton = wrapper.querySelector('button.selected, button[data-selected="true"]');
     const currentValue =
-      selectedButton?.getAttribute('data-value') ||
-      selectedButton?.textContent?.trim() ||
-      '';
+      selectedButton?.getAttribute('data-value') || selectedButton?.textContent?.trim() || '';
 
     const options: string[] = [];
-    buttons.forEach((button) => {
-      const value =
-        button.getAttribute('data-value') || button.textContent?.trim();
-      if (value) options.push(value);
+    buttons.forEach(button => {
+      const value = button.getAttribute('data-value') || button.textContent?.trim();
+      if (value) {
+        options.push(value);
+      }
     });
 
     return {
@@ -1447,10 +1381,8 @@ export class ContextCapture {
       initialValue: this._toFormFieldValue('buttongroup', currentValue),
       label: label || undefined,
       required: wrapper.querySelector('.text-red-950') !== null,
-      disabled: Array.from(buttons).every((btn) => btn.disabled),
-      options: options.map((option) =>
-        this._toFormFieldValue('string', option)
-      ),
+      disabled: Array.from(buttons).every(btn => btn.disabled),
+      options: options.map(option => this._toFormFieldValue('string', option)),
       framework: 'Euler ReScript ButtonGroup',
       inputType: 'btnGroupInput',
     };
@@ -1460,10 +1392,8 @@ export class ContextCapture {
     wrapper: HTMLElement,
     fieldName: string,
     label: string
-  ): any {
-    const rangeInput = wrapper.querySelector(
-      'input[type="range"]'
-    ) as HTMLInputElement;
+  ): CustomFieldInfo {
+    const rangeInput = wrapper.querySelector('input[type="range"]') as HTMLInputElement;
 
     return {
       name: fieldName,
@@ -1485,19 +1415,14 @@ export class ContextCapture {
     wrapper: HTMLElement,
     fieldName: string,
     label: string
-  ): any {
-    const colorInput = wrapper.querySelector(
-      'input[type="color"]'
-    ) as HTMLInputElement;
+  ): CustomFieldInfo {
+    const colorInput = wrapper.querySelector('input[type="color"]') as HTMLInputElement;
 
     return {
       name: fieldName,
       type: 'color',
       value: this._toFormFieldValue('color', colorInput?.value || '#000000'),
-      initialValue: this._toFormFieldValue(
-        'color',
-        colorInput?.value || '#000000'
-      ),
+      initialValue: this._toFormFieldValue('color', colorInput?.value || '#000000'),
       label: label || undefined,
       required: wrapper.querySelector('.text-red-950') !== null,
       disabled: colorInput?.disabled || false,
@@ -1510,13 +1435,15 @@ export class ContextCapture {
     wrapper: HTMLElement,
     fieldName: string,
     label: string
-  ): any {
+  ): CustomFieldInfo {
     const tags: string[] = [];
     const tagElements = wrapper.querySelectorAll('.tag, .chip, [data-tag]');
 
-    tagElements.forEach((tag) => {
+    tagElements.forEach(tag => {
       const tagValue = tag.getAttribute('data-tag') || tag.textContent?.trim();
-      if (tagValue) tags.push(tagValue);
+      if (tagValue) {
+        tags.push(tagValue);
+      }
     });
 
     return {
@@ -1537,10 +1464,8 @@ export class ContextCapture {
     wrapper: HTMLElement,
     fieldName: string,
     label: string
-  ): any {
-    const button = wrapper.querySelector(
-      'button[data-value]'
-    ) as HTMLButtonElement;
+  ): CustomFieldInfo {
+    const button = wrapper.querySelector('button[data-value]') as HTMLButtonElement;
     const currentValue = button?.getAttribute('data-value') || '';
     const displayText = button?.textContent?.trim() || '';
 
@@ -1562,7 +1487,7 @@ export class ContextCapture {
   private _extractStandardFieldInfo(
     input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
     index: number
-  ): any | null {
+  ): CustomFieldInfo | null {
     const fieldName = this._extractInputFieldName(input, index);
     let fieldType = 'text';
     let currentValue = '';
@@ -1573,7 +1498,7 @@ export class ContextCapture {
       const selectElement = input as HTMLSelectElement;
       currentValue = selectElement.value;
 
-      Array.from(selectElement.options).forEach((option) => {
+      Array.from(selectElement.options).forEach(option => {
         if (option.value) {
           options.push(option.value);
         }
@@ -1606,24 +1531,21 @@ export class ContextCapture {
       disabled: input.disabled || false,
       options:
         options.length > 0
-          ? options.map((option) => this._toFormFieldValue('string', option))
+          ? options.map(option => this._toFormFieldValue('string', option))
           : undefined,
       framework: 'React Final Form',
       inputType: 'standardInput',
     };
   }
 
-  private _detectSpecializedReScriptComponents(): any[] {
-    const fields: any[] = [];
-    console.log('📋 Kriya: Detecting specialized ReScript components...');
+  private _detectSpecializedReScriptComponents(): CustomFieldInfo[] {
+    const fields: CustomFieldInfo[] = [];
+    this._log('Detecting specialized ReScript components...');
 
     // 1. Detect Monaco Editor (Code Input)
-    const monacoEditors = document.querySelectorAll(
-      '.monaco-editor, [data-monaco-editor]'
-    );
+    const monacoEditors = document.querySelectorAll('.monaco-editor, [data-monaco-editor]');
     monacoEditors.forEach((editor, index) => {
-      const fieldName =
-        editor.getAttribute('data-field-name') || `monaco-editor-${index}`;
+      const fieldName = editor.getAttribute('data-field-name') || `monaco-editor-${index}`;
       fields.push({
         name: fieldName,
         type: 'code',
@@ -1636,12 +1558,9 @@ export class ContextCapture {
     });
 
     // 2. Detect Draft.js Rich Text Editors
-    const draftEditors = document.querySelectorAll(
-      '.DraftEditor-root, [data-draft-editor]'
-    );
+    const draftEditors = document.querySelectorAll('.DraftEditor-root, [data-draft-editor]');
     draftEditors.forEach((editor, index) => {
-      const fieldName =
-        editor.getAttribute('data-field-name') || `draft-editor-${index}`;
+      const fieldName = editor.getAttribute('data-field-name') || `draft-editor-${index}`;
       fields.push({
         name: fieldName,
         type: 'richtext',
@@ -1654,24 +1573,15 @@ export class ContextCapture {
     });
 
     // 3. Detect Async SelectBoxes (with loading states)
-    const asyncSelects = document.querySelectorAll(
-      '[data-async-select], .async-selectbox'
-    );
+    const asyncSelects = document.querySelectorAll('[data-async-select], .async-selectbox');
     asyncSelects.forEach((select, index) => {
-      const fieldName =
-        select.getAttribute('data-field-name') || `async-select-${index}`;
+      const fieldName = select.getAttribute('data-field-name') || `async-select-${index}`;
       const button = select.querySelector('button');
       fields.push({
         name: fieldName,
         type: 'async-select',
-        value: this._toFormFieldValue(
-          'select',
-          button?.getAttribute('data-value') || ''
-        ),
-        initialValue: this._toFormFieldValue(
-          'select',
-          button?.getAttribute('data-value') || ''
-        ),
+        value: this._toFormFieldValue('select', button?.getAttribute('data-value') || ''),
+        initialValue: this._toFormFieldValue('select', button?.getAttribute('data-value') || ''),
         label: 'Async Select',
         placeholder: button?.textContent?.trim() || 'Loading...',
         framework: 'Async SelectBox',
@@ -1682,8 +1592,7 @@ export class ContextCapture {
     // 4. Detect Nested Dropdowns
     const nestedDropdowns = document.querySelectorAll('[data-nested-dropdown]');
     nestedDropdowns.forEach((dropdown, index) => {
-      const fieldName =
-        dropdown.getAttribute('data-field-name') || `nested-dropdown-${index}`;
+      const fieldName = dropdown.getAttribute('data-field-name') || `nested-dropdown-${index}`;
       fields.push({
         name: fieldName,
         type: 'nested-select',
@@ -1700,8 +1609,7 @@ export class ContextCapture {
       '[data-calendar-input], .calendar-highlighter'
     );
     calendarInputs.forEach((calendar, index) => {
-      const fieldName =
-        calendar.getAttribute('data-field-name') || `calendar-${index}`;
+      const fieldName = calendar.getAttribute('data-field-name') || `calendar-${index}`;
       fields.push({
         name: fieldName,
         type: 'calendar',
@@ -1716,8 +1624,7 @@ export class ContextCapture {
     // 6. Detect Time Range Inputs
     const timeRanges = document.querySelectorAll('[data-time-range]');
     timeRanges.forEach((timeRange, index) => {
-      const fieldName =
-        timeRange.getAttribute('data-field-name') || `time-range-${index}`;
+      const fieldName = timeRange.getAttribute('data-field-name') || `time-range-${index}`;
       fields.push({
         name: fieldName,
         type: 'timerange',
@@ -1729,16 +1636,14 @@ export class ContextCapture {
       });
     });
 
-    console.log(`📋 Kriya: Found ${fields.length} specialized components`);
+    this._log(`Found ${fields.length} specialized components`);
     return fields;
   }
 
   // Helper methods for better field name extraction
   private _extractFieldName(wrapper: HTMLElement, index: number): string {
     // 1. HIGHEST PRIORITY: Try to find input element and get its name/id (actual form field names)
-    const inputElement = wrapper.querySelector(
-      'input, textarea, select, button[data-value]'
-    );
+    const inputElement = wrapper.querySelector('input, textarea, select, button[data-value]');
     if (inputElement) {
       const name = inputElement.getAttribute('name') || inputElement.id;
       if (name && name.trim()) {
@@ -1755,8 +1660,7 @@ export class ContextCapture {
     // 3. Try to extract from label text
     const labelElement = wrapper.querySelector('[data-form-label]');
     const labelText =
-      labelElement?.getAttribute('data-form-label') ||
-      labelElement?.textContent?.trim();
+      labelElement?.getAttribute('data-form-label') || labelElement?.textContent?.trim();
     if (labelText && labelText.trim()) {
       // Convert label text to camelCase field name
       return this._labelToFieldName(labelText.trim());
@@ -1778,9 +1682,7 @@ export class ContextCapture {
     // 6. Try to extract from button text for SelectBox components
     const selectboxElement = wrapper.querySelector('[data-selectbox-value]');
     if (selectboxElement) {
-      const selectboxTitle = selectboxElement.getAttribute(
-        'data-selectbox-value'
-      );
+      const selectboxTitle = selectboxElement.getAttribute('data-selectbox-value');
       if (selectboxTitle && selectboxTitle.trim()) {
         return this._labelToFieldName(selectboxTitle.trim());
       }
@@ -1831,9 +1733,7 @@ export class ContextCapture {
     // 6. Check if it's inside a field wrapper and extract from there - strip prefixes
     const fieldWrapper = input.closest('[data-component-field-wrapper]');
     if (fieldWrapper) {
-      const wrapperName = fieldWrapper.getAttribute(
-        'data-component-field-wrapper'
-      );
+      const wrapperName = fieldWrapper.getAttribute('data-component-field-wrapper');
       if (wrapperName && wrapperName.trim()) {
         return this._stripFieldPrefix(wrapperName.trim());
       }
@@ -1847,13 +1747,7 @@ export class ContextCapture {
 
   private _stripFieldPrefix(fieldName: string): string {
     // Remove common prefixes that are added by form frameworks
-    const prefixesToRemove = [
-      'field-',
-      'form-',
-      'input-',
-      'rff-field-',
-      'wrapper-field-',
-    ];
+    const prefixesToRemove = ['field-', 'form-', 'input-', 'rff-field-', 'wrapper-field-'];
 
     for (const prefix of prefixesToRemove) {
       if (fieldName.startsWith(prefix)) {
@@ -1883,32 +1777,53 @@ export class ContextCapture {
 
   private _getFieldTypeHint(wrapper: HTMLElement): string {
     // Try to determine field type from wrapper content to create better fallback names
-    if (wrapper.querySelector('[data-selectbox-value]')) return 'selectbox';
-    if (wrapper.querySelector('input[type="text"]')) return 'text';
-    if (wrapper.querySelector('input[type="number"]')) return 'number';
-    if (wrapper.querySelector('input[type="email"]')) return 'email';
-    if (wrapper.querySelector('input[type="password"]')) return 'password';
-    if (wrapper.querySelector('input[type="checkbox"]')) return 'checkbox';
-    if (wrapper.querySelector('input[type="radio"]')) return 'radio';
-    if (wrapper.querySelector('input[type="file"]')) return 'file';
-    if (wrapper.querySelector('textarea')) return 'textarea';
-    if (wrapper.querySelector('button[data-value]')) return 'button';
-    if (wrapper.querySelector('input[type="date"]')) return 'date';
-    if (wrapper.querySelector('input[type="range"]')) return 'range';
+    if (wrapper.querySelector('[data-selectbox-value]')) {
+      return 'selectbox';
+    }
+    if (wrapper.querySelector('input[type="text"]')) {
+      return 'text';
+    }
+    if (wrapper.querySelector('input[type="number"]')) {
+      return 'number';
+    }
+    if (wrapper.querySelector('input[type="email"]')) {
+      return 'email';
+    }
+    if (wrapper.querySelector('input[type="password"]')) {
+      return 'password';
+    }
+    if (wrapper.querySelector('input[type="checkbox"]')) {
+      return 'checkbox';
+    }
+    if (wrapper.querySelector('input[type="radio"]')) {
+      return 'radio';
+    }
+    if (wrapper.querySelector('input[type="file"]')) {
+      return 'file';
+    }
+    if (wrapper.querySelector('textarea')) {
+      return 'textarea';
+    }
+    if (wrapper.querySelector('button[data-value]')) {
+      return 'button';
+    }
+    if (wrapper.querySelector('input[type="date"]')) {
+      return 'date';
+    }
+    if (wrapper.querySelector('input[type="range"]')) {
+      return 'range';
+    }
 
     return 'field';
   }
 
-  private _isFieldNameSimilar(
-    fieldName: string,
-    existingFieldNames: string[]
-  ): boolean {
+  private _isFieldNameSimilar(fieldName: string, existingFieldNames: string[]): boolean {
     // Check if a field name is similar to existing ones to avoid duplicates
     // This handles cases like "task_name" vs "field-task_name"
 
     const normalizedFieldName = this._normalizeFieldName(fieldName);
 
-    return existingFieldNames.some((existingName) => {
+    return existingFieldNames.some(existingName => {
       const normalizedExistingName = this._normalizeFieldName(existingName);
 
       // Exact match after normalization
@@ -1936,19 +1851,13 @@ export class ContextCapture {
         const commonSuffixes = ['field', 'input', 'value'];
 
         for (const prefix of commonPrefixes) {
-          if (
-            longer === `${prefix}_${shorter}` ||
-            longer === `${prefix}-${shorter}`
-          ) {
+          if (longer === `${prefix}_${shorter}` || longer === `${prefix}-${shorter}`) {
             return true;
           }
         }
 
         for (const suffix of commonSuffixes) {
-          if (
-            longer === `${shorter}_${suffix}` ||
-            longer === `${shorter}-${suffix}`
-          ) {
+          if (longer === `${shorter}_${suffix}` || longer === `${shorter}-${suffix}`) {
             return true;
           }
         }

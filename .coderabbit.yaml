@@ -1,0 +1,79 @@
+## yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit configuration for Kriya.
+# Docs: https://docs.coderabbit.ai/guides/configure-coderabbit
+#
+# Install the CodeRabbit GitHub app on this repo to activate:
+#   https://github.com/apps/coderabbitai
+
+language: en-US
+early_access: false
+
+reviews:
+  profile: chill
+  # Kept false so forked-PR reviews don't get stuck in "changes requested"
+  # due to reduced GITHUB_TOKEN permissions on those events.
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    ignore_title_keywords:
+      - WIP
+      - DO NOT MERGE
+      - RFC
+    drafts: false
+    base_branches:
+      - main
+  path_filters:
+    - '!dist/**'
+    - '!build/**'
+    - '!coverage/**'
+    - '!node_modules/**'
+    - '!**/*.min.js'
+    - '!**/*.bundle.js'
+    - '!package-lock.json'
+    - '!pnpm-lock.yaml'
+  path_instructions:
+    - path: 'src/**/*.ts'
+      instructions: |
+        - Flag any use of `any`, `@ts-ignore`, `@ts-nocheck`, or non-null
+          assertions (`!`). Suggest explicit types or type guards.
+        - Exported functions must have explicit return types.
+        - Library code must not throw; return a Result union instead.
+        - Flag direct DOM manipulation without null-checking the selector.
+        - Flag `innerHTML`, `outerHTML`, `document.write`, `eval`,
+          `new Function` as security issues.
+    - path: 'src/**/*.test.ts'
+      instructions: |
+        - Tests may use `any` where needed for mocking; don't flag those.
+        - Check that async tests await or return the promise.
+    - path: 'scripts/**/*.cjs'
+      instructions: |
+        - These are CI/dev scripts; ignore TypeScript strictness.
+        - Flag shell injection risks in execSync calls.
+    - path: '.github/workflows/*.yml'
+      instructions: |
+        - Flag hardcoded secrets or tokens.
+        - Verify action versions are pinned (actions/checkout@v4 etc).
+        - Flag unnecessary permissions at workflow level.
+
+  tools:
+    github-checks:
+      enabled: true
+      timeout_ms: 90000
+    eslint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    gitleaks:
+      enabled: true
+    languagetool:
+      enabled: false
+
+chat:
+  auto_reply: true

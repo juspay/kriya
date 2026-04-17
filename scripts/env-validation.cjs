@@ -32,8 +32,7 @@ class EnvironmentValidator {
     this.envVars = new Map();
     this.codeEnvVars = new Set();
     // Detect CI environment (GitHub Actions, Travis, CircleCI, etc.)
-    this.isCI =
-      process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+    this.isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
   }
 
   /**
@@ -93,8 +92,7 @@ class EnvironmentValidator {
 
       // Check for section comments
       if (trimmedLine.startsWith('#') && trimmedLine.includes('---')) {
-        currentSection =
-          trimmedLine.replace(/#/g, '').replace(/-/g, '').trim() || 'General';
+        currentSection = trimmedLine.replace(/#/g, '').replace(/-/g, '').trim() || 'General';
         continue;
       }
 
@@ -229,15 +227,9 @@ class EnvironmentValidator {
     }
 
     // Validate URLs
-    if (
-      name.includes('URL') ||
-      name.includes('ENDPOINT') ||
-      name.includes('HOST')
-    ) {
+    if (name.includes('URL') || name.includes('ENDPOINT') || name.includes('HOST')) {
       const hasValidScheme =
-        /^(https?|postgres|mysql|mongodb|redis|amqp|ws|wss|ftp|ssh|file):\/\//.test(
-          value
-        );
+        /^(https?|postgres|mysql|mongodb|redis|amqp|ws|wss|ftp|ssh|file):\/\//.test(value);
       if (
         value &&
         !hasValidScheme &&
@@ -301,9 +293,7 @@ class EnvironmentValidator {
 
     // Check for secrets in wrong format
     if (
-      (name.includes('SECRET') ||
-        name.includes('PASSWORD') ||
-        name.includes('TOKEN')) &&
+      (name.includes('SECRET') || name.includes('PASSWORD') || name.includes('TOKEN')) &&
       value.length < 8
     ) {
       this.addIssue(
@@ -333,7 +323,7 @@ class EnvironmentValidator {
     ];
     const extensions = ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'];
 
-    const walkDir = (dir) => {
+    const walkDir = dir => {
       try {
         const files = fs.readdirSync(dir);
         for (const file of files) {
@@ -344,7 +334,7 @@ class EnvironmentValidator {
             if (!ignoreDirs.includes(file) && !file.startsWith('.')) {
               walkDir(filePath);
             }
-          } else if (extensions.some((ext) => file.endsWith(ext))) {
+          } else if (extensions.some(ext => file.endsWith(ext))) {
             sourceFiles.push(filePath);
           }
         }
@@ -453,6 +443,19 @@ class EnvironmentValidator {
       return;
     }
 
+    // Locally, if .env doesn't exist, the user hasn't opted into env management
+    // yet. Don't fail validation for them — just emit info-level guidance.
+    const envPath = path.join(this.projectRoot, '.env');
+    if (!fs.existsSync(envPath)) {
+      this.addIssue(
+        'info',
+        'Local Setup',
+        'No .env file found — skipping .env consistency checks',
+        'Copy .env.example to .env and fill in values if you need local overrides'
+      );
+      return;
+    }
+
     // Check for vars in .env.example but missing from .env
     for (const [name, meta] of this.envExampleVars) {
       if (!this.envVars.has(name)) {
@@ -501,10 +504,7 @@ class EnvironmentValidator {
 
     // Print critical issues
     if (this.issues.length > 0) {
-      this.log(
-        `  ${colors.bold}Critical Issues (${this.issues.length})${colors.reset}`,
-        'red'
-      );
+      this.log(`  ${colors.bold}Critical Issues (${this.issues.length})${colors.reset}`, 'red');
       this.log('-'.repeat(40), 'red');
       for (const issue of this.issues) {
         this.log(`  [${issue.category}] ${issue.message}`, 'red');
@@ -516,12 +516,9 @@ class EnvironmentValidator {
     }
 
     // Print warnings
-    const warnings = this.warnings.filter((w) => w.severity === 'warning');
+    const warnings = this.warnings.filter(w => w.severity === 'warning');
     if (warnings.length > 0) {
-      this.log(
-        `  ${colors.bold}Warnings (${warnings.length})${colors.reset}`,
-        'yellow'
-      );
+      this.log(`  ${colors.bold}Warnings (${warnings.length})${colors.reset}`, 'yellow');
       this.log('-'.repeat(40), 'yellow');
       for (const warning of warnings) {
         this.log(`  [${warning.category}] ${warning.message}`, 'yellow');
@@ -533,7 +530,7 @@ class EnvironmentValidator {
     }
 
     // Print info
-    const infos = this.warnings.filter((w) => w.severity === 'info');
+    const infos = this.warnings.filter(w => w.severity === 'info');
     if (infos.length > 0) {
       this.log(`  ${colors.bold}Info (${infos.length})${colors.reset}`, 'blue');
       this.log('-'.repeat(40), 'blue');
@@ -573,10 +570,7 @@ class EnvironmentValidator {
     if (this.issues.length === 0 && warnings.length === 0) {
       this.log('  All environment variables are properly configured!', 'green');
     } else if (this.issues.length === 0) {
-      this.log(
-        '  No critical issues found, but review warnings above.',
-        'yellow'
-      );
+      this.log('  No critical issues found, but review warnings above.', 'yellow');
     } else {
       this.log('  Please fix critical issues before proceeding.', 'red');
     }

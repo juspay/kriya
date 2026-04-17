@@ -1,0 +1,89 @@
+name: Deploy Documentation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'mkdocs.yml'
+      - 'typedoc.json'
+      - '.github/workflows/docs-deploy.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build:
+    name: 📚 Build Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: docs-requirements.txt
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install MkDocs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r docs-requirements.txt
+
+      - name: Generate TypeDoc API
+        run: |
+          if [ -f "typedoc.json" ]; then
+            npx typedoc
+          fi
+
+      - name: Build MkDocs site
+        # TODO: restore --strict once mkdocs.yml nav is reconciled with actual docs/
+        run: mkdocs build --clean
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: 🚀 Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

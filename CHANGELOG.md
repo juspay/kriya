@@ -1,9 +1,9 @@
 ## <small>1.0.1 (2026-04-17)</small>
 
-* fix(ci): upgrade to npm 11 for native OIDC publish support ([f384ecd](https://github.com/juspay/kriya/commit/f384ecd))
-* fix(fillform): Fill Form fix ([1e70b74](https://github.com/juspay/kriya/commit/1e70b74))
-* chore: did remove warning ([65cceb4](https://github.com/juspay/kriya/commit/65cceb4))
-* chore: update CHANGELOG formatting ([7d3fcdc](https://github.com/juspay/kriya/commit/7d3fcdc))
+- fix(ci): upgrade to npm 11 for native OIDC publish support ([f384ecd](https://github.com/juspay/kriya/commit/f384ecd))
+- fix(fillform): Fill Form fix ([1e70b74](https://github.com/juspay/kriya/commit/1e70b74))
+- chore: did remove warning ([65cceb4](https://github.com/juspay/kriya/commit/65cceb4))
+- chore: update CHANGELOG formatting ([7d3fcdc](https://github.com/juspay/kriya/commit/7d3fcdc))
 
 ## 1.0.0 (2026-04-01)
 

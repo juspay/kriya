@@ -93,8 +93,8 @@ fi
 # 4. Secret Scanning
 print_header "4. Secret Scanning (Gitleaks)"
 if command -v gitleaks &> /dev/null; then
-    if [ -f ".gitleaksrc.json" ]; then
-        run_validation "Gitleaks scan" "gitleaks protect --staged --config .gitleaksrc.json --verbose" || true
+    if [ -f ".gitleaks.toml" ]; then
+        run_validation "Gitleaks scan" "gitleaks protect --staged --config .gitleaks.toml --verbose" || true
     else
         run_validation "Gitleaks scan" "gitleaks protect --staged --verbose" || true
     fi

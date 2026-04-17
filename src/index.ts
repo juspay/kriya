@@ -38,6 +38,11 @@ export type {
 
 export { AutomationError, DEFAULT_CONFIG } from '@/types';
 
+// Parameter names in a public interface are documentation only; the base
+// `no-unused-vars` rule misreads them because it predates TypeScript type
+// positions. The TS-aware rule (@typescript-eslint/no-unused-vars) correctly
+// ignores them. Scope the disable to this interface.
+/* eslint-disable no-unused-vars */
 export interface WebAutomataAPI {
   initialize(formLibrary?: import('@/types').FormLibrary): void;
   executeAction(
@@ -57,12 +62,11 @@ export interface WebAutomataAPI {
     eventType: import('@/types').EventType,
     callback: import('@/types').EventCallback
   ): void;
-  captureScreenshot(
-    options?: Partial<import('@/types').ScreenshotOptions>
-  ): Promise<string>;
+  captureScreenshot(options?: Partial<import('@/types').ScreenshotOptions>): Promise<string>;
   isInitialized(): boolean;
   dispose(): void;
 }
+/* eslint-enable no-unused-vars */
 
 export function createAutomationEngine(
   config?: Partial<import('@/types').AutomationConfig>
@@ -115,12 +119,17 @@ export function createAutomationEngine(
     captureScreenshot: async (
       options?: Partial<import('@/types').ScreenshotOptions>
     ): Promise<string> => {
-      const context = (engine as any)._contextCapture;
+      const context = (
+        engine as unknown as {
+          _contextCapture?: {
+            captureScreenshot: (
+              _options?: Partial<import('@/types').ScreenshotOptions>
+            ) => Promise<string>;
+          };
+        }
+      )._contextCapture;
       if (!context) {
-        throw new AutomationError(
-          'ContextCapture not initialized',
-          'INVALID_CONFIGURATION'
-        );
+        throw new AutomationError('ContextCapture not initialized', 'INVALID_CONFIGURATION');
       }
       return context.captureScreenshot(options);
     },

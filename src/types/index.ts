@@ -15,23 +15,14 @@ export interface ActionCommand {
   readonly description?: string;
 }
 
-export type FormFieldValueType =
-  | 'string'
-  | 'number'
-  | 'boolean'
-  | 'array'
-  | 'file';
+export type FormFieldValueType = 'string' | 'number' | 'boolean' | 'array' | 'file';
 
 export interface FormFieldValue {
   readonly type: FormFieldValueType;
   readonly value: string | number | boolean | readonly string[] | File;
 }
 
-export type ExecutionStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed';
+export type ExecutionStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
 export interface ExecutionResult {
   readonly success: boolean;

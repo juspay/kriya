@@ -2,7 +2,6 @@ import type {
   ActionCommand,
   AutomationConfig,
   AutomationEvent,
-  ErrorCode,
   EventCallback,
   EventType,
   ExecutionResult,
@@ -37,10 +36,7 @@ export class AutomationEngine {
 
   public initialize(formLibrary?: FormLibrary): void {
     if (this._initialized) {
-      throw new AutomationError(
-        'AutomationEngine is already initialized',
-        'INVALID_CONFIGURATION'
-      );
+      throw new AutomationError('AutomationEngine is already initialized', 'INVALID_CONFIGURATION');
     }
 
     try {
@@ -85,8 +81,7 @@ export class AutomationEngine {
 
       return result;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this._emitEvent('action_failed', {
         action: action.type,
         error: errorMessage,
@@ -96,8 +91,7 @@ export class AutomationEngine {
         success: false,
         status: 'failed',
         error: errorMessage,
-        errorCode:
-          error instanceof AutomationError ? error.code : 'EXECUTION_FAILED',
+        errorCode: error instanceof AutomationError ? error.code : 'EXECUTION_FAILED',
         timestamp: Date.now(),
       };
     }
@@ -161,16 +155,15 @@ export class AutomationEngine {
   }
 
   public addEventListener(eventType: EventType, callback: EventCallback): void {
-    if (!this._eventListeners.has(eventType)) {
-      this._eventListeners.set(eventType, new Set());
+    let listeners = this._eventListeners.get(eventType);
+    if (!listeners) {
+      listeners = new Set();
+      this._eventListeners.set(eventType, listeners);
     }
-    this._eventListeners.get(eventType)!.add(callback);
+    listeners.add(callback);
   }
 
-  public removeEventListener(
-    eventType: EventType,
-    callback: EventCallback
-  ): void {
+  public removeEventListener(eventType: EventType, callback: EventCallback): void {
     const listeners = this._eventListeners.get(eventType);
     if (listeners) {
       listeners.delete(callback);
@@ -257,18 +250,12 @@ export class AutomationEngine {
       this.addEventListener(eventType, callback);
     };
 
-    this._formRegistry.addEventListener = (
-      eventType: EventType,
-      callback: EventCallback
-    ): void => {
+    this._formRegistry.addEventListener = (eventType: EventType, callback: EventCallback): void => {
       this.addEventListener(eventType, callback);
     };
   }
 
-  private _emitEvent(
-    eventType: EventType,
-    data?: Readonly<Record<string, unknown>>
-  ): void {
+  private _emitEvent(eventType: EventType, data?: Readonly<Record<string, unknown>>): void {
     const event: AutomationEvent = {
       type: eventType,
       timestamp: Date.now(),
@@ -277,7 +264,7 @@ export class AutomationEngine {
 
     const listeners = this._eventListeners.get(eventType);
     if (listeners) {
-      listeners.forEach((callback) => {
+      listeners.forEach(callback => {
         try {
           callback(event);
         } catch (error) {

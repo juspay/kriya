@@ -20,9 +20,7 @@ export class ActionExecutor {
   private readonly _domActions: DOMActions;
   private _formRegistry: FormRegistry | null;
   private _contextCapture: ContextCapture | null;
-  public addEventListener:
-    | ((_eventType: EventType, _callback: EventCallback) => void)
-    | null;
+  public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
 
   constructor(config: AutomationConfig) {
     this._config = config;
@@ -32,10 +30,7 @@ export class ActionExecutor {
     this.addEventListener = null;
   }
 
-  public initialize(
-    formRegistry: FormRegistry,
-    contextCapture: ContextCapture
-  ): void {
+  public initialize(formRegistry: FormRegistry, contextCapture: ContextCapture): void {
     this._formRegistry = formRegistry;
     this._contextCapture = contextCapture;
     this._domActions.initialize();
@@ -57,15 +52,13 @@ export class ActionExecutor {
       if (this._config.screenshotOnError && this._contextCapture) {
         try {
           await this._contextCapture.captureScreenshot();
-        } catch (_screenshotError) {
+        } catch {
           // Silently ignore screenshot errors
         }
       }
 
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error occurred';
-      const errorCode =
-        error instanceof AutomationError ? error.code : 'EXECUTION_FAILED';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorCode = error instanceof AutomationError ? error.code : 'EXECUTION_FAILED';
 
       return {
         success: false,
@@ -84,9 +77,7 @@ export class ActionExecutor {
     this.addEventListener = null;
   }
 
-  private async _executeActionInternal(
-    action: ActionCommand
-  ): Promise<unknown> {
+  private async _executeActionInternal(action: ActionCommand): Promise<unknown> {
     const timeout = action.timeout ?? this._config.timeout;
 
     return this._withTimeout(async () => {
@@ -108,11 +99,9 @@ export class ActionExecutor {
         case 'press':
           return this._executePress(action);
         default:
-          throw new AutomationError(
-            `Unsupported action type: ${action.type}`,
-            'INVALID_ACTION',
-            { action }
-          );
+          throw new AutomationError(`Unsupported action type: ${action.type}`, 'INVALID_ACTION', {
+            action,
+          });
       }
     }, timeout);
   }
@@ -120,11 +109,9 @@ export class ActionExecutor {
   private async _executeNavigate(action: ActionCommand): Promise<void> {
     const url = action.parameters.url;
     if (!url) {
-      throw new AutomationError(
-        'Navigate action requires url parameter',
-        'VALIDATION_FAILED',
-        { action }
-      );
+      throw new AutomationError('Navigate action requires url parameter', 'VALIDATION_FAILED', {
+        action,
+      });
     }
 
     const options: NavigationOptions = {
@@ -145,9 +132,7 @@ export class ActionExecutor {
     };
 
     if (action.parameters.x && action.parameters.y) {
-      (
-        options as ClickOptions & { position?: { x: number; y: number } }
-      ).position = {
+      (options as ClickOptions & { position?: { x: number; y: number } }).position = {
         x: parseInt(action.parameters.x, 10),
         y: parseInt(action.parameters.y, 10),
       };
@@ -159,11 +144,9 @@ export class ActionExecutor {
   private async _executeFill(action: ActionCommand): Promise<void> {
     const value = action.parameters.value;
     if (!value) {
-      throw new AutomationError(
-        'Fill action requires value parameter',
-        'VALIDATION_FAILED',
-        { action }
-      );
+      throw new AutomationError('Fill action requires value parameter', 'VALIDATION_FAILED', {
+        action,
+      });
     }
 
     const options: FillOptions = {
@@ -179,10 +162,7 @@ export class ActionExecutor {
 
   private async _executeFillForm(action: ActionCommand): Promise<unknown> {
     if (!this._formRegistry) {
-      throw new AutomationError(
-        'Form registry not initialized',
-        'INVALID_CONFIGURATION'
-      );
+      throw new AutomationError('Form registry not initialized', 'INVALID_CONFIGURATION');
     }
 
     const formId = action.parameters.formId;
@@ -199,9 +179,13 @@ export class ActionExecutor {
     if (fieldsParam === undefined) {
       const flat: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(params)) {
-        if (!RESERVED.has(k)) flat[k] = v;
+        if (!RESERVED.has(k)) {
+          flat[k] = v;
+        }
       }
-      if (Object.keys(flat).length > 0) fieldsParam = flat;
+      if (Object.keys(flat).length > 0) {
+        fieldsParam = flat;
+      }
     }
 
     if (!fieldsParam) {
@@ -215,14 +199,12 @@ export class ActionExecutor {
     // Allow any value type, not just strings - supports arrays, objects, etc.
     let fields: Record<string, unknown>;
     try {
-      fields =
-        typeof fieldsParam === 'string' ? JSON.parse(fieldsParam) : fieldsParam;
+      fields = typeof fieldsParam === 'string' ? JSON.parse(fieldsParam) : fieldsParam;
     } catch (error) {
-      throw new AutomationError(
-        'Invalid fields parameter format',
-        'VALIDATION_FAILED',
-        { action, originalError: error }
-      );
+      throw new AutomationError('Invalid fields parameter format', 'VALIDATION_FAILED', {
+        action,
+        originalError: error,
+      });
     }
 
     if (formId) {
@@ -234,10 +216,7 @@ export class ActionExecutor {
 
   private async _executeSubmitForm(action: ActionCommand): Promise<unknown> {
     if (!this._formRegistry) {
-      throw new AutomationError(
-        'Form registry not initialized',
-        'INVALID_CONFIGURATION'
-      );
+      throw new AutomationError('Form registry not initialized', 'INVALID_CONFIGURATION');
     }
 
     const formId = action.parameters.formId;
@@ -251,10 +230,7 @@ export class ActionExecutor {
 
   private async _executeScreenshot(action: ActionCommand): Promise<string> {
     if (!this._contextCapture) {
-      throw new AutomationError(
-        'Context capture not initialized',
-        'INVALID_CONFIGURATION'
-      );
+      throw new AutomationError('Context capture not initialized', 'INVALID_CONFIGURATION');
     }
 
     const fullPage = action.parameters.fullPage === 'true';
@@ -281,11 +257,9 @@ export class ActionExecutor {
   private async _executePress(action: ActionCommand): Promise<void> {
     const key = action.parameters.key;
     if (!key) {
-      throw new AutomationError(
-        'Press action requires key parameter',
-        'VALIDATION_FAILED',
-        { action }
-      );
+      throw new AutomationError('Press action requires key parameter', 'VALIDATION_FAILED', {
+        action,
+      });
     }
 
     const options: PressOptions = {
@@ -297,26 +271,18 @@ export class ActionExecutor {
     return this._domActions.press(options);
   }
 
-  private async _withTimeout<T>(
-    operation: () => Promise<T>,
-    timeout: number
-  ): Promise<T> {
+  private async _withTimeout<T>(operation: () => Promise<T>, timeout: number): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        reject(
-          new AutomationError(
-            `Operation timed out after ${timeout}ms`,
-            'EXECUTION_TIMEOUT'
-          )
-        );
+        reject(new AutomationError(`Operation timed out after ${timeout}ms`, 'EXECUTION_TIMEOUT'));
       }, timeout);
 
       operation()
-        .then((result) => {
+        .then(result => {
           clearTimeout(timeoutId);
           resolve(result);
         })
-        .catch((error) => {
+        .catch(error => {
           clearTimeout(timeoutId);
           reject(error);
         });

@@ -1,10 +1,12 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-# Validate commit message format
-# Uses custom commit-validation script if available, falls back to commitlint
+set -e
+
+# 1) Commitlint (conventional-commits rules)
+npx --no -- commitlint --edit "$1"
+
+# 2) Custom semantic validator (anti-patterns, typos, quality heuristics)
 if [ -f "scripts/commit-validation.cjs" ]; then
-  COMMIT_MSG_FILE="$1" node scripts/commit-validation.cjs
-else
-  npx --no -- commitlint --edit "${1}"
+  node scripts/commit-validation.cjs "$1"
 fi

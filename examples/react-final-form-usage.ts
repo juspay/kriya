@@ -39,9 +39,7 @@ async function fillAnyFormExample() {
     console.log('Form fill result:', result);
 
     if (result.success) {
-      console.log(
-        `✅ Successfully filled ${result.data.filledFields.length} fields`
-      );
+      console.log(`✅ Successfully filled ${result.data.filledFields.length} fields`);
       console.log('Filled fields:', result.data.filledFields);
     } else {
       console.log('❌ Form filling failed:', result.error);
@@ -134,10 +132,8 @@ async function captureFormsExample() {
       console.log(`  - Has Submit Button: ${form.hasSubmitButton}`);
 
       // Show field details
-      form.fields.forEach((field) => {
-        console.log(
-          `    • ${field.name} (${field.type})${field.required ? ' *required' : ''}`
-        );
+      form.fields.forEach(field => {
+        console.log(`    • ${field.name} (${field.type})${field.required ? ' *required' : ''}`);
       });
     });
   } catch (error) {

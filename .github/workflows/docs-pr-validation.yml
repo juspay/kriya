@@ -1,0 +1,208 @@
+name: Documentation PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'mkdocs.yml'
+      - 'typedoc.json'
+      - '.github/workflows/docs-pr-validation.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: docs-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  validate:
+    name: 📚 Validate Documentation
+    runs-on: ubuntu-latest
+    outputs:
+      markdown_status: ${{ steps.markdown.outcome }}
+      typedoc_status: ${{ steps.typedoc.outcome }}
+      mkdocs_status: ${{ steps.mkdocs.outcome }}
+      links_status: ${{ steps.links.outcome }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: docs-requirements.txt
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install MkDocs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r docs-requirements.txt
+
+      - name: 📝 Markdownlint
+        id: markdown
+        continue-on-error: true
+        # Pinned to commit SHA for security (v16)
+        uses: DavidAnson/markdownlint-cli2-action@b4c9feab76d8025d1e83c653fa3990936df0e6c8
+        with:
+          globs: |
+            **/*.md
+            !node_modules/**/*.md
+            !dist/**/*.md
+            !CHANGELOG.md
+
+      - name: 📖 TypeDoc API generation
+        id: typedoc
+        continue-on-error: true
+        run: |
+          if [ -f "typedoc.json" ]; then
+            echo "Generating TypeDoc..."
+            npx typedoc
+          else
+            echo "No typedoc.json — skipping"
+          fi
+
+      - name: 🏗️ MkDocs build
+        id: mkdocs
+        continue-on-error: true
+        # TODO: restore --strict once mkdocs.yml nav is reconciled with actual docs/
+        run: mkdocs build --clean
+
+      - name: 🔗 Link validation
+        id: links
+        continue-on-error: true
+        # Pinned to commit SHA for security (v1)
+        uses: gaurav-nelson/github-action-markdown-link-check@499c1e7f3637c131334fa8e937c45144f79d72d2
+        with:
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'yes'
+          config-file: '.github/mlc_config.json'
+
+      - name: 📤 Upload docs artifact
+        if: always() && hashFiles('site/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-build-${{ github.sha }}
+          path: site
+          retention-days: 7
+
+      # Every preceding step is `continue-on-error: true` so that link validation
+      # and artifact upload always run and all statuses reach the PR comment.
+      # MkDocs is the only blocking gate — fail the job here if it failed.
+      - name: Enforce MkDocs build success
+        if: steps.mkdocs.outcome == 'failure'
+        run: |
+          echo "❌ MkDocs build failed — see '🏗️ MkDocs build' step above."
+          exit 1
+
+  comment:
+    name: 💬 Post Validation Results
+    needs: validate
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Check Comment Permissions
+        id: check-permissions
+        run: |
+          if [ "${{ github.event.pull_request.head.repo.id }}" != "${{ github.event.repository.id }}" ]; then
+            echo "can_comment=false" >> $GITHUB_OUTPUT
+          else
+            echo "can_comment=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post PR comment
+        if: steps.check-permissions.outputs.can_comment == 'true'
+        uses: actions/github-script@v7
+        env:
+          MD_STATUS: ${{ needs.validate.outputs.markdown_status }}
+          TD_STATUS: ${{ needs.validate.outputs.typedoc_status }}
+          MK_STATUS: ${{ needs.validate.outputs.mkdocs_status }}
+          LK_STATUS: ${{ needs.validate.outputs.links_status }}
+          COMMIT_SHA: ${{ github.sha }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO_FULL: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        with:
+          script: |
+            const md = process.env.MD_STATUS;
+            const td = process.env.TD_STATUS;
+            const mk = process.env.MK_STATUS;
+            const lk = process.env.LK_STATUS;
+            const emoji = (s) => s === 'success' ? ':white_check_mark:' : s === 'failure' ? ':x:' : s === 'skipped' ? ':fast_forward:' : ':warning:';
+            const label = (s) => s === 'success' ? 'Passed' : s === 'failure' ? 'Failed' : s === 'skipped' ? 'Skipped' : 'Unknown';
+            const blocking = [mk];
+            const allBlockingPassed = blocking.every((s) => s === 'success');
+            const overall = allBlockingPassed
+              ? ':rocket: **Documentation validation passed**'
+              : ':warning: **Documentation validation has issues**';
+
+            // Assemble as an array to avoid template-literal indentation leaking
+            // 4+ leading spaces into lines (which GFM renders as code blocks).
+            const lines = [
+              '## Documentation Validation',
+              '',
+              overall,
+              '',
+              '| Check | Status | Result |',
+              '|-------|--------|--------|',
+              `| Markdownlint | ${emoji(md)} | ${label(md)} |`,
+              `| TypeDoc | ${emoji(td)} | ${label(td)} |`,
+              `| MkDocs build | ${emoji(mk)} | ${label(mk)} |`,
+              `| Link check | ${emoji(lk)} | ${label(lk)} |`,
+              '',
+              allBlockingPassed
+                ? ':package: Build artifact uploaded.'
+                : ':construction: Fix blocking checks before merging.',
+              '',
+              `<sub>Commit: \`${process.env.COMMIT_SHA}\` • [Run logs](${process.env.SERVER_URL}/${process.env.REPO_FULL}/actions/runs/${process.env.RUN_ID})</sub>`,
+            ];
+            const body = lines.join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((c) =>
+              c.user.type === 'Bot' && c.body.includes('Documentation Validation')
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

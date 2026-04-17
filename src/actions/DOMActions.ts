@@ -18,14 +18,14 @@ export class DOMActions {
   }
 
   /**
-   * Force log function that always logs regardless of debug mode
+   * Debug log gated on `AutomationConfig.debugMode`. Library code must not
+   * emit to consumers' devtools on every action.
    */
-  private forcelog(...args: any[]): void {
-    console.log('🔍 KRIYA-ENHANCEDD:', ...args);
-    console.info('🔍 KRIYA-ENHANCEDD:', ...args);
-    console.warn('🔍 KRIYA-ENHANCEDD:', ...args);
-    // Also try direct console access
-    (window as any).console?.log?.('🔍 KRIYA-ENHANCEDD:', ...args);
+  private forcelog(...args: readonly unknown[]): void {
+    if (!this._config.debugMode) {
+      return;
+    }
+    console.info('🔍 KRIYA-ENHANCED:', ...args);
   }
 
   public initialize(): void {
@@ -78,27 +78,18 @@ export class DOMActions {
   public async click(options: ClickOptions): Promise<void> {
     this._ensureInitialized();
 
-    let element = await this._findElement(
-      options.selector,
-      options.description
-    );
+    let element = await this._findElement(options.selector, options.description);
 
     this.forcelog('[KRIYA DEBUG] Click attempt - Found element:', element);
-    this.forcelog(
-      `[KRIYA DEBUG] Click attempt - Element tag: ${element.tagName}`
-    );
-    this.forcelog(
-      `[KRIYA DEBUG] Click attempt - Element href: ${element.getAttribute('href')}`
-    );
+    this.forcelog(`[KRIYA DEBUG] Click attempt - Element tag: ${element.tagName}`);
+    this.forcelog(`[KRIYA DEBUG] Click attempt - Element href: ${element.getAttribute('href')}`);
     this.forcelog(
       `[KRIYA DEBUG] Click attempt - Element clickable: ${this._isElementClickable(element)}`
     );
 
     // If the found element is not directly clickable, try to find a clickable child or parent
     if (!this._isElementClickable(element)) {
-      this.forcelog(
-        '[KRIYA DEBUG] Element not directly clickable, looking for alternatives...'
-      );
+      this.forcelog('[KRIYA DEBUG] Element not directly clickable, looking for alternatives...');
       // First try to find a clickable child
       const clickableChild = this._findClickableChild(element);
       if (clickableChild) {
@@ -108,10 +99,7 @@ export class DOMActions {
         // If no clickable child, try to find a clickable parent
         const clickableParent = this._findClickableParent(element);
         if (clickableParent) {
-          this.forcelog(
-            '[KRIYA DEBUG] Found clickable parent:',
-            clickableParent
-          );
+          this.forcelog('[KRIYA DEBUG] Found clickable parent:', clickableParent);
           element = clickableParent;
         } else {
           this.forcelog('[KRIYA DEBUG] No clickable parent or child found');
@@ -136,16 +124,11 @@ export class DOMActions {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
       // Wait a small moment for scroll to complete
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       if (options.position) {
         this.forcelog('[KRIYA DEBUG] Clicking at position:', options.position);
-        this._clickAtPosition(
-          element,
-          options.position,
-          options.button,
-          options.clickCount
-        );
+        this._clickAtPosition(element, options.position, options.button, options.clickCount);
       } else {
         this.forcelog('[KRIYA DEBUG] Clicking element directly');
         this._clickElement(element, options.button, options.clickCount);
@@ -165,28 +148,15 @@ export class DOMActions {
   public async fill(options: FillOptions): Promise<void> {
     this._ensureInitialized();
 
-    this.forcelog(
-      `[KRIYA DEBUG] Fill attempt - Description: "${options.description}"`
-    );
-    this.forcelog(
-      `[KRIYA DEBUG] Fill attempt - Value to fill: "${options.value}"`
-    );
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Description: "${options.description}"`);
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Value to fill: "${options.value}"`);
 
     // For fill, prioritize finding input elements
-    const searchTarget = (
-      options.selector ||
-      options.description ||
-      ''
-    ).toString();
-    let element: HTMLElement | null = await this._findElementByText(
-      searchTarget,
-      true
-    );
+    const searchTarget = (options.selector || options.description || '').toString();
+    let element: HTMLElement | null = await this._findElementByText(searchTarget, true);
 
     this.forcelog('[KRIYA DEBUG] Fill attempt - Found element:', element);
-    this.forcelog(
-      `[KRIYA DEBUG] Fill attempt - Element tag: ${element?.tagName}`
-    );
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Element tag: ${element?.tagName}`);
     this.forcelog(
       `[KRIYA DEBUG] Fill attempt - Element type: ${(element as HTMLInputElement)?.type}`
     );
@@ -209,9 +179,7 @@ export class DOMActions {
       if (labelElement) {
         const forAttr = labelElement.getAttribute('for');
         if (forAttr) {
-          const associatedInput = document.getElementById(
-            forAttr
-          ) as HTMLElement;
+          const associatedInput = document.getElementById(forAttr) as HTMLElement;
           if (associatedInput && this._isElementFillable(associatedInput)) {
             this.forcelog(
               // eslint-disable-next-line quotes
@@ -224,14 +192,9 @@ export class DOMActions {
 
         // If still not found, look for input inside label
         if (!element || !this._isElementFillable(element)) {
-          const inputInside = labelElement.querySelector(
-            'input, textarea, select'
-          ) as HTMLElement;
+          const inputInside = labelElement.querySelector('input, textarea, select') as HTMLElement;
           if (inputInside && this._isElementFillable(inputInside)) {
-            this.forcelog(
-              '[KRIYA DEBUG] Found input inside label:',
-              inputInside
-            );
+            this.forcelog('[KRIYA DEBUG] Found input inside label:', inputInside);
             element = inputInside;
           }
         }
@@ -255,18 +218,11 @@ export class DOMActions {
 
       // Look for input in parent elements (up to 3 levels)
       let parent = element?.parentElement;
-      for (
-        let i = 0;
-        i < 3 && parent && element && !this._isElementFillable(element);
-        i++
-      ) {
+      for (let i = 0; i < 3 && parent && element && !this._isElementFillable(element); i++) {
         const inputs = parent.querySelectorAll('input, textarea, select');
         for (const input of inputs) {
           if (this._isElementFillable(input as HTMLElement)) {
-            this.forcelog(
-              '[KRIYA DEBUG] Found fillable input in parent context:',
-              input
-            );
+            this.forcelog('[KRIYA DEBUG] Found fillable input in parent context:', input);
             element = input as HTMLElement;
             break;
           }
@@ -276,22 +232,15 @@ export class DOMActions {
     }
 
     if (!element || !this._isElementFillable(element)) {
-      this.forcelog(
-        '[KRIYA DEBUG] Fill failed - Element is not fillable:',
-        element
-      );
-      throw new AutomationError(
-        'Element is not fillable',
-        'ELEMENT_NOT_FOUND',
-        { selector: options.selector, description: options.description }
-      );
+      this.forcelog('[KRIYA DEBUG] Fill failed - Element is not fillable:', element);
+      throw new AutomationError('Element is not fillable', 'ELEMENT_NOT_FOUND', {
+        selector: options.selector,
+        description: options.description,
+      });
     }
 
     try {
-      const inputElement = element as
-        | HTMLInputElement
-        | HTMLTextAreaElement
-        | HTMLSelectElement;
+      const inputElement = element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
       this.forcelog('[KRIYA DEBUG] Filling element:', inputElement);
       this.forcelog(`[KRIYA DEBUG] Current value: "${inputElement.value}"`);
@@ -302,9 +251,7 @@ export class DOMActions {
 
       this._fillElement(inputElement, options.value, options.triggerEvents);
 
-      this.forcelog(
-        `[KRIYA DEBUG] Fill completed - New value: "${inputElement.value}"`
-      );
+      this.forcelog(`[KRIYA DEBUG] Fill completed - New value: "${inputElement.value}"`);
     } catch (error) {
       this.forcelog('[KRIYA DEBUG] Fill failed with error:', error);
       throw new AutomationError(
@@ -323,16 +270,12 @@ export class DOMActions {
     this._ensureInitialized();
 
     if (options.duration) {
-      await new Promise((resolve) => setTimeout(resolve, options.duration));
+      await new Promise(resolve => setTimeout(resolve, options.duration));
       return;
     }
 
     if (options.selector && options.condition) {
-      await this._waitForCondition(
-        options.selector,
-        options.condition,
-        options.timeout
-      );
+      await this._waitForCondition(options.selector, options.condition, options.timeout);
       return;
     }
 
@@ -363,11 +306,7 @@ export class DOMActions {
     // not body (which is the fallback after blur fires during fill)
     if (!element) {
       const active = document.activeElement as HTMLElement;
-      if (
-        active &&
-        active !== document.body &&
-        this._isElementFillable(active)
-      ) {
+      if (active && active !== document.body && this._isElementFillable(active)) {
         element = active;
       } else {
         // Last resort: find the most recently interacted visible input
@@ -375,7 +314,7 @@ export class DOMActions {
           document.querySelectorAll('input:not([type="hidden"]), textarea')
         ) as HTMLElement[];
         element =
-          inputs.find((el) => {
+          inputs.find(el => {
             const style = window.getComputedStyle(el);
             return style.display !== 'none' && style.visibility !== 'hidden';
           }) || document.body;
@@ -389,7 +328,7 @@ export class DOMActions {
     // Focus the resolved element before dispatching key events
     if (targetElement && targetElement.focus) {
       targetElement.focus();
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     // Create and dispatch keyboard events
@@ -440,10 +379,7 @@ export class DOMActions {
     }
   }
 
-  private async _findElement(
-    selector?: string,
-    description?: string
-  ): Promise<HTMLElement> {
+  private async _findElement(selector?: string, description?: string): Promise<HTMLElement> {
     if (selector) {
       const element = document.querySelector(selector) as HTMLElement;
       if (element) {
@@ -466,11 +402,9 @@ export class DOMActions {
 
   private _findElementByDescription(description: string): HTMLElement | null {
     const lowerDescription = description.toLowerCase();
-    const elements = Array.from(
-      document.querySelectorAll('*')
-    ) as HTMLElement[];
+    const elements = Array.from(document.querySelectorAll('*')) as HTMLElement[];
 
-    const scores = elements.map((element) => ({
+    const scores = elements.map(element => ({
       element,
       score: this._calculateElementScore(element, lowerDescription),
     }));
@@ -487,8 +421,7 @@ export class DOMActions {
         const text = element.textContent?.trim().substring(0, 100) || '';
         const href = element.getAttribute('href') || '';
         const clickable = this._isElementClickable(element);
-        const dataDesignSystem =
-          element.getAttribute('data-design-system') || '';
+        const dataDesignSystem = element.getAttribute('data-design-system') || '';
         const className = element.className || '';
 
         this.forcelog(
@@ -505,9 +438,7 @@ export class DOMActions {
       const youtubeLinks = Array.from(
         document.querySelectorAll('a[href*="youtube"]')
       ) as HTMLElement[];
-      this.forcelog(
-        `[KRIYA DEBUG] Found ${youtubeLinks.length} elements with YouTube in href:`
-      );
+      this.forcelog(`[KRIYA DEBUG] Found ${youtubeLinks.length} elements with YouTube in href:`);
       youtubeLinks.forEach((link, index) => {
         const score = this._calculateElementScore(link, lowerDescription);
         const clickable = this._isElementClickable(link);
@@ -664,22 +595,14 @@ export class DOMActions {
     return null;
   }
 
-  private _calculateElementScore(
-    element: HTMLElement,
-    description: string
-  ): number {
+  private _calculateElementScore(element: HTMLElement, description: string): number {
     let score = 0;
 
     // Enhanced text content processing - handle whitespace and invisible characters
     const rawTextContent = element.textContent ?? '';
-    const textContent = rawTextContent
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, ' '); // Normalize whitespace
-    const placeholder =
-      (element as HTMLInputElement).placeholder?.toLowerCase().trim() ?? '';
-    const label =
-      element.getAttribute('aria-label')?.toLowerCase().trim() ?? '';
+    const textContent = rawTextContent.toLowerCase().trim().replace(/\s+/g, ' '); // Normalize whitespace
+    const placeholder = (element as HTMLInputElement).placeholder?.toLowerCase().trim() ?? '';
+    const label = element.getAttribute('aria-label')?.toLowerCase().trim() ?? '';
     const title = element.getAttribute('title')?.toLowerCase().trim() ?? '';
     const id = element.id?.toLowerCase() ?? '';
     const className = String(element.className || '').toLowerCase();
@@ -692,20 +615,15 @@ export class DOMActions {
       .replace(/\s+/g, ' ');
 
     // Check data attributes for button text and other descriptive content
-    const dataButtonText =
-      element.getAttribute('data-button-text')?.toLowerCase() ?? '';
+    const dataButtonText = element.getAttribute('data-button-text')?.toLowerCase() ?? '';
     const dataLabel = element.getAttribute('data-label')?.toLowerCase() ?? '';
     const dataTitle = element.getAttribute('data-title')?.toLowerCase() ?? '';
     const dataName = element.getAttribute('data-name')?.toLowerCase() ?? '';
     const dataTestId = element.getAttribute('data-testid')?.toLowerCase() ?? '';
-    const dataButtonFor =
-      element.getAttribute('data-button-for')?.toLowerCase() ?? '';
-    const dataBreadcrumb =
-      element.getAttribute('data-breadcrumb')?.toLowerCase() ?? '';
-    const dataDesignSystem =
-      element.getAttribute('data-design-system')?.toLowerCase() ?? '';
-    const dataNumberinput =
-      element.getAttribute('data-numberinput')?.toLowerCase() ?? '';
+    const dataButtonFor = element.getAttribute('data-button-for')?.toLowerCase() ?? '';
+    const dataBreadcrumb = element.getAttribute('data-breadcrumb')?.toLowerCase() ?? '';
+    const dataDesignSystem = element.getAttribute('data-design-system')?.toLowerCase() ?? '';
+    const dataNumberinput = element.getAttribute('data-numberinput')?.toLowerCase() ?? '';
     const dataField = element.getAttribute('data-field')?.toLowerCase() ?? '';
 
     // DEBUG: Log text comparison for problematic elements
@@ -718,9 +636,7 @@ export class DOMActions {
       this.forcelog(`  Normalized text: "${textContent}"`);
       this.forcelog(`  Target: "${normalizedDescription}"`);
       this.forcelog(`  Exact match: ${textContent === normalizedDescription}`);
-      this.forcelog(
-        `  Contains match: ${textContent.includes(normalizedDescription)}`
-      );
+      this.forcelog(`  Contains match: ${textContent.includes(normalizedDescription)}`);
       this.forcelog('  Element: ', element);
     }
 
@@ -736,7 +652,7 @@ export class DOMActions {
     if (textContent.includes(description)) {
       // Check if the text match comes from a direct child vs deeply nested
       const directChildrenText = Array.from(element.children)
-        .map((child) => child.textContent?.toLowerCase() ?? '')
+        .map(child => child.textContent?.toLowerCase() ?? '')
         .join(' ');
 
       if (directChildrenText.includes(description)) {
@@ -756,18 +672,21 @@ export class DOMActions {
     }
 
     // HIGHEST Priority: Exact breadcrumb matches (navigation elements)
-    if (dataBreadcrumb.trim() === normalizedDescription) score += 20; // Highest priority for exact breadcrumb matches
-    if (dataBreadcrumb.includes(normalizedDescription)) score += 15; // High priority for breadcrumb navigation
+    if (dataBreadcrumb.trim() === normalizedDescription) {
+      score += 20;
+    } // Highest priority for exact breadcrumb matches
+    if (dataBreadcrumb.includes(normalizedDescription)) {
+      score += 15;
+    } // High priority for breadcrumb navigation
 
     // High priority matches (exact text content) - using normalized text
-    if (textContent === normalizedDescription) score += 12;
+    if (textContent === normalizedDescription) {
+      score += 12;
+    }
     if (textContent.includes(normalizedDescription)) {
       // Boost score for clickable elements that contain the text (like your <a> element)
       const tagName = element.tagName.toLowerCase();
-      if (
-        (tagName === 'a' && element.getAttribute('href')) ||
-        tagName === 'button'
-      ) {
+      if ((tagName === 'a' && element.getAttribute('href')) || tagName === 'button') {
         score += 10; // Higher score for clickable elements containing the text
       } else {
         score += 8;
@@ -777,20 +696,14 @@ export class DOMActions {
     // FALLBACK: Check if any individual words from description match
     const descriptionWords = normalizedDescription.split(' ');
     const textWords = textContent.split(' ');
-    const matchingWords = descriptionWords.filter((word) =>
-      textWords.some((textWord) => textWord.includes(word))
+    const matchingWords = descriptionWords.filter(word =>
+      textWords.some(textWord => textWord.includes(word))
     );
 
-    if (
-      matchingWords.length === descriptionWords.length &&
-      descriptionWords.length > 1
-    ) {
+    if (matchingWords.length === descriptionWords.length && descriptionWords.length > 1) {
       // All words from description found in text
       const tagName = element.tagName.toLowerCase();
-      if (
-        (tagName === 'a' && element.getAttribute('href')) ||
-        tagName === 'button'
-      ) {
+      if ((tagName === 'a' && element.getAttribute('href')) || tagName === 'button') {
         score += 9; // High score for word-based match in clickable elements
       } else {
         score += 6; // Lower score for word-based match in non-clickable elements
@@ -800,94 +713,147 @@ export class DOMActions {
       score += Math.min(matchingWords.length * 2, 5);
     }
 
-    if (dataButtonText.trim() === normalizedDescription) score += 12;
-    if (dataButtonText.includes(normalizedDescription)) score += 8;
+    if (dataButtonText.trim() === normalizedDescription) {
+      score += 12;
+    }
+    if (dataButtonText.includes(normalizedDescription)) {
+      score += 8;
+    }
 
     // Exact matches for other descriptive attributes
-    if (placeholder === normalizedDescription) score += 10;
-    if (label === normalizedDescription) score += 10;
-    if (title === normalizedDescription) score += 10;
-    if (
-      dataDesignSystem.trim() === normalizedDescription &&
-      dataDesignSystem !== 'true'
-    )
+    if (placeholder === normalizedDescription) {
       score += 10;
+    }
+    if (label === normalizedDescription) {
+      score += 10;
+    }
+    if (title === normalizedDescription) {
+      score += 10;
+    }
+    if (dataDesignSystem.trim() === normalizedDescription && dataDesignSystem !== 'true') {
+      score += 10;
+    }
 
     // Partial matches for descriptive attributes
-    if (placeholder.includes(normalizedDescription)) score += 6;
-    if (label.includes(normalizedDescription)) score += 6;
-    if (title.includes(normalizedDescription)) score += 6;
+    if (placeholder.includes(normalizedDescription)) {
+      score += 6;
+    }
+    if (label.includes(normalizedDescription)) {
+      score += 6;
+    }
+    if (title.includes(normalizedDescription)) {
+      score += 6;
+    }
 
     // Enhanced SelectBox component scoring
     if (isSelectBoxComponent) {
       score += 3; // Bonus for being a SelectBox component
-      if (selectBoxButtonText.trim() === description) score += 15;
-      if (selectBoxButtonText.includes(description)) score += 10;
+      if (selectBoxButtonText.trim() === description) {
+        score += 15;
+      }
+      if (selectBoxButtonText.includes(description)) {
+        score += 10;
+      }
     }
 
     // Enhanced FormRenderer field scoring
     if (isFormRendererField) {
       score += 2; // Bonus for being a FormRenderer field
-      if (formFieldName.trim() === description) score += 12;
-      if (formFieldName.includes(description)) score += 8;
+      if (formFieldName.trim() === description) {
+        score += 12;
+      }
+      if (formFieldName.includes(description)) {
+        score += 8;
+      }
     }
 
     // Medium priority matches (descriptive attributes)
-    if (dataLabel.includes(description)) score += 5;
-    if (dataTitle.includes(description)) score += 5;
-    if (dataName.includes(description)) score += 5;
-    if (dataTestId.includes(description)) score += 5;
-    if (dataDesignSystem.includes(description) && dataDesignSystem !== 'true')
-      score += 5; // Avoid generic 'true' values
+    if (dataLabel.includes(description)) {
+      score += 5;
+    }
+    if (dataTitle.includes(description)) {
+      score += 5;
+    }
+    if (dataName.includes(description)) {
+      score += 5;
+    }
+    if (dataTestId.includes(description)) {
+      score += 5;
+    }
+    if (dataDesignSystem.includes(description) && dataDesignSystem !== 'true') {
+      score += 5;
+    } // Avoid generic 'true' values
 
     // New: data-numberinput and data-field support
-    if (dataNumberinput.includes(description)) score += 5;
-    if (dataField.includes(description)) score += 5;
+    if (dataNumberinput.includes(description)) {
+      score += 5;
+    }
+    if (dataField.includes(description)) {
+      score += 5;
+    }
 
     // Lower priority matches (structural identifiers)
-    if (id.includes(description)) score += 3;
-    if (dataButtonFor.includes(description)) score += 3;
-    if (className.includes(description)) score += 2;
+    if (id.includes(description)) {
+      score += 3;
+    }
+    if (dataButtonFor.includes(description)) {
+      score += 3;
+    }
+    if (className.includes(description)) {
+      score += 2;
+    }
 
     // ReScript-specific class name matching
-    if (className.includes('selectbox') || className.includes('select-box'))
+    if (className.includes('selectbox') || className.includes('select-box')) {
       score += 2;
-    if (className.includes('dropdown') || className.includes('combobox'))
+    }
+    if (className.includes('dropdown') || className.includes('combobox')) {
       score += 2;
-    if (
-      className.includes('field-renderer') ||
-      className.includes('form-field')
-    )
+    }
+    if (className.includes('field-renderer') || className.includes('form-field')) {
       score += 1;
+    }
 
     // Bonus for clickable elements (prefer directly clickable elements)
     const tagName = element.tagName.toLowerCase();
-    if (tagName === 'a' && element.getAttribute('href')) score += 7; // Increased from 5 to 7
-    if (tagName === 'button') score += 5;
-    if (element.getAttribute('onclick')) score += 3;
-    if (element.getAttribute('role') === 'button') score += 3;
+    if (tagName === 'a' && element.getAttribute('href')) {
+      score += 7;
+    } // Increased from 5 to 7
+    if (tagName === 'button') {
+      score += 5;
+    }
+    if (element.getAttribute('onclick')) {
+      score += 3;
+    }
+    if (element.getAttribute('role') === 'button') {
+      score += 3;
+    }
 
     // NESTED STRUCTURE BONUS: Give extra points to clickable parents that contain target text
     if (
       hasNestedTextMatch &&
-      ((tagName === 'a' && element.getAttribute('href')) ||
-        tagName === 'button')
+      ((tagName === 'a' && element.getAttribute('href')) || tagName === 'button')
     ) {
       score += 5; // Extra bonus for clickable parents of nested text
     }
 
     // Penalize hidden or disabled elements
-    if (element.getAttribute('aria-hidden') === 'true') score -= 10;
-    if (element.style.display === 'none') score -= 10;
-    if (element.style.visibility === 'hidden') score -= 10;
-    if ((element as HTMLButtonElement).disabled) score -= 8;
+    if (element.getAttribute('aria-hidden') === 'true') {
+      score -= 10;
+    }
+    if (element.style.display === 'none') {
+      score -= 10;
+    }
+    if (element.style.visibility === 'hidden') {
+      score -= 10;
+    }
+    if ((element as HTMLButtonElement).disabled) {
+      score -= 8;
+    }
 
     // PENALIZE NON-CLICKABLE ELEMENTS that contain text but aren't actionable
     // This prevents text-containing divs from scoring higher than their clickable parents
-    if (
-      textContent.includes(description) &&
-      !this._isElementClickable(element)
-    ) {
+    if (textContent.includes(description) && !this._isElementClickable(element)) {
       score -= 3; // Reduce score for non-clickable elements
     }
 
@@ -897,16 +863,26 @@ export class DOMActions {
   private _isElementClickable(element: HTMLElement): boolean {
     // Check if element has zero dimensions
     const rect = element.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return false;
+    if (rect.width === 0 || rect.height === 0) {
+      return false;
+    }
 
     // Check computed styles
     const style = window.getComputedStyle(element);
-    if (style.display === 'none' || style.visibility === 'hidden') return false;
-    if (style.pointerEvents === 'none') return false;
+    if (style.display === 'none' || style.visibility === 'hidden') {
+      return false;
+    }
+    if (style.pointerEvents === 'none') {
+      return false;
+    }
 
     // Check if element is actually visible in viewport (basic check)
-    if (rect.top < 0 && rect.bottom < 0) return false;
-    if (rect.left < 0 && rect.right < 0) return false;
+    if (rect.top < 0 && rect.bottom < 0) {
+      return false;
+    }
+    if (rect.left < 0 && rect.right < 0) {
+      return false;
+    }
 
     // Check for semantic clickability
     const tagName = element.tagName.toLowerCase();
@@ -929,10 +905,14 @@ export class DOMActions {
     }
 
     // Check if element has cursor pointer (indicating clickability)
-    if (style.cursor === 'pointer') return true;
+    if (style.cursor === 'pointer') {
+      return true;
+    }
 
     // For div and other generic elements, be more permissive if they have clickable styling
-    if (hasOnClick || hasButtonRole) return true;
+    if (hasOnClick || hasButtonRole) {
+      return true;
+    }
 
     // Default to false for generic elements without clear clickable indicators
     return tagName === 'button' || (tagName === 'a' && hasHref);
@@ -944,36 +924,37 @@ export class DOMActions {
 
     // Standard HTML elements
     if (tagName === 'input') {
-      const fillableTypes = [
-        'text',
-        'email',
-        'password',
-        'tel',
-        'url',
-        'search',
-        'number',
-      ];
+      const fillableTypes = ['text', 'email', 'password', 'tel', 'url', 'search', 'number'];
       return fillableTypes.includes(type ?? 'text');
     }
 
-    if (tagName === 'textarea') return true;
-    if (tagName === 'select') return true;
-    if (element.contentEditable === 'true') return true;
+    if (tagName === 'textarea') {
+      return true;
+    }
+    if (tagName === 'select') {
+      return true;
+    }
+    if (element.contentEditable === 'true') {
+      return true;
+    }
 
     // ReScript SelectBox components (custom dropdowns)
-    if (this._detectSelectBoxComponent(element)) return true;
+    if (this._detectSelectBoxComponent(element)) {
+      return true;
+    }
 
     // Check if element is within a SelectBox component
-    if (element.closest('[data-selectbox-value]')) return true;
+    if (element.closest('[data-selectbox-value]')) {
+      return true;
+    }
 
     // Check if element is a button within a form field wrapper (could be a custom select)
-    if (
-      tagName === 'button' &&
-      element.closest('[data-component-field-wrapper]')
-    ) {
+    if (tagName === 'button' && element.closest('[data-component-field-wrapper]')) {
       const fieldWrapper = element.closest('[data-component-field-wrapper]');
       // If the field wrapper contains selectbox indicators, this button is fillable
-      if (fieldWrapper?.querySelector('[data-selectbox-value]')) return true;
+      if (fieldWrapper?.querySelector('[data-selectbox-value]')) {
+        return true;
+      }
     }
 
     return false;
@@ -1027,16 +1008,9 @@ export class DOMActions {
       const href = element.getAttribute('href');
       const target = element.getAttribute('target');
 
-      this.forcelog(
-        `[KRIYA DEBUG] Link detected - href: ${href}, target: ${target}`
-      );
+      this.forcelog(`[KRIYA DEBUG] Link detected - href: ${href}, target: ${target}`);
 
-      if (
-        href &&
-        (href.startsWith('http') ||
-          href.startsWith('/') ||
-          href.startsWith('./'))
-      ) {
+      if (href && (href.startsWith('http') || href.startsWith('/') || href.startsWith('./'))) {
         // For relative URLs, construct the full URL
         let fullUrl = href;
         if (href.startsWith('/') || href.startsWith('./')) {
@@ -1063,9 +1037,7 @@ export class DOMActions {
               );
               // Fallback to same window navigation (like navigate function)
               window.location.href = fullUrl;
-              this.forcelog(
-                '[KRIYA DEBUG] Direct navigation executed (same as navigate function)'
-              );
+              this.forcelog('[KRIYA DEBUG] Direct navigation executed (same as navigate function)');
               return; // Success! Exit early
             }
           } else {
@@ -1074,9 +1046,7 @@ export class DOMActions {
               '[KRIYA DEBUG] Same window direct navigation (same as navigate function)'
             );
             window.location.href = fullUrl;
-            this.forcelog(
-              '[KRIYA DEBUG] Direct navigation executed (same as navigate function)'
-            );
+            this.forcelog('[KRIYA DEBUG] Direct navigation executed (same as navigate function)');
             return; // Success! Exit early
           }
         } catch (error) {
@@ -1089,7 +1059,7 @@ export class DOMActions {
     if (!clickHandled || element.tagName.toLowerCase() === 'a') {
       this.forcelog('[KRIYA DEBUG] Trying native click() method');
       try {
-        (element as any).click();
+        (element as HTMLElement).click();
         this.forcelog('[KRIYA DEBUG] Native click() executed');
       } catch (error) {
         this.forcelog('[KRIYA DEBUG] Native click() failed:', error);
@@ -1101,23 +1071,14 @@ export class DOMActions {
       const href = element.getAttribute('href');
       const target = element.getAttribute('target');
 
-      if (
-        href &&
-        (href.startsWith('http') ||
-          href.startsWith('/') ||
-          href.startsWith('./'))
-      ) {
+      if (href && (href.startsWith('http') || href.startsWith('/') || href.startsWith('./'))) {
         // For relative URLs, use the full URL we constructed earlier
         let targetUrl = href;
         if (href.startsWith('/') || href.startsWith('./')) {
           targetUrl = new URL(href, window.location.origin).href;
-          this.forcelog(
-            `[KRIYA DEBUG] Using full URL for enhanced techniques: ${targetUrl}`
-          );
+          this.forcelog(`[KRIYA DEBUG] Using full URL for enhanced techniques: ${targetUrl}`);
         }
-        this.forcelog(
-          `[KRIYA DEBUG] Attempting enhanced navigation techniques for: ${targetUrl}`
-        );
+        this.forcelog(`[KRIYA DEBUG] Attempting enhanced navigation techniques for: ${targetUrl}`);
 
         // Method 3a: Try creating a temporary hidden link and clicking it
         this.forcelog('[KRIYA DEBUG] Method 3a: Creating temporary link');
@@ -1176,145 +1137,25 @@ export class DOMActions {
             this.forcelog('[KRIYA DEBUG] Enhanced direct navigation needed');
 
             try {
-              // Method 3c1: Try with user gesture flag
               if (target === '_blank') {
-                this.forcelog(
-                  '[KRIYA DEBUG] Method 3c1: window.open with user gesture simulation'
-                );
-
-                // Create a click event on document to simulate user gesture
-                const userGestureEvent = new MouseEvent('click', {
-                  bubbles: true,
-                  cancelable: true,
-                  view: window,
-                });
-                document.dispatchEvent(userGestureEvent);
-
-                // Try multiple window.open variations
-                let newWindow: Window | null = null;
-
-                // Method 3c1a: Try without features parameter
-                newWindow = window.open(targetUrl, '_blank');
-                if (newWindow) {
-                  this.forcelog(
-                    '[KRIYA DEBUG] window.open without features succeeded'
-                  );
-                } else {
-                  this.forcelog(
-                    '[KRIYA DEBUG] window.open without features blocked'
-                  );
-
-                  // Method 3c1b: Try with minimal features
-                  newWindow = window.open(
-                    targetUrl,
-                    '_blank',
-                    'toolbar=yes,scrollbars=yes,resizable=yes'
-                  );
-                  if (newWindow) {
-                    this.forcelog(
-                      '[KRIYA DEBUG] window.open with minimal features succeeded'
-                    );
-                  } else {
-                    this.forcelog(
-                      '[KRIYA DEBUG] window.open with minimal features blocked'
-                    );
-
-                    // Method 3c1c: Try with popup-like features (sometimes works)
-                    newWindow = window.open(
-                      targetUrl,
-                      '_blank',
-                      'width=800,height=600,scrollbars=yes,resizable=yes'
-                    );
-                    if (newWindow) {
-                      this.forcelog(
-                        '[KRIYA DEBUG] window.open with popup features succeeded'
-                      );
-                    } else {
-                      this.forcelog(
-                        '[KRIYA DEBUG] All window.open methods blocked (likely popup blocker)'
-                      );
-
-                      // Method 3c2: Try assignment to parent window
-                      this.forcelog(
-                        '[KRIYA DEBUG] Method 3c2: Trying parent.location assignment'
-                      );
-                      try {
-                        if (window.parent && window.parent !== window) {
-                          window.parent.open(targetUrl, '_blank');
-                          this.forcelog('[KRIYA DEBUG] parent.open() executed');
-                        } else {
-                          // Method 3c3: Try creating and submitting a form
-                          this.forcelog(
-                            '[KRIYA DEBUG] Method 3c3: Creating form submission'
-                          );
-                          const form = document.createElement('form');
-                          form.action = targetUrl;
-                          form.target = '_blank';
-                          form.method = 'GET';
-                          form.style.display = 'none';
-                          document.body.appendChild(form);
-                          form.submit();
-
-                          setTimeout(() => {
-                            document.body.removeChild(form);
-                          }, 100);
-
-                          this.forcelog(
-                            '[KRIYA DEBUG] Form submission executed'
-                          );
-
-                          // Check if form submission worked
-                          setTimeout(() => {
-                            const finalLocation = window.location.href;
-                            if (finalLocation === currentLocation) {
-                              this.forcelog(
-                                '[KRIYA DEBUG] Form submission also failed - trying final fallback'
-                              );
-                              this._showNavigationAssistance(targetUrl);
-                            } else {
-                              this.forcelog(
-                                '[KRIYA DEBUG] Form submission appears to have worked'
-                              );
-                            }
-                          }, 500);
-                        }
-                      } catch (formError) {
-                        this.forcelog(
-                          '[KRIYA DEBUG] Form submission failed:',
-                          formError
-                        );
-                        this._showNavigationAssistance(targetUrl);
-                      }
-                    }
-                  }
-                }
+                this._openInNewWindowWithFallbacks(targetUrl, currentLocation);
               } else {
                 // For same window navigation
                 this.forcelog('[KRIYA DEBUG] Same window navigation');
                 try {
                   window.location.href = targetUrl;
-                  this.forcelog(
-                    '[KRIYA DEBUG] window.location.href set for same window'
-                  );
+                  this.forcelog('[KRIYA DEBUG] window.location.href set for same window');
                 } catch (navError) {
-                  this.forcelog(
-                    '[KRIYA DEBUG] Same window navigation failed:',
-                    navError
-                  );
+                  this.forcelog('[KRIYA DEBUG] Same window navigation failed:', navError);
                   this._showNavigationAssistance(targetUrl);
                 }
               }
             } catch (error) {
-              this.forcelog(
-                '[KRIYA DEBUG] Enhanced direct navigation failed:',
-                error
-              );
+              this.forcelog('[KRIYA DEBUG] Enhanced direct navigation failed:', error);
               this._showNavigationAssistance(href);
             }
           } else {
-            this.forcelog(
-              '[KRIYA DEBUG] Enhanced methods appear to have worked - page changed'
-            );
+            this.forcelog('[KRIYA DEBUG] Enhanced methods appear to have worked - page changed');
           }
         }, 300); // Increased delay to allow for navigation
       }
@@ -1347,9 +1188,7 @@ export class DOMActions {
     }
   }
 
-  private _clearElement(
-    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-  ): void {
+  private _clearElement(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): void {
     if (element.tagName.toLowerCase() === 'select') {
       (element as HTMLSelectElement).selectedIndex = 0;
     } else {
@@ -1366,10 +1205,7 @@ export class DOMActions {
     triggerEvents: boolean
   ): void {
     // Handle ReScript SelectBox components (custom dropdowns)
-    if (
-      this._detectSelectBoxComponent(element) ||
-      element.closest('[data-selectbox-value]')
-    ) {
+    if (this._detectSelectBoxComponent(element) || element.closest('[data-selectbox-value]')) {
       this._fillReScriptSelectBox(element, value);
       return;
     }
@@ -1378,16 +1214,13 @@ export class DOMActions {
     if (element.tagName.toLowerCase() === 'select') {
       const selectElement = element as HTMLSelectElement;
       const option = Array.from(selectElement.options).find(
-        (opt) => opt.value === value || opt.textContent === value
+        opt => opt.value === value || opt.textContent === value
       );
 
       if (option) {
         selectElement.selectedIndex = option.index;
       } else {
-        throw new AutomationError(
-          `Option not found in select: ${value}`,
-          'ELEMENT_NOT_FOUND'
-        );
+        throw new AutomationError(`Option not found in select: ${value}`, 'ELEMENT_NOT_FOUND');
       }
     } else {
       // Handle standard input/textarea elements
@@ -1420,10 +1253,7 @@ export class DOMActions {
       (element.hasAttribute('data-selectbox-value') ? element : null);
 
     if (!selectBoxContainer) {
-      throw new AutomationError(
-        'SelectBox container not found',
-        'ELEMENT_NOT_FOUND'
-      );
+      throw new AutomationError('SelectBox container not found', 'ELEMENT_NOT_FOUND');
     }
 
     // Find the trigger button for the dropdown
@@ -1432,10 +1262,7 @@ export class DOMActions {
     ) as HTMLButtonElement;
 
     if (!triggerButton) {
-      throw new AutomationError(
-        'SelectBox trigger button not found',
-        'ELEMENT_NOT_FOUND'
-      );
+      throw new AutomationError('SelectBox trigger button not found', 'ELEMENT_NOT_FOUND');
     }
 
     // Click the button to open the dropdown
@@ -1461,20 +1288,16 @@ export class DOMActions {
       let optionToSelect: HTMLElement | null = null;
 
       // Strategy 1: Look for exact data-dropdown-value match
-      optionToSelect = dropdown.querySelector(
-        `[data-dropdown-value="${value}"]`
-      ) as HTMLElement;
+      optionToSelect = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
 
       // Strategy 2: Look for exact text content match
       if (!optionToSelect) {
         const options = dropdown.querySelectorAll(
           '[data-dropdown-value], [role="option"], li, div[class*="option"]'
         );
-        optionToSelect = Array.from(options).find((option) => {
+        optionToSelect = Array.from(options).find(option => {
           const text = option.textContent?.trim().toLowerCase();
-          const dataValue = option
-            .getAttribute('data-dropdown-value')
-            ?.toLowerCase();
+          const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
           const targetValue = value.toLowerCase();
 
           return text === targetValue || dataValue === targetValue;
@@ -1486,16 +1309,12 @@ export class DOMActions {
         const options = dropdown.querySelectorAll(
           '[data-dropdown-value], [role="option"], li, div[class*="option"]'
         );
-        optionToSelect = Array.from(options).find((option) => {
+        optionToSelect = Array.from(options).find(option => {
           const text = option.textContent?.trim().toLowerCase();
-          const dataValue = option
-            .getAttribute('data-dropdown-value')
-            ?.toLowerCase();
+          const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
           const targetValue = value.toLowerCase();
 
-          return (
-            text?.includes(targetValue) || dataValue?.includes(targetValue)
-          );
+          return text?.includes(targetValue) || dataValue?.includes(targetValue);
         }) as HTMLElement;
       }
 
@@ -1518,11 +1337,9 @@ export class DOMActions {
       triggerButton.setAttribute('data-value', selectedValue);
 
       // Update button text if it has data-button-text element
-      const buttonTextElement =
-        triggerButton.querySelector('[data-button-text]');
+      const buttonTextElement = triggerButton.querySelector('[data-button-text]');
       if (buttonTextElement) {
-        buttonTextElement.textContent =
-          optionToSelect.textContent?.trim() || value;
+        buttonTextElement.textContent = optionToSelect.textContent?.trim() || value;
         buttonTextElement.setAttribute(
           'data-button-text',
           optionToSelect.textContent?.trim() || value
@@ -1563,14 +1380,13 @@ export class DOMActions {
         return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    throw new AutomationError(
-      `Wait condition not met within ${maxWait}ms`,
-      'EXECUTION_TIMEOUT',
-      { selector, condition }
-    );
+    throw new AutomationError(`Wait condition not met within ${maxWait}ms`, 'EXECUTION_TIMEOUT', {
+      selector,
+      condition,
+    });
   }
 
   private async _findElementByText(
@@ -1596,18 +1412,12 @@ export class DOMActions {
           el.getAttribute('aria-label')?.toLowerCase().includes(searchText) ||
           el.getAttribute('data-testid')?.toLowerCase().includes(searchText) ||
           el.getAttribute('data-label')?.toLowerCase().includes(searchText) ||
-          el
-            .getAttribute('data-numberinput')
-            ?.toLowerCase()
-            .includes(searchText) ||
+          el.getAttribute('data-numberinput')?.toLowerCase().includes(searchText) ||
           el.getAttribute('data-field')?.toLowerCase().includes(searchText) ||
           el.id?.toLowerCase().includes(searchText) ||
           (el as HTMLInputElement).name?.toLowerCase().includes(searchText)
         ) {
-          this.forcelog(
-            '[KRIYA DEBUG] _findElementByText found INPUT by attribute:',
-            el
-          );
+          this.forcelog('[KRIYA DEBUG] _findElementByText found INPUT by attribute:', el);
           return el;
         }
       }
@@ -1620,9 +1430,7 @@ export class DOMActions {
           // Try to find associated input
           const forAttr = label.getAttribute('for');
           if (forAttr) {
-            const inputById = document.getElementById(
-              forAttr
-            ) as HTMLInputElement;
+            const inputById = document.getElementById(forAttr) as HTMLInputElement;
             if (inputById && this._isElementFillable(inputById)) {
               this.forcelog(
                 '[KRIYA DEBUG] _findElementByText found input via label for:',
@@ -1632,9 +1440,7 @@ export class DOMActions {
             }
           }
           // Try to find input inside label
-          const inputInside = label.querySelector(
-            'input, textarea, select'
-          ) as HTMLInputElement;
+          const inputInside = label.querySelector('input, textarea, select') as HTMLInputElement;
           if (inputInside && this._isElementFillable(inputInside)) {
             this.forcelog(
               '[KRIYA DEBUG] _findElementByText found input inside label:',
@@ -1653,10 +1459,10 @@ export class DOMActions {
           // Look for sibling or parent input
           let parent = el.parentElement;
           for (let i = 0; i < 3; i++) {
-            if (!parent) break;
-            const nearbyInput = parent.querySelector(
-              'input, textarea, select'
-            ) as HTMLInputElement;
+            if (!parent) {
+              break;
+            }
+            const nearbyInput = parent.querySelector('input, textarea, select') as HTMLInputElement;
             if (nearbyInput && this._isElementFillable(nearbyInput)) {
               this.forcelog(
                 '[KRIYA DEBUG] _findElementByText found input near label:',
@@ -1689,13 +1495,10 @@ export class DOMActions {
       try {
         const el = document.querySelector(sel) as HTMLElement;
         if (el && this._isElementClickable(el)) {
-          this.forcelog(
-            `[KRIYA DEBUG] _findElementByText found via ${sel}:`,
-            el
-          );
+          this.forcelog(`[KRIYA DEBUG] _findElementByText found via ${sel}:`, el);
           return el;
         }
-      } catch (e) {
+      } catch {
         // Skip invalid selectors
       }
     }
@@ -1711,28 +1514,19 @@ export class DOMActions {
         el.getAttribute('data-testid')?.toLowerCase().includes(searchText) ||
         el.getAttribute('data-label')?.toLowerCase().includes(searchText)
       ) {
-        this.forcelog(
-          '[KRIYA DEBUG] _findElementByText found INPUT in DOM walk:',
-          el
-        );
+        this.forcelog('[KRIYA DEBUG] _findElementByText found INPUT in DOM walk:', el);
         return el;
       }
     }
 
     // Second pass: find non-link elements with matching text
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_ELEMENT,
-      null
-    );
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, null);
 
     let node: Node | null = walker.nextNode();
     while (node) {
       if (node.nodeType === Node.ELEMENT_NODE) {
         const el = node as HTMLElement;
-        const elText = (el.textContent || el.innerText || '')
-          .toLowerCase()
-          .trim();
+        const elText = (el.textContent || el.innerText || '').toLowerCase().trim();
         const tagName = el.tagName.toLowerCase();
 
         // Skip non-clickable elements
@@ -1745,29 +1539,21 @@ export class DOMActions {
         if (
           elText === searchText ||
           el.getAttribute('data-label')?.toLowerCase().includes(searchText) ||
-          el
-            .getAttribute('data-placeholder')
-            ?.toLowerCase()
-            .includes(searchText) ||
+          el.getAttribute('data-placeholder')?.toLowerCase().includes(searchText) ||
           el.getAttribute('aria-label')?.toLowerCase().includes(searchText) ||
           el.getAttribute('data-testid')?.toLowerCase().includes(searchText) ||
           el.getAttribute('data-id')?.toLowerCase().includes(searchText) ||
           el.getAttribute('data-element')?.toLowerCase().includes(searchText) ||
           el.getAttribute('data-button')?.toLowerCase().includes(searchText)
         ) {
-          this.forcelog(
-            '[KRIYA DEBUG] _findElementByText found via DOM walk:',
-            el
-          );
+          this.forcelog('[KRIYA DEBUG] _findElementByText found via DOM walk:', el);
           return el;
         }
       }
       node = walker.nextNode();
     }
 
-    this.forcelog(
-      `[KRIYA DEBUG] _findElementByText - no element found for: "${text}"`
-    );
+    this.forcelog(`[KRIYA DEBUG] _findElementByText - no element found for: "${text}"`);
     return null;
   }
 
@@ -1807,57 +1593,64 @@ export class DOMActions {
     const tagName = element.tagName.toLowerCase();
 
     // PRIMARY: Check for Euler dashboard SelectBox data attributes (highest priority)
-    if (element.hasAttribute('data-selectbox-value')) return true;
-    if (element.closest('[data-selectbox-value]')) return true;
+    if (element.hasAttribute('data-selectbox-value')) {
+      return true;
+    }
+    if (element.closest('[data-selectbox-value]')) {
+      return true;
+    }
 
     // Check for button elements with Euler SelectBox patterns
     if (tagName === 'button') {
-      if (
-        element.hasAttribute('data-value') &&
-        element.querySelector('[data-button-text]')
-      )
+      if (element.hasAttribute('data-value') && element.querySelector('[data-button-text]')) {
         return true;
-      if (
-        element.hasAttribute('data-value') &&
-        element.closest('[data-selectbox-value]')
-      )
+      }
+      if (element.hasAttribute('data-value') && element.closest('[data-selectbox-value]')) {
         return true;
+      }
     }
 
     // Check for common SelectBox patterns in ReScript components
-    if (className.includes('selectbox') || className.includes('select-box'))
+    if (className.includes('selectbox') || className.includes('select-box')) {
       return true;
-    if (className.includes('dropdown') || className.includes('combobox'))
+    }
+    if (className.includes('dropdown') || className.includes('combobox')) {
       return true;
+    }
 
     // Check for button elements that might be SelectBox triggers
     if (tagName === 'button') {
       // Look for dropdown-related classes or attributes
-      if (element.getAttribute('aria-haspopup') === 'listbox') return true;
-      if (element.getAttribute('role') === 'combobox') return true;
-      if (className.includes('dropdown') || className.includes('select'))
+      if (element.getAttribute('aria-haspopup') === 'listbox') {
         return true;
+      }
+      if (element.getAttribute('role') === 'combobox') {
+        return true;
+      }
+      if (className.includes('dropdown') || className.includes('select')) {
+        return true;
+      }
     }
 
     // Check if parent container has SelectBox patterns
     const parent = element.parentElement;
     if (parent) {
       const parentClass = String(parent.className || '').toLowerCase();
-      if (
-        parentClass.includes('selectbox') ||
-        parentClass.includes('select-box')
-      )
+      if (parentClass.includes('selectbox') || parentClass.includes('select-box')) {
         return true;
-      if (parentClass.includes('dropdown') || parentClass.includes('combobox'))
+      }
+      if (parentClass.includes('dropdown') || parentClass.includes('combobox')) {
         return true;
+      }
     }
 
     // Check for ReScript compiled class patterns (typically have BS prefix)
     if (
       className.includes('bs-') &&
       (className.includes('select') || className.includes('dropdown'))
-    )
+    ) {
       return true;
+    }
 
     return false;
   }
@@ -1866,22 +1659,26 @@ export class DOMActions {
     const className = String(element.className || '').toLowerCase();
 
     // PRIMARY: Check for Euler dashboard form field data attributes (highest priority)
-    if (element.hasAttribute('data-component-field-wrapper')) return true;
-    if (element.closest('[data-component-field-wrapper]')) return true;
-    if (element.hasAttribute('data-form-label')) return true;
-    if (element.hasAttribute('data-design-system')) return true;
+    if (element.hasAttribute('data-component-field-wrapper')) {
+      return true;
+    }
+    if (element.closest('[data-component-field-wrapper]')) {
+      return true;
+    }
+    if (element.hasAttribute('data-form-label')) {
+      return true;
+    }
+    if (element.hasAttribute('data-design-system')) {
+      return true;
+    }
 
     // Check for FormRenderer field patterns
-    if (
-      className.includes('field-renderer') ||
-      className.includes('form-field')
-    )
+    if (className.includes('field-renderer') || className.includes('form-field')) {
       return true;
-    if (
-      className.includes('field-container') ||
-      className.includes('form-container')
-    )
+    }
+    if (className.includes('field-container') || className.includes('form-container')) {
       return true;
+    }
 
     // Check parent elements for FormRenderer patterns
     let current = element.parentElement;
@@ -1889,16 +1686,12 @@ export class DOMActions {
     while (current && depth < 5) {
       // Check up to 5 levels up
       const parentClass = String(current.className || '').toLowerCase();
-      if (
-        parentClass.includes('field-renderer') ||
-        parentClass.includes('form-field')
-      )
+      if (parentClass.includes('field-renderer') || parentClass.includes('form-field')) {
         return true;
-      if (
-        parentClass.includes('field-container') ||
-        parentClass.includes('form-container')
-      )
+      }
+      if (parentClass.includes('field-container') || parentClass.includes('form-container')) {
         return true;
+      }
 
       current = current.parentElement;
       depth++;
@@ -1913,7 +1706,9 @@ export class DOMActions {
 
     // PRIMARY: Check for Euler-specific data-button-text attribute
     text = element.getAttribute('data-button-text') || '';
-    if (text) return text.toLowerCase();
+    if (text) {
+      return text.toLowerCase();
+    }
 
     // Look for data-button-text in children
     const buttonTextElement = element.querySelector('[data-button-text]');
@@ -1922,40 +1717,51 @@ export class DOMActions {
         buttonTextElement.getAttribute('data-button-text') ||
         buttonTextElement.textContent?.trim() ||
         '';
-      if (text) return text.toLowerCase();
+      if (text) {
+        return text.toLowerCase();
+      }
     }
 
     // Check for selectbox value attribute
     text = element.getAttribute('data-selectbox-value') || '';
-    if (text) return text.toLowerCase();
+    if (text) {
+      return text.toLowerCase();
+    }
 
     // Look for selectbox value in parents
     const selectboxContainer = element.closest('[data-selectbox-value]');
     if (selectboxContainer) {
       text = selectboxContainer.getAttribute('data-selectbox-value') || '';
-      if (text) return text.toLowerCase();
+      if (text) {
+        return text.toLowerCase();
+      }
     }
 
     // Direct text content
     text = element.textContent?.trim() || '';
-    if (text) return text.toLowerCase();
+    if (text) {
+      return text.toLowerCase();
+    }
 
     // Check for button elements within or as the element
     if (element.tagName.toLowerCase() === 'button') {
       text = element.textContent?.trim() || '';
-      if (text) return text.toLowerCase();
+      if (text) {
+        return text.toLowerCase();
+      }
     }
 
     // Look for button children
     const button = element.querySelector('button');
     if (button) {
       text = button.textContent?.trim() || '';
-      if (text) return text.toLowerCase();
+      if (text) {
+        return text.toLowerCase();
+      }
     }
 
     // Check standard data attributes as fallback
-    text =
-      element.getAttribute('aria-label') || element.getAttribute('title') || '';
+    text = element.getAttribute('aria-label') || element.getAttribute('title') || '';
 
     return text.toLowerCase();
   }
@@ -1966,46 +1772,55 @@ export class DOMActions {
 
     // PRIMARY: Check for Euler-specific data attributes
     name = element.getAttribute('data-component-field-wrapper') || '';
-    if (name) return name.toLowerCase();
+    if (name) {
+      return name.toLowerCase();
+    }
 
     // Look for field wrapper in parents
     const fieldWrapper = element.closest('[data-component-field-wrapper]');
     if (fieldWrapper) {
       name = fieldWrapper.getAttribute('data-component-field-wrapper') || '';
-      if (name) return name.toLowerCase();
+      if (name) {
+        return name.toLowerCase();
+      }
     }
 
     // Check for form label data attribute
     name = element.getAttribute('data-form-label') || '';
-    if (name) return name.toLowerCase();
+    if (name) {
+      return name.toLowerCase();
+    }
 
     // Look for form label in the field
     const labelElement =
       element.querySelector('[data-form-label]') ||
-      element
-        .closest('[data-component-field-wrapper]')
-        ?.querySelector('[data-form-label]');
+      element.closest('[data-component-field-wrapper]')?.querySelector('[data-form-label]');
     if (labelElement) {
-      name =
-        labelElement.getAttribute('data-form-label') ||
-        labelElement.textContent?.trim() ||
-        '';
-      if (name) return name.toLowerCase();
+      name = labelElement.getAttribute('data-form-label') || labelElement.textContent?.trim() || '';
+      if (name) {
+        return name.toLowerCase();
+      }
     }
 
     // Standard name attribute
     name = element.getAttribute('name') || '';
-    if (name) return name.toLowerCase();
+    if (name) {
+      return name.toLowerCase();
+    }
 
     // Check data-name attribute
     name = element.getAttribute('data-name') || '';
-    if (name) return name.toLowerCase();
+    if (name) {
+      return name.toLowerCase();
+    }
 
     // Look for input elements within the field
     const input = element.querySelector('input, select, textarea');
     if (input) {
       name = input.getAttribute('name') || '';
-      if (name) return name.toLowerCase();
+      if (name) {
+        return name.toLowerCase();
+      }
     }
 
     // Check parent elements for name attributes
@@ -2013,9 +1828,10 @@ export class DOMActions {
     let depth = 0;
     while (current && depth < 3) {
       // Check up to 3 levels up
-      name =
-        current.getAttribute('name') || current.getAttribute('data-name') || '';
-      if (name) return name.toLowerCase();
+      name = current.getAttribute('name') || current.getAttribute('data-name') || '';
+      if (name) {
+        return name.toLowerCase();
+      }
 
       current = current.parentElement;
       depth++;
@@ -2025,10 +1841,87 @@ export class DOMActions {
     const label = element.querySelector('label');
     if (label) {
       name = label.textContent?.trim() || '';
-      if (name) return name.toLowerCase();
+      if (name) {
+        return name.toLowerCase();
+      }
     }
 
     return '';
+  }
+
+  /**
+   * Try a waterfall of `window.open` variants (no-features, minimal, popup),
+   * then a `parent.open` attempt and finally a hidden-form submission, before
+   * falling back to showing the user a manual-open assistance panel. Extracted
+   * from `click()` to keep nesting depth manageable.
+   */
+  private _openInNewWindowWithFallbacks(targetUrl: string, currentLocation: string): void {
+    this.forcelog('[KRIYA DEBUG] Method 3c1: window.open with user gesture simulation');
+
+    const userGestureEvent = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    });
+    document.dispatchEvent(userGestureEvent);
+
+    // Method 3c1a..c: window.open variants.
+    const variants: Array<string | undefined> = [
+      undefined,
+      'toolbar=yes,scrollbars=yes,resizable=yes',
+      'width=800,height=600,scrollbars=yes,resizable=yes',
+    ];
+    for (const features of variants) {
+      const opened = features
+        ? window.open(targetUrl, '_blank', features)
+        : window.open(targetUrl, '_blank');
+      if (opened) {
+        this.forcelog(
+          `[KRIYA DEBUG] window.open succeeded${features ? ` (features="${features}")` : ''}`
+        );
+        return;
+      }
+    }
+    this.forcelog('[KRIYA DEBUG] All window.open methods blocked (likely popup blocker)');
+
+    // Method 3c2: parent.open assignment.
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.open(targetUrl, '_blank');
+        this.forcelog('[KRIYA DEBUG] parent.open() executed');
+        return;
+      }
+    } catch (parentError) {
+      this.forcelog('[KRIYA DEBUG] parent.open() failed:', parentError);
+    }
+
+    // Method 3c3: hidden form submission.
+    try {
+      this.forcelog('[KRIYA DEBUG] Method 3c3: Creating form submission');
+      const form = document.createElement('form');
+      form.action = targetUrl;
+      form.target = '_blank';
+      form.method = 'GET';
+      form.style.display = 'none';
+      document.body.appendChild(form);
+      form.submit();
+
+      setTimeout(() => {
+        document.body.removeChild(form);
+      }, 100);
+
+      setTimeout(() => {
+        if (window.location.href === currentLocation) {
+          this.forcelog('[KRIYA DEBUG] Form submission also failed - trying final fallback');
+          this._showNavigationAssistance(targetUrl);
+        } else {
+          this.forcelog('[KRIYA DEBUG] Form submission appears to have worked');
+        }
+      }, 500);
+    } catch (formError) {
+      this.forcelog('[KRIYA DEBUG] Form submission failed:', formError);
+      this._showNavigationAssistance(targetUrl);
+    }
   }
 
   /**
@@ -2133,7 +2026,7 @@ export class DOMActions {
 
       // Add hover effects
       const buttons = notification.querySelectorAll('button');
-      buttons.forEach((button) => {
+      buttons.forEach(button => {
         button.addEventListener('mouseenter', () => {
           (button as HTMLElement).style.background = 'rgba(255,255,255,0.3)';
         });
@@ -2147,9 +2040,7 @@ export class DOMActions {
       });
 
       // Copy link functionality
-      const copyButton = notification.querySelector(
-        '#kriya-open-link'
-      ) as HTMLButtonElement;
+      const copyButton = notification.querySelector('#kriya-open-link') as HTMLButtonElement;
       copyButton.addEventListener('click', () => {
         this.forcelog('[KRIYA DEBUG] Copy link button clicked');
         try {
@@ -2176,9 +2067,7 @@ export class DOMActions {
       });
 
       // Dismiss functionality
-      const dismissButton = notification.querySelector(
-        '#kriya-dismiss'
-      ) as HTMLButtonElement;
+      const dismissButton = notification.querySelector('#kriya-dismiss') as HTMLButtonElement;
       dismissButton.addEventListener('click', () => {
         this.forcelog('[KRIYA DEBUG] Dismiss button clicked');
         this._dismissNotification(notification);
@@ -2207,15 +2096,13 @@ export class DOMActions {
 
       this.forcelog('[KRIYA DEBUG] Navigation assistance displayed');
     } catch (error) {
-      this.forcelog(
-        '[KRIYA DEBUG] Failed to show navigation assistance:',
-        error
-      );
+      this.forcelog('[KRIYA DEBUG] Failed to show navigation assistance:', error);
 
-      // Fallback: Just log and show alert
-      console.warn(
-        `Kriya: Unable to navigate to ${href}. Please open this link manually.`
-      );
+      // Fallback: Just log and show alert. Gated on debugMode so library code
+      // doesn't write to consumers' consoles unsolicited.
+      if (this._config.debugMode) {
+        console.warn(`Kriya: Unable to navigate to ${href}. Please open this link manually.`);
+      }
 
       // Try basic alert as last resort
       try {
@@ -2226,10 +2113,7 @@ export class DOMActions {
     }
   }
 
-  private _fallbackCopyToClipboard(
-    text: string,
-    button: HTMLButtonElement
-  ): void {
+  private _fallbackCopyToClipboard(text: string, button: HTMLButtonElement): void {
     try {
       // Create a temporary textarea element
       const textArea = document.createElement('textarea');
