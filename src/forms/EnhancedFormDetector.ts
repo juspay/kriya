@@ -1622,9 +1622,35 @@ export class EnhancedFormDetector {
     for (const form of this.forms.values()) {
       let score = 0;
 
+      // RFF / Formik register fields via hooks — they have no matching DOM <input name=...>.
+      // Consult the form API's own registered-fields list when available so requests like
+      // { json: {...}, markdown: "..." } score against 'json' / 'markdown' even though no
+      // HTML input has those names. Prefix matches (e.g. "json" vs "json.rules[0]...") get
+      // half weight so exact matches still win ties.
+      const formApi = form.formApi as
+        | { getRegisteredFields?: () => string[] }
+        | undefined;
+      const registered: string[] =
+        formApi && typeof formApi.getRegisteredFields === 'function'
+          ? formApi.getRegisteredFields()
+          : [];
+
       for (const fieldName of fieldNames) {
         if (form.fields.has(fieldName)) {
-          score++;
+          score += 1;
+          continue;
+        }
+        if (registered.includes(fieldName)) {
+          score += 1;
+          continue;
+        }
+        if (
+          registered.some(
+            (r) =>
+              r.startsWith(fieldName + '.') || r.startsWith(fieldName + '[')
+          )
+        ) {
+          score += 0.5;
         }
       }
 
@@ -1649,7 +1675,7 @@ export class EnhancedFormDetector {
   /**
    * Fill any suitable form with the provided field values
    */
-  public fillAnyForm(fields: Record<string, string>): boolean {
+  public fillAnyForm(fields: Record<string, any>): boolean {
     this._forceLog(
       `🎯 Enhanced fillAnyForm called with ${Object.keys(fields).length} fields`
     );
@@ -1670,6 +1696,36 @@ export class EnhancedFormDetector {
     this._forceLog(
       `🚀 Using form ${bestForm.id} (${bestForm.formLibrary}) for filling`
     );
+
+    // Prefer the form library's own bulk-set API over DOM manipulation.
+    // RFF's initialize() sets the entire values tree atomically, preserving
+    // nested object/array shapes (which DOM writes would stringify to
+    // "[object Object]") and triggering RFF's subscription cascade so all
+    // mounted <Field> components re-render with the new state.
+    const api = bestForm.formApi as
+      | {
+          initialize?: (values: Record<string, any>) => void;
+          getState?: () => { values?: Record<string, any> };
+        }
+      | undefined;
+    if (
+      api &&
+      typeof api.initialize === 'function' &&
+      typeof api.getState === 'function'
+    ) {
+      try {
+        const current = api.getState()?.values ?? {};
+        api.initialize({ ...current, ...fields });
+        this._forceLog(`✨ Filled via formApi.initialize() on ${bestForm.id}`);
+        return true;
+      } catch (e) {
+        this._forceLog(
+          '⚠️ initialize() failed, falling back to per-field DOM writes:',
+          e
+        );
+      }
+    }
+
     return this.setFormValues(bestForm.id, fields);
   }
 
