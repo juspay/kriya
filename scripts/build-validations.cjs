@@ -148,7 +148,7 @@ class BuildValidator {
    */
   shouldExclude(filePath) {
     const relativePath = path.relative(this.rootDir, filePath);
-    return this.config.excludePatterns.some((pattern) => {
+    return this.config.excludePatterns.some(pattern => {
       if (pattern.includes('*')) {
         const regex = new RegExp(pattern.replace(/\*/g, '.*'));
         return regex.test(relativePath);
@@ -217,13 +217,9 @@ class BuildValidator {
 
         // Skip allowed files
         if (
-          this.config.allowedConsoleFiles.some((allowed) =>
-            fileName.includes(allowed.toLowerCase())
-          )
+          this.config.allowedConsoleFiles.some(allowed => fileName.includes(allowed.toLowerCase()))
         ) {
-          this.logVerbose(
-            `Skipping allowed file: ${path.relative(this.rootDir, file)}`
-          );
+          this.logVerbose(`Skipping allowed file: ${path.relative(this.rootDir, file)}`);
           continue;
         }
 
@@ -259,7 +255,7 @@ class BuildValidator {
       this.log('No console statements found in production code', 'success');
     } else {
       this.log(`Found ${found} console statement(s):`, 'warning');
-      issues.slice(0, 10).forEach((issue) => {
+      issues.slice(0, 10).forEach(issue => {
         this.log(
           `${colors.dim}${issue.file}:${issue.line}${colors.reset} - console.${issue.type}()`,
           'bullet'
@@ -281,11 +277,7 @@ class BuildValidator {
     this.printHeader('Checking for potential API key leaks');
 
     // First, try to delegate to security-check.cjs if it exists
-    const securityCheckPath = path.join(
-      this.rootDir,
-      'scripts',
-      'security-check.cjs'
-    );
+    const securityCheckPath = path.join(this.rootDir, 'scripts', 'security-check.cjs');
     if (fs.existsSync(securityCheckPath)) {
       this.log('Delegating to security-check.cjs...', 'info');
       try {
@@ -344,18 +336,13 @@ class BuildValidator {
       this.log('No potential API key leaks detected', 'success');
     } else {
       this.log(`Found ${found} potential secret(s):`, 'error');
-      issues.slice(0, 5).forEach((issue) => {
-        this.log(
-          `${colors.dim}${issue.file}:${issue.line}${colors.reset}`,
-          'bullet'
-        );
+      issues.slice(0, 5).forEach(issue => {
+        this.log(`${colors.dim}${issue.file}:${issue.line}${colors.reset}`, 'bullet');
       });
       if (issues.length > 5) {
         this.log(`... and ${issues.length - 5} more`, 'bullet');
       }
-      this.errors.push(
-        `Found ${found} potential API key leak(s). Review these files carefully.`
-      );
+      this.errors.push(`Found ${found} potential API key leak(s). Review these files carefully.`);
     }
   }
 
@@ -394,9 +381,7 @@ class BuildValidator {
       this.log('All required scripts present', 'success');
     } else {
       this.log(`Missing scripts: ${missingScripts.join(', ')}`, 'warning');
-      this.warnings.push(
-        `Missing recommended scripts: ${missingScripts.join(', ')}`
-      );
+      this.warnings.push(`Missing recommended scripts: ${missingScripts.join(', ')}`);
     }
 
     // Check for common issues
@@ -411,18 +396,12 @@ class BuildValidator {
     }
 
     if (!pkg.engines) {
-      this.log(
-        'Consider adding "engines" field to specify Node.js version',
-        'info'
-      );
+      this.log('Consider adding "engines" field to specify Node.js version', 'info');
     }
 
     // Check for private vs publishConfig
     if (!pkg.private && !pkg.publishConfig) {
-      this.log(
-        'Package is public. Consider adding "private: true" or "publishConfig"',
-        'info'
-      );
+      this.log('Package is public. Consider adding "private: true" or "publishConfig"', 'info');
     }
   }
 
@@ -450,9 +429,7 @@ class BuildValidator {
         let match;
         while ((match = emptyCatchPattern.exec(content)) !== null) {
           emptyCatches++;
-          const lineNumber = content
-            .substring(0, match.index)
-            .split('\n').length;
+          const lineNumber = content.substring(0, match.index).split('\n').length;
           issues.push({
             file: path.relative(this.rootDir, file),
             line: lineNumber,
@@ -488,18 +465,14 @@ class BuildValidator {
         );
       }
       if (unhandledPromises > 0) {
-        this.log(
-          `Found ${unhandledPromises} potentially unhandled Promise(s)`,
-          'warning'
-        );
+        this.log(`Found ${unhandledPromises} potentially unhandled Promise(s)`, 'warning');
         this.warnings.push(
           `Found ${unhandledPromises} potentially unhandled Promise(s). Add .catch() handlers.`
         );
       }
 
-      issues.slice(0, 5).forEach((issue) => {
-        const typeLabel =
-          issue.type === 'empty-catch' ? 'empty catch' : 'unhandled promise';
+      issues.slice(0, 5).forEach(issue => {
+        const typeLabel = issue.type === 'empty-catch' ? 'empty catch' : 'unhandled promise';
         this.log(
           `${colors.dim}${issue.file}:${issue.line}${colors.reset} - ${typeLabel}`,
           'bullet'
@@ -529,9 +502,7 @@ class BuildValidator {
 
         const lines = content.split('\n');
         lines.forEach((line, index) => {
-          const todoMatch = line.match(
-            /(?:\/\/|\/\*|#|\*)\s*(TODO|FIXME|XXX|HACK|BUG)[\s:]/i
-          );
+          const todoMatch = line.match(/(?:\/\/|\/\*|#|\*)\s*(TODO|FIXME|XXX|HACK|BUG)[\s:]/i);
           if (todoMatch) {
             if (!issueRefPattern.test(line)) {
               unreferencedTodos++;
@@ -550,11 +521,8 @@ class BuildValidator {
     if (unreferencedTodos === 0) {
       this.log('All TODO/FIXME comments have issue references', 'success');
     } else {
-      this.log(
-        `Found ${unreferencedTodos} TODO/FIXME without issue reference:`,
-        'warning'
-      );
-      issues.slice(0, 5).forEach((issue) => {
+      this.log(`Found ${unreferencedTodos} TODO/FIXME without issue reference:`, 'warning');
+      issues.slice(0, 5).forEach(issue => {
         this.log(
           `${colors.dim}${issue.file}:${issue.line}${colors.reset} - ${issue.type}`,
           'bullet'
@@ -591,7 +559,7 @@ class BuildValidator {
     // Parse .env.example
     const exampleContent = fs.readFileSync(envExamplePath, 'utf-8');
     const exampleVars = new Set();
-    exampleContent.split('\n').forEach((line) => {
+    exampleContent.split('\n').forEach(line => {
       const match = line.match(/^([A-Z][A-Z0-9_]*)=/);
       if (match) {
         exampleVars.add(match[1]);
@@ -609,14 +577,14 @@ class BuildValidator {
     if (fs.existsSync(envPath)) {
       const envContent = fs.readFileSync(envPath, 'utf-8');
       const envVars = new Set();
-      envContent.split('\n').forEach((line) => {
+      envContent.split('\n').forEach(line => {
         const match = line.match(/^([A-Z][A-Z0-9_]*)=/);
         if (match) {
           envVars.add(match[1]);
         }
       });
 
-      const missingVars = [...exampleVars].filter((v) => !envVars.has(v));
+      const missingVars = [...exampleVars].filter(v => !envVars.has(v));
       if (missingVars.length > 0) {
         this.log(`Missing in .env: ${missingVars.join(', ')}`, 'warning');
         this.warnings.push(`Your .env is missing: ${missingVars.join(', ')}`);
@@ -630,13 +598,8 @@ class BuildValidator {
     if (fs.existsSync(gitignorePath)) {
       const gitignore = fs.readFileSync(gitignorePath, 'utf-8');
       if (!gitignore.includes('.env')) {
-        this.log(
-          '.env should be in .gitignore to prevent secret leaks',
-          'warning'
-        );
-        this.warnings.push(
-          'Add .env to .gitignore to prevent committing secrets'
-        );
+        this.log('.env should be in .gitignore to prevent secret leaks', 'warning');
+        this.warnings.push('Add .env to .gitignore to prevent committing secrets');
       }
     }
   }
@@ -714,10 +677,8 @@ class BuildValidator {
     }
 
     if (this.errors.length > 0) {
-      console.log(
-        `  ${colors.red}${colors.bold}Errors (${this.errors.length}):${colors.reset}`
-      );
-      this.errors.forEach((error) => {
+      console.log(`  ${colors.red}${colors.bold}Errors (${this.errors.length}):${colors.reset}`);
+      this.errors.forEach(error => {
         console.log(`    ${symbols.error} ${error}`);
       });
       console.log();
@@ -727,7 +688,7 @@ class BuildValidator {
       console.log(
         `  ${colors.yellow}${colors.bold}Warnings (${this.warnings.length}):${colors.reset}`
       );
-      this.warnings.forEach((warning) => {
+      this.warnings.forEach(warning => {
         console.log(`    ${symbols.warning} ${warning}`);
       });
       console.log();
@@ -737,9 +698,7 @@ class BuildValidator {
       console.log(
         `  ${colors.red}Build validation failed with ${this.errors.length} error(s).${colors.reset}`
       );
-      console.log(
-        `  ${colors.dim}Fix the errors above before proceeding.${colors.reset}`
-      );
+      console.log(`  ${colors.dim}Fix the errors above before proceeding.${colors.reset}`);
       return false;
     }
 
@@ -764,18 +723,14 @@ class BuildValidator {
    */
   run() {
     console.log();
-    console.log(
-      `${colors.bold}${colors.cyan}╔${'═'.repeat(58)}╗${colors.reset}`
-    );
+    console.log(`${colors.bold}${colors.cyan}╔${'═'.repeat(58)}╗${colors.reset}`);
     console.log(
       `${colors.bold}${colors.cyan}║${colors.reset}  ${colors.bold}Build Validation${colors.reset}${' '.repeat(40)}${colors.bold}${colors.cyan}║${colors.reset}`
     );
     console.log(
       `${colors.bold}${colors.cyan}║${colors.reset}  ${colors.dim}Pre-build checks for code quality${colors.reset}${' '.repeat(22)}${colors.bold}${colors.cyan}║${colors.reset}`
     );
-    console.log(
-      `${colors.bold}${colors.cyan}╚${'═'.repeat(58)}╝${colors.reset}`
-    );
+    console.log(`${colors.bold}${colors.cyan}╚${'═'.repeat(58)}╝${colors.reset}`);
 
     try {
       this.checkProjectStructure();
@@ -786,9 +741,7 @@ class BuildValidator {
       this.checkErrorHandling();
       this.checkTodoReferences();
     } catch (error) {
-      console.error(
-        `\n${symbols.error} Validation script error: ${error.message}`
-      );
+      console.error(`\n${symbols.error} Validation script error: ${error.message}`);
       if (this.verbose) {
         console.error(error.stack);
       }

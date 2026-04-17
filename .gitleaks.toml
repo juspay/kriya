@@ -1,0 +1,85 @@
+# Kriya gitleaks configuration — secret detection for the automation engine codebase.
+# Docs: https://github.com/gitleaks/gitleaks#configuration
+
+title = "Kriya Gitleaks Configuration"
+
+# Inherit the default ruleset, then extend with Kriya-specific rules below.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "kriya-api-token"
+description = "Kriya project-level API token pattern"
+regex = '''kriya[_-]?(?:api[_-]?)?(?:key|token)["'\s]*[=:]["'\s]*[a-zA-Z0-9]{32,64}'''
+keywords = ["kriya_api_key", "kriya-api-key", "kriyaApiKey", "kriya_token"]
+
+[[rules]]
+id = "custom-bearer-token"
+description = "Bearer token assignment"
+regex = '''bearer[\s]+[a-zA-Z0-9\-._~+/]{20,}=*'''
+keywords = ["bearer"]
+
+[[rules]]
+id = "private-key-block"
+description = "PEM-encoded private key"
+regex = '''-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----'''
+keywords = ["PRIVATE KEY"]
+
+[[rules]]
+id = "jwt-token"
+description = "JWT in code"
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+keywords = ["eyJ"]
+
+[[rules]]
+id = "form-credential-leak"
+description = "Plausible password/credential baked into form fixtures"
+regex = '''(?:password|passwd|pwd|secret)\s*:\s*['"][A-Za-z0-9!@#$%^&*_-]{10,}['"]'''
+keywords = ["password:", "passwd:", "secret:"]
+
+# Global allowlist for known fixtures and false positives.
+[allowlist]
+description = "Kriya-wide allowlist"
+regexes = [
+  '''your[-_]api[-_]key[-_]here''',
+  '''replace[-_]with[-_]your''',
+  '''example[-_]key''',
+  '''test[-_]key''',
+  '''dummy[-_]key''',
+  '''placeholder''',
+  '''sample[-_]token''',
+  '''[Xx]{20,}''',
+  '''123456789''',
+  '''abcdefgh''',
+  '''sk-[Xx]{48}''',
+]
+paths = [
+  '''\.gitleaks\.toml''',
+  '''node_modules/''',
+  '''dist/''',
+  '''build/''',
+  '''coverage/''',
+  '''\.min\.js$''',
+  '''\.bundle\.js$''',
+  '''\.git/''',
+  '''\.rollup\.cache/''',
+  '''docs/.*\.md$''',
+  '''examples/''',
+  '''tests?/''',
+  '''CHANGELOG\.md''',
+  '''package-lock\.json''',
+  '''pnpm-lock\.yaml''',
+]
+commits = []
+stopwords = [
+  "example",
+  "test",
+  "dummy",
+  "placeholder",
+  "sample",
+  "demo",
+  "fake",
+  "mock",
+  "template",
+  "fixture",
+]

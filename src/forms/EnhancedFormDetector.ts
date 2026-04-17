@@ -19,13 +19,39 @@ export interface EnhancedFormField {
   formLibrary?: 'react-final-form' | 'formik' | 'native' | 'unknown';
 }
 
+/**
+ * Loose handle for an extracted form API (react-final-form / formik / native).
+ * Shapes vary across libraries; callers narrow via typeof/in checks.
+ */
+export type DetectedFormApi = Record<string, unknown> & {
+  change?: (field: string, value: unknown) => void;
+  submit?: () => unknown;
+  getState?: () => Record<string, unknown>;
+  batch?: (fn: () => void) => void;
+  reset?: () => void;
+  initialize?: (values: Record<string, unknown>) => void;
+};
+
+/**
+ * Minimal React fiber node shape used when walking a form element's internals.
+ */
+type ReactFiberNode = {
+  memoizedProps?: Record<string, unknown>;
+  memoizedState?: Record<string, unknown> | null;
+  stateNode?: Record<string, unknown>;
+  type?: { displayName?: string; name?: string } | string | null;
+  return?: ReactFiberNode | null;
+  child?: ReactFiberNode | null;
+  sibling?: ReactFiberNode | null;
+};
+
 export interface EnhancedDetectedForm {
   element: HTMLFormElement | HTMLElement;
   id: string;
   name?: string;
   fields: Map<string, EnhancedFormField>;
   formLibrary: 'react-final-form' | 'formik' | 'native' | 'unknown';
-  formApi?: any; // The form's API object (if detected)
+  formApi?: DetectedFormApi; // The form's API object (if detected)
 }
 
 export interface EnhancedFormDetectorConfig {
@@ -33,11 +59,7 @@ export interface EnhancedFormDetectorConfig {
   includeDisabled?: boolean;
   debugMode?: boolean;
   onFormDetected?: (form: EnhancedDetectedForm) => void;
-  onFieldChanged?: (
-    fieldName: string,
-    value: any,
-    form: EnhancedDetectedForm
-  ) => void;
+  onFieldChanged?: (fieldName: string, value: unknown, form: EnhancedDetectedForm) => void;
 }
 
 export class EnhancedFormDetector {
@@ -57,14 +79,13 @@ export class EnhancedFormDetector {
     }
   }
 
-  // Force logs to appear even if console.log is filtered
-  private _forceLog(...args: any[]): void {
-    if (!this.config.debugMode) return;
-    console.log('🔍 KRIYA-ENHANCED:', ...args);
+  // Debug log gated on config.debugMode — single-channel output to keep
+  // devtools clean for consumers of the detector.
+  private _forceLog(...args: readonly unknown[]): void {
+    if (!this.config.debugMode) {
+      return;
+    }
     console.info('🔍 KRIYA-ENHANCED:', ...args);
-    console.warn('🔍 KRIYA-ENHANCED:', ...args);
-    // Also try direct console access
-    (window as any).console?.log?.('🔍 KRIYA-ENHANCED:', ...args);
   }
 
   /**
@@ -78,44 +99,33 @@ export class EnhancedFormDetector {
     // Detect React Final Form instances
     const reactFinalForms = this.detectReactFinalForms();
     newForms.push(...reactFinalForms);
-    reactFinalForms.forEach((form) => detectedElements.add(form.element));
-    this._forceLog(
-      `📊 React Final Form detection: found ${reactFinalForms.length} forms`
-    );
+    reactFinalForms.forEach(form => detectedElements.add(form.element));
+    this._forceLog(`📊 React Final Form detection: found ${reactFinalForms.length} forms`);
 
     // Detect Formik forms
     const formikForms = this.detectFormikForms(detectedElements);
     newForms.push(...formikForms);
-    formikForms.forEach((form) => detectedElements.add(form.element));
+    formikForms.forEach(form => detectedElements.add(form.element));
     this._forceLog(`📊 Formik detection: found ${formikForms.length} forms`);
 
     // Detect native HTML forms (pass already detected elements)
     const nativeForms = this.detectNativeForms(detectedElements);
     newForms.push(...nativeForms);
-    this._forceLog(
-      `📊 Native form detection: found ${nativeForms.length} forms`
-    );
+    this._forceLog(`📊 Native form detection: found ${nativeForms.length} forms`);
 
-    this._forceLog(
-      `📊 Enhanced detection found ${newForms.length} forms total`
-    );
+    this._forceLog(`📊 Enhanced detection found ${newForms.length} forms total`);
 
     // Update internal forms map
-    newForms.forEach((form) => {
+    newForms.forEach(form => {
       const existingForm = this.forms.get(form.id);
       if (!existingForm) {
         this.forms.set(form.id, form);
         if (this.config.onFormDetected) {
           this.config.onFormDetected(form);
         }
-        this._forceLog(
-          `✅ Detected new form: ${form.id} (${form.formLibrary})`
-        );
+        this._forceLog(`✅ Detected new form: ${form.id} (${form.formLibrary})`);
         if (form.formApi) {
-          this._forceLog(
-            `🚀 Form API available for ${form.id}:`,
-            Object.keys(form.formApi)
-          );
+          this._forceLog(`🚀 Form API available for ${form.id}:`, Object.keys(form.formApi));
         }
         return;
       }
@@ -132,10 +142,7 @@ export class EnhancedFormDetector {
       }
       this._forceLog(`♻️ Updated form: ${form.id} (${mergedForm.formLibrary})`);
       if (mergedForm.formApi) {
-        this._forceLog(
-          `🚀 Form API available for ${form.id}:`,
-          Object.keys(mergedForm.formApi)
-        );
+        this._forceLog(`🚀 Form API available for ${form.id}:`, Object.keys(mergedForm.formApi));
       }
     });
 
@@ -155,20 +162,13 @@ export class EnhancedFormDetector {
     htmlForms.forEach((formElement, index) => {
       const reactInstance = this.getReactInstance(formElement);
       if (reactInstance) {
-        this._forceLog(
-          `🎯 Found React instance on form ${index}, analyzing...`
-        );
+        this._forceLog(`🎯 Found React instance on form ${index}, analyzing...`);
         const formApi = this.extractReactFinalFormApi(reactInstance);
 
         if (formApi) {
-          this._forceLog(
-            `✅ Successfully extracted React Final Form API from form ${index}`
-          );
+          this._forceLog(`✅ Successfully extracted React Final Form API from form ${index}`);
           const formId = formElement.id || `react-final-form-${index}`;
-          const fields = this.detectFieldsInContainer(
-            formElement,
-            'react-final-form'
-          );
+          const fields = this.detectFieldsInContainer(formElement, 'react-final-form');
 
           const detectedForm: EnhancedDetectedForm = {
             element: formElement,
@@ -188,9 +188,7 @@ export class EnhancedFormDetector {
     const containers = document.querySelectorAll(
       '[data-react-final-form], .react-final-form, #generic-util-form, [id*="-form"], [id*="form-"]'
     );
-    this._forceLog(
-      `🔍 Found ${containers.length} potential React Final Form containers`
-    );
+    this._forceLog(`🔍 Found ${containers.length} potential React Final Form containers`);
 
     containers.forEach((container, index) => {
       const formElement = container as HTMLElement;
@@ -209,10 +207,7 @@ export class EnhancedFormDetector {
 
       if (formApi) {
         this._forceLog(`✅ Found React Final Form API in container: ${formId}`);
-        const fields = this.detectFieldsInContainer(
-          formElement,
-          'react-final-form'
-        );
+        const fields = this.detectFieldsInContainer(formElement, 'react-final-form');
 
         const detectedForm: EnhancedDetectedForm = {
           element: formElement,
@@ -225,9 +220,7 @@ export class EnhancedFormDetector {
 
         forms.push(detectedForm);
       } else {
-        this._forceLog(
-          `❌ No React Final Form API found in container: ${formId}`
-        );
+        this._forceLog(`❌ No React Final Form API found in container: ${formId}`);
       }
     });
 
@@ -248,14 +241,9 @@ export class EnhancedFormDetector {
           this._forceLog('🔍 useForm() API methods:', Object.keys(formApi));
 
           // Find the nearest form element or use this element
-          const formElement =
-            element.closest('form') || (element as HTMLElement);
-          const formId =
-            formElement.id || `react-final-form-usehook-${foundFormApis}`;
-          const fields = this.detectFieldsInContainer(
-            formElement,
-            'react-final-form'
-          );
+          const formElement = element.closest('form') || (element as HTMLElement);
+          const formId = formElement.id || `react-final-form-usehook-${foundFormApis}`;
+          const fields = this.detectFieldsInContainer(formElement, 'react-final-form');
 
           const detectedForm: EnhancedDetectedForm = {
             element: formElement,
@@ -281,33 +269,57 @@ export class EnhancedFormDetector {
   /**
    * Specifically search for useForm() hook pattern
    */
-  private searchForUseFormHook(reactInstance: any): any {
-    if (!reactInstance) return null;
+  private searchForUseFormHook(reactInstance: ReactFiberNode): DetectedFormApi | null {
+    if (!reactInstance) {
+      return null;
+    }
 
     // Check if this component is using useForm() hook
     if (reactInstance.memoizedState) {
-      let hook = reactInstance.memoizedState;
+      let hook = reactInstance.memoizedState as
+        | {
+            memoizedState?:
+              | (Record<string, unknown> & {
+                  change?: unknown;
+                  submit?: unknown;
+                  batch?: unknown;
+                  getState?: unknown;
+                  form?: Record<string, unknown> & {
+                    change?: unknown;
+                    submit?: unknown;
+                  };
+                })
+              | null;
+            next?: unknown;
+          }
+        | undefined;
       while (hook) {
         // Look for the specific useForm hook signature
         if (hook.memoizedState && typeof hook.memoizedState === 'object') {
-          const state = hook.memoizedState;
+          const state = hook.memoizedState as Record<string, unknown> & {
+            change?: unknown;
+            submit?: unknown;
+            batch?: unknown;
+            getState?: unknown;
+            form?: Record<string, unknown> & {
+              change?: unknown;
+              submit?: unknown;
+            };
+          };
 
           // Check if this looks like React Final Form API
           if (state.change && state.submit && state.batch && state.getState) {
-            this._forceLog(
-              '🎯 Found useForm() hook with methods:',
-              Object.keys(state)
-            );
-            return state;
+            this._forceLog('🎯 Found useForm() hook with methods:', Object.keys(state));
+            return state as DetectedFormApi;
           }
 
           // Check for nested form API
           if (state.form && state.form.change && state.form.submit) {
             this._forceLog('🎯 Found nested form API in useForm() hook');
-            return state.form;
+            return state.form as DetectedFormApi;
           }
         }
-        hook = hook.next;
+        hook = hook.next as typeof hook;
       }
     }
 
@@ -327,25 +339,23 @@ export class EnhancedFormDetector {
    * Detect Formik forms
    */
   private detectFormikForms(
-    alreadyDetectedElements: Set<HTMLElement> = new Set()
+    _alreadyDetectedElements: Set<HTMLElement> = new Set()
   ): EnhancedDetectedForm[] {
     const forms: EnhancedDetectedForm[] = [];
     this._forceLog('🔍 Looking for Formik instances...');
 
     // Look for Formik containers
-    const formContainers = document.querySelectorAll(
-      '[data-formik], .formik-form'
-    );
+    const formContainers = document.querySelectorAll('[data-formik], .formik-form');
 
     formContainers.forEach((container, index) => {
       const formElement = container as HTMLElement;
       const formId = formElement.id || `formik-form-${index}`;
 
       const reactInstance = this.getReactInstance(formElement);
-      let formApi = null;
+      let formApi: DetectedFormApi | undefined;
 
       if (reactInstance) {
-        formApi = this.extractFormikApi(reactInstance);
+        formApi = this.extractFormikApi(reactInstance) ?? undefined;
       }
 
       const fields = this.detectFieldsInContainer(formElement, 'formik');
@@ -410,9 +420,7 @@ export class EnhancedFormDetector {
       };
 
       forms.push(detectedForm);
-      this._forceLog(
-        `✅ Detected native form: ${formId} with ${fields.size} fields`
-      );
+      this._forceLog(`✅ Detected native form: ${formId} with ${fields.size} fields`);
     });
 
     this._forceLog(`📋 Found ${forms.length} new native HTML forms`);
@@ -453,9 +461,9 @@ export class EnhancedFormDetector {
       '[data-selectbox-value] button[data-value]',
     ];
 
-    fieldSelectors.forEach((selector) => {
+    fieldSelectors.forEach(selector => {
       const elements = container.querySelectorAll(selector);
-      elements.forEach((element) => {
+      elements.forEach(element => {
         const field = this.createFormField(element as HTMLElement, formLibrary);
         if (field && (this.config.includeDisabled || !field.disabled)) {
           const existingField = fields.get(field.name);
@@ -464,22 +472,20 @@ export class EnhancedFormDetector {
             (field.type === 'checkbox' || field.type === 'radio') &&
             existingField.type === field.type
           ) {
-            const existingElements = existingField.elements ?? [
-              existingField.element,
-            ];
+            const existingElements = existingField.elements ?? [existingField.element];
             const mergedElements = [...existingElements, field.element];
             existingField.elements = mergedElements;
 
             if (field.type === 'checkbox') {
               const checkedValues = mergedElements
-                .filter((el) => (el as HTMLInputElement).checked)
-                .map((el) => (el as HTMLInputElement).value);
+                .filter(el => (el as HTMLInputElement).checked)
+                .map(el => (el as HTMLInputElement).value);
               existingField.value = checkedValues;
               existingField.initialValue = checkedValues;
             } else {
-              const checkedRadio = mergedElements.find(
-                (el) => (el as HTMLInputElement).checked
-              ) as HTMLInputElement | undefined;
+              const checkedRadio = mergedElements.find(el => (el as HTMLInputElement).checked) as
+                | HTMLInputElement
+                | undefined;
               existingField.value = checkedRadio ? checkedRadio.value : '';
               existingField.initialValue = existingField.value;
             }
@@ -509,27 +515,18 @@ export class EnhancedFormDetector {
   /**
    * Create a FormField object from an HTML element with enhanced detection
    */
-  private createFormField(
-    element: HTMLElement,
-    formLibrary: string
-  ): EnhancedFormField | null {
+  private createFormField(element: HTMLElement, formLibrary: string): EnhancedFormField | null {
     // Handle ReScript SelectBox components
     if (element.hasAttribute('data-value') && element.tagName === 'BUTTON') {
       const container = element.closest('[data-component-field-wrapper]');
       if (container) {
         const name =
-          container.getAttribute('data-component-field-wrapper') ||
-          element.id ||
-          'unknown';
+          container.getAttribute('data-component-field-wrapper') || element.id || 'unknown';
         const value = element.getAttribute('data-value') || '';
         const cleanName = name.replace(/^field-/, ''); // Remove field- prefix
 
         // Get initial value for SelectBox
-        const initialValue = this.extractInitialValue(
-          element,
-          cleanName,
-          formLibrary
-        );
+        const initialValue = this.extractInitialValue(element, cleanName, formLibrary);
 
         return {
           element,
@@ -539,15 +536,12 @@ export class EnhancedFormDetector {
           initialValue,
           required: element.hasAttribute('required'),
           disabled: element.hasAttribute('disabled'),
-          formLibrary: formLibrary as any,
+          formLibrary: formLibrary as EnhancedFormField['formLibrary'],
         };
       }
     }
 
-    const input = element as
-      | HTMLInputElement
-      | HTMLSelectElement
-      | HTMLTextAreaElement;
+    const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
     // Get field name with multiple strategies
     let name = input.name || input.id;
@@ -574,12 +568,9 @@ export class EnhancedFormDetector {
       value = (input as HTMLInputElement).checked;
     } else if (input.type === 'radio') {
       value = (input as HTMLInputElement).checked ? input.value : '';
-    } else if (
-      input.tagName === 'SELECT' &&
-      (input as HTMLSelectElement).multiple
-    ) {
+    } else if (input.tagName === 'SELECT' && (input as HTMLSelectElement).multiple) {
       const select = input as HTMLSelectElement;
-      value = Array.from(select.selectedOptions).map((option) => option.value);
+      value = Array.from(select.selectedOptions).map(option => option.value);
     } else {
       value = input.value || '';
     }
@@ -624,7 +615,7 @@ export class EnhancedFormDetector {
       placeholder: 'placeholder' in input ? input.placeholder : undefined,
       required: input.required,
       disabled: input.disabled,
-      formLibrary: formLibrary as any,
+      formLibrary: formLibrary as EnhancedFormField['formLibrary'],
     };
   }
 
@@ -638,18 +629,12 @@ export class EnhancedFormDetector {
   ): string | boolean | string[] {
     // Try different strategies based on form library
     if (formLibrary === 'react-final-form') {
-      const reactInitialValue = this.extractReactFinalFormInitialValue(
-        element,
-        fieldName
-      );
+      const reactInitialValue = this.extractReactFinalFormInitialValue(element, fieldName);
       if (reactInitialValue !== null) {
         return reactInitialValue;
       }
     } else if (formLibrary === 'formik') {
-      const formikInitialValue = this.extractFormikInitialValue(
-        element,
-        fieldName
-      );
+      const formikInitialValue = this.extractFormikInitialValue(element, fieldName);
       if (formikInitialValue !== null) {
         return formikInitialValue;
       }
@@ -666,54 +651,42 @@ export class EnhancedFormDetector {
     element: HTMLElement,
     fieldName: string
   ): string | boolean | string[] | null {
-    this._forceLog(
-      `🔍 Extracting React Final Form initial value for field: ${fieldName}`
-    );
+    this._forceLog(`🔍 Extracting React Final Form initial value for field: ${fieldName}`);
 
     // Strategy 1: Find form API from the element itself
     const reactInstance = this.getReactInstance(element);
     if (reactInstance) {
       const formApi = this.extractReactFinalFormApi(reactInstance);
       if (formApi) {
-        this._forceLog(
-          `✅ Found form API for field ${fieldName}, checking state...`
-        );
+        this._forceLog(`✅ Found form API for field ${fieldName}, checking state...`);
 
         if (formApi.getState) {
           try {
-            const state = formApi.getState();
+            const state = formApi.getState() as {
+              initialValues?: Record<string, unknown>;
+            };
             this._forceLog(`🔍 Form state for ${fieldName}:`, {
               hasInitialValues: !!state.initialValues,
-              initialValuesKeys: state.initialValues
-                ? Object.keys(state.initialValues)
-                : [],
-              hasFieldInInitialValues:
-                state.initialValues && fieldName in state.initialValues,
+              initialValuesKeys: state.initialValues ? Object.keys(state.initialValues) : [],
+              hasFieldInInitialValues: state.initialValues && fieldName in state.initialValues,
               fieldInitialValue: state.initialValues?.[fieldName],
               allInitialValues: state.initialValues,
             });
 
             if (state.initialValues && fieldName in state.initialValues) {
-              this._forceLog(
-                `✅ Found React Final Form initial value for ${fieldName}:`,
-                state.initialValues[fieldName]
-              );
-              return state.initialValues[fieldName];
+              const raw = state.initialValues[fieldName];
+              this._forceLog(`✅ Found React Final Form initial value for ${fieldName}:`, raw);
+              return raw as string | boolean | string[];
             } else {
               this._forceLog(
                 `⚠️ Field ${fieldName} not found in initialValues or initialValues is empty`
               );
             }
           } catch (error) {
-            this._forceLog(
-              `❌ Error calling getState() for ${fieldName}:`,
-              error
-            );
+            this._forceLog(`❌ Error calling getState() for ${fieldName}:`, error);
           }
         } else {
-          this._forceLog(
-            `⚠️ Form API found but no getState() method for ${fieldName}`
-          );
+          this._forceLog(`⚠️ Form API found but no getState() method for ${fieldName}`);
         }
       } else {
         this._forceLog(`⚠️ No form API found for field ${fieldName}`);
@@ -726,52 +699,49 @@ export class EnhancedFormDetector {
       element.closest('[data-react-final-form]') ||
       element.closest('[id*="form"]');
     if (container) {
-      this._forceLog(
-        `🔍 Searching for form API in container for field ${fieldName}`
-      );
-      const containerReactInstance = this.getReactInstance(
-        container as HTMLElement
-      );
+      this._forceLog(`🔍 Searching for form API in container for field ${fieldName}`);
+      const containerReactInstance = this.getReactInstance(container as HTMLElement);
       if (containerReactInstance) {
-        const containerFormApi = this.extractReactFinalFormApi(
-          containerReactInstance
-        );
+        const containerFormApi = this.extractReactFinalFormApi(containerReactInstance);
         if (containerFormApi && containerFormApi.getState) {
           try {
-            const state = containerFormApi.getState();
+            const state = containerFormApi.getState() as {
+              initialValues?: Record<string, unknown>;
+            };
             this._forceLog(`🔍 Container form state for ${fieldName}:`, {
               hasInitialValues: !!state.initialValues,
               fieldValue: state.initialValues?.[fieldName],
             });
 
             if (state.initialValues && fieldName in state.initialValues) {
+              const raw = state.initialValues[fieldName];
               this._forceLog(
                 `✅ Found React Final Form initial value in container for ${fieldName}:`,
-                state.initialValues[fieldName]
+                raw
               );
-              return state.initialValues[fieldName];
+              return raw as string | boolean | string[];
             }
           } catch (error) {
-            this._forceLog(
-              `❌ Error getting state from container for ${fieldName}:`,
-              error
-            );
+            this._forceLog(`❌ Error getting state from container for ${fieldName}:`, error);
           }
         }
       }
     }
 
     // Strategy 3: Look for useFormState hook patterns in React tree
-    const formStateValue = this.searchForFormStateInReactTree(
-      element,
-      fieldName
-    );
-    if (formStateValue !== null) {
+    const formStateValue = this.searchForFormStateInReactTree(element, fieldName);
+    if (formStateValue !== null && formStateValue !== undefined) {
       this._forceLog(
         `✅ Found initial value via React hook search for ${fieldName}:`,
         formStateValue
       );
-      return formStateValue;
+      if (
+        typeof formStateValue === 'string' ||
+        typeof formStateValue === 'boolean' ||
+        (Array.isArray(formStateValue) && formStateValue.every(v => typeof v === 'string'))
+      ) {
+        return formStateValue as string | boolean | string[];
+      }
     }
 
     this._forceLog(
@@ -783,13 +753,8 @@ export class EnhancedFormDetector {
   /**
    * Search for form state in React component tree (enhanced hook detection)
    */
-  private searchForFormStateInReactTree(
-    element: HTMLElement,
-    fieldName: string
-  ): any {
-    this._forceLog(
-      `🔍 Searching React tree for form state containing ${fieldName}`
-    );
+  private searchForFormStateInReactTree(element: HTMLElement, fieldName: string): unknown {
+    this._forceLog(`🔍 Searching React tree for form state containing ${fieldName}`);
 
     // Search broader React tree for form state
     const allElements = [element];
@@ -802,10 +767,8 @@ export class EnhancedFormDetector {
     }
 
     // Add sibling containers that might have form context
-    const containers = document.querySelectorAll(
-      '[id*="form"], [class*="form"], form'
-    );
-    containers.forEach((container) => {
+    const containers = document.querySelectorAll('[id*="form"], [class*="form"], form');
+    containers.forEach(container => {
       if (allElements.length < 20) {
         allElements.push(container as HTMLElement);
       }
@@ -815,19 +778,13 @@ export class EnhancedFormDetector {
       const reactInstance = this.getReactInstance(el);
       if (reactInstance) {
         // Search for useFormState hook patterns
-        const formState = this.searchHooksForFormState(
-          reactInstance,
-          fieldName
-        );
+        const formState = this.searchHooksForFormState(reactInstance, fieldName);
         if (formState !== null) {
           return formState;
         }
 
         // Search for form context
-        const contextState = this.searchContextForFormState(
-          reactInstance,
-          fieldName
-        );
+        const contextState = this.searchContextForFormState(reactInstance, fieldName);
         if (contextState !== null) {
           return contextState;
         }
@@ -840,40 +797,48 @@ export class EnhancedFormDetector {
   /**
    * Search React hooks for form state
    */
-  private searchHooksForFormState(reactInstance: any, fieldName: string): any {
-    if (!reactInstance?.memoizedState) return null;
+  private searchHooksForFormState(
+    reactInstance: ReactFiberNode,
+    fieldName: string
+  ): DetectedFormApi | null {
+    if (!reactInstance?.memoizedState) {
+      return null;
+    }
 
-    let hook = reactInstance.memoizedState;
+    let hook = reactInstance.memoizedState as
+      | {
+          memoizedState?:
+            | (Record<string, unknown> & {
+                values?: Record<string, unknown>;
+                initialValues?: Record<string, unknown>;
+              })
+            | null;
+          next?: unknown;
+        }
+      | undefined;
     while (hook) {
-      if (hook.memoizedState) {
+      const state = hook.memoizedState;
+      if (state) {
         // Check if this looks like useFormState result
-        if (
-          hook.memoizedState.initialValues &&
-          fieldName in hook.memoizedState.initialValues
-        ) {
-          this._forceLog(
-            `✅ Found initial value in React hook for ${fieldName}:`,
-            hook.memoizedState.initialValues[fieldName]
-          );
-          return hook.memoizedState.initialValues[fieldName];
+        if (state.initialValues && fieldName in state.initialValues) {
+          const raw = state.initialValues[fieldName];
+          this._forceLog(`✅ Found initial value in React hook for ${fieldName}:`, raw);
+          return raw as DetectedFormApi;
         }
 
         // Check if this is a form state object
         if (
-          typeof hook.memoizedState === 'object' &&
-          hook.memoizedState.values &&
-          hook.memoizedState.initialValues
+          typeof state === 'object' &&
+          state.values &&
+          state.initialValues &&
+          fieldName in state.initialValues
         ) {
-          if (fieldName in hook.memoizedState.initialValues) {
-            this._forceLog(
-              `✅ Found initial value in form state hook for ${fieldName}:`,
-              hook.memoizedState.initialValues[fieldName]
-            );
-            return hook.memoizedState.initialValues[fieldName];
-          }
+          const raw = state.initialValues[fieldName];
+          this._forceLog(`✅ Found initial value in form state hook for ${fieldName}:`, raw);
+          return raw as DetectedFormApi;
         }
       }
-      hook = hook.next;
+      hook = hook.next as typeof hook;
     }
 
     return null;
@@ -882,44 +847,49 @@ export class EnhancedFormDetector {
   /**
    * Search React context for form state
    */
-  private searchContextForFormState(
-    reactInstance: any,
-    fieldName: string
-  ): any {
-    if (!reactInstance?.dependencies?.firstContext) return null;
+  private searchContextForFormState(reactInstance: ReactFiberNode, fieldName: string): unknown {
+    const deps = (reactInstance as unknown as Record<string, unknown>).dependencies as
+      | { firstContext?: unknown }
+      | undefined;
+    if (!deps?.firstContext) {
+      return null;
+    }
 
-    let context = reactInstance.dependencies.firstContext;
+    type ContextLink = {
+      memoizedValue?: {
+        initialValues?: Record<string, unknown>;
+        form?: { getState?: () => Record<string, unknown> };
+      };
+      next?: unknown;
+    };
+    let context = deps.firstContext as ContextLink | undefined;
     while (context) {
       if (context.memoizedValue) {
         // Check if context contains initialValues
-        if (
-          context.memoizedValue.initialValues &&
-          fieldName in context.memoizedValue.initialValues
-        ) {
-          this._forceLog(
-            `✅ Found initial value in React context for ${fieldName}:`,
-            context.memoizedValue.initialValues[fieldName]
-          );
-          return context.memoizedValue.initialValues[fieldName];
+        const init = context.memoizedValue.initialValues;
+        if (init && fieldName in init) {
+          const raw = init[fieldName];
+          this._forceLog(`✅ Found initial value in React context for ${fieldName}:`, raw);
+          return raw;
         }
 
         // Check nested form state in context
-        if (context.memoizedValue.form?.getState) {
+        const getState = context.memoizedValue.form?.getState;
+        if (getState) {
           try {
-            const state = context.memoizedValue.form.getState();
-            if (state.initialValues && fieldName in state.initialValues) {
-              this._forceLog(
-                `✅ Found initial value in context form API for ${fieldName}:`,
-                state.initialValues[fieldName]
-              );
-              return state.initialValues[fieldName];
+            const state = getState();
+            const stateInit = (state as { initialValues?: Record<string, unknown> }).initialValues;
+            if (stateInit && fieldName in stateInit) {
+              const raw = stateInit[fieldName];
+              this._forceLog(`✅ Found initial value in context form API for ${fieldName}:`, raw);
+              return raw;
             }
-          } catch (error) {
+          } catch {
             // Ignore errors
           }
         }
       }
-      context = context.next;
+      context = context.next as ContextLink | undefined;
     }
 
     return null;
@@ -936,16 +906,18 @@ export class EnhancedFormDetector {
     const reactInstance = this.getReactInstance(element);
     if (reactInstance) {
       const formikApi = this.extractFormikApi(reactInstance);
-      if (
-        formikApi &&
-        formikApi.initialValues &&
-        fieldName in formikApi.initialValues
-      ) {
-        this._forceLog(
-          `🔍 Found Formik initial value for ${fieldName}:`,
-          formikApi.initialValues[fieldName]
-        );
-        return formikApi.initialValues[fieldName];
+      const initialValues = (formikApi as { initialValues?: Record<string, unknown> } | null)
+        ?.initialValues;
+      if (initialValues && fieldName in initialValues) {
+        const raw = initialValues[fieldName];
+        this._forceLog(`🔍 Found Formik initial value for ${fieldName}:`, raw);
+        if (
+          typeof raw === 'string' ||
+          typeof raw === 'boolean' ||
+          (Array.isArray(raw) && raw.every(v => typeof v === 'string'))
+        ) {
+          return raw as string | boolean | string[];
+        }
       }
     }
     return null;
@@ -954,13 +926,8 @@ export class EnhancedFormDetector {
   /**
    * Extract initial value from native HTML forms
    */
-  private extractNativeInitialValue(
-    element: HTMLElement
-  ): string | boolean | string[] {
-    const input = element as
-      | HTMLInputElement
-      | HTMLSelectElement
-      | HTMLTextAreaElement;
+  private extractNativeInitialValue(element: HTMLElement): string | boolean | string[] {
+    const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
     // For native forms, use HTML attributes and defaults
     if (input.type === 'checkbox') {
@@ -973,21 +940,16 @@ export class EnhancedFormDetector {
       const select = input as HTMLSelectElement;
       if (select.multiple) {
         return Array.from(select.options)
-          .filter((option) => option.defaultSelected)
-          .map((option) => option.value);
+          .filter(option => option.defaultSelected)
+          .map(option => option.value);
       } else {
         // For single select, find the default selected option
-        const defaultOption = Array.from(select.options).find(
-          (option) => option.defaultSelected
-        );
+        const defaultOption = Array.from(select.options).find(option => option.defaultSelected);
         return defaultOption ? defaultOption.value : '';
       }
     } else if (input.tagName === 'TEXTAREA') {
       return (input as HTMLTextAreaElement).defaultValue || '';
-    } else if (
-      element.tagName === 'BUTTON' &&
-      element.hasAttribute('data-value')
-    ) {
+    } else if (element.tagName === 'BUTTON' && element.hasAttribute('data-value')) {
       // For ReScript SelectBox, try to get original data-value
       return element.getAttribute('data-value') || '';
     } else {
@@ -999,7 +961,7 @@ export class EnhancedFormDetector {
   /**
    * Set a field value using the appropriate method for the form library
    */
-  public setFieldValue(formId: string, fieldName: string, value: any): boolean {
+  public setFieldValue(formId: string, fieldName: string, value: unknown): boolean {
     const form = this.forms.get(formId);
     if (!form) {
       this._forceLog(`❌ Form not found: ${formId}`);
@@ -1012,9 +974,7 @@ export class EnhancedFormDetector {
       return false;
     }
 
-    this._forceLog(
-      `🔄 Setting ${fieldName} = "${value}" in ${form.formLibrary} form`
-    );
+    this._forceLog(`🔄 Setting ${fieldName} = "${value}" in ${form.formLibrary} form`);
 
     try {
       switch (form.formLibrary) {
@@ -1025,9 +985,7 @@ export class EnhancedFormDetector {
         case 'native':
           return this.setNativeFormValue(field, value);
         default:
-          this._forceLog(
-            `⚠️ Unknown form library: ${form.formLibrary}, using native fallback`
-          );
+          this._forceLog(`⚠️ Unknown form library: ${form.formLibrary}, using native fallback`);
           return this.setNativeFormValue(field, value);
       }
     } catch (error) {
@@ -1042,7 +1000,7 @@ export class EnhancedFormDetector {
   private setReactFinalFormValue(
     form: EnhancedDetectedForm,
     fieldName: string,
-    value: any
+    value: unknown
   ): boolean {
     if (form.formApi && form.formApi.change) {
       this._forceLog(`✨ Using React Final Form API change() for ${fieldName}`);
@@ -1053,7 +1011,7 @@ export class EnhancedFormDetector {
           try {
             // Check if it's a JSON string (starts with [ { or ")
             if (
-              value.trim().match(/^[\[{"]/) ||
+              value.trim().match(/^[[{"]/) ||
               value === 'true' ||
               value === 'false' ||
               value === 'null'
@@ -1064,11 +1022,9 @@ export class EnhancedFormDetector {
               );
               processedValue = parsed;
             }
-          } catch (parseError) {
+          } catch {
             // If parsing fails, use original value
-            this._forceLog(
-              `⚠️ Could not parse JSON for ${fieldName}, using as string: "${value}"`
-            );
+            this._forceLog(`⚠️ Could not parse JSON for ${fieldName}, using as string: "${value}"`);
           }
         }
 
@@ -1079,25 +1035,20 @@ export class EnhancedFormDetector {
         // Log the actual value type being set
         const valueDisplay = Array.isArray(processedValue)
           ? `[${processedValue.join(', ')}] (array)`
-          : typeof processedValue === 'object'
-            ? `{object} (${Object.keys(processedValue).length} keys)`
-            : `"${processedValue}" (${typeof processedValue})`;
+          : processedValue !== null && typeof processedValue === 'object'
+            ? `{object} (${Object.keys(processedValue as object).length} keys)`
+            : `"${String(processedValue)}" (${typeof processedValue})`;
 
         this._forceLog(
           `✅ Successfully set ${fieldName} = ${valueDisplay} via React Final Form API`
         );
         return true;
       } catch (error) {
-        this._forceLog(
-          `❌ React Final Form API change() failed for ${fieldName}:`,
-          error
-        );
+        this._forceLog(`❌ React Final Form API change() failed for ${fieldName}:`, error);
         this._forceLog('⚠️ Falling back to DOM manipulation');
       }
     } else {
-      this._forceLog(
-        '⚠️ No React Final Form API available, falling back to DOM manipulation'
-      );
+      this._forceLog('⚠️ No React Final Form API available, falling back to DOM manipulation');
     }
 
     // Fallback to direct DOM manipulation
@@ -1112,21 +1063,18 @@ export class EnhancedFormDetector {
   /**
    * Set Formik field value
    */
-  private setFormikValue(
-    form: EnhancedDetectedForm,
-    fieldName: string,
-    value: any
-  ): boolean {
-    if (form.formApi && form.formApi.setFieldValue) {
+  private setFormikValue(form: EnhancedDetectedForm, fieldName: string, value: unknown): boolean {
+    const setFieldValue = form.formApi?.setFieldValue as
+      | ((field: string, value: unknown) => void)
+      | undefined;
+    if (setFieldValue) {
       this._forceLog(`✨ Using Formik API setFieldValue() for ${fieldName}`);
-      form.formApi.setFieldValue(fieldName, value);
+      setFieldValue(fieldName, value);
       this.triggerFieldChange(form, fieldName, value);
       return true;
     }
 
-    this._forceLog(
-      '⚠️ No Formik API available, falling back to DOM manipulation'
-    );
+    this._forceLog('⚠️ No Formik API available, falling back to DOM manipulation');
     // Fallback to direct DOM manipulation
     const field = form.fields.get(fieldName);
     if (field) {
@@ -1139,37 +1087,31 @@ export class EnhancedFormDetector {
   /**
    * Set native form field value with enhanced support for ReScript components
    */
-  private setNativeFormValue(field: EnhancedFormField, value: any): boolean {
+  private setNativeFormValue(field: EnhancedFormField, value: unknown): boolean {
     const element = field.element;
     const elements = field.elements ?? [field.element];
 
     // Handle ReScript SelectBox components
     if (field.type === 'selectbox' && element.tagName === 'BUTTON') {
-      return this.setReScriptSelectBoxValue(
-        element as HTMLButtonElement,
-        value
-      );
+      return this.setReScriptSelectBoxValue(element as HTMLButtonElement, String(value));
     }
 
-    const input = element as
-      | HTMLInputElement
-      | HTMLSelectElement
-      | HTMLTextAreaElement;
+    const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
     if (field.type === 'checkbox') {
       if (elements.length > 1) {
         if (Array.isArray(value)) {
-          elements.forEach((el) => {
+          elements.forEach(el => {
             const checkbox = el as HTMLInputElement;
             checkbox.checked = value.includes(checkbox.value);
           });
         } else if (typeof value === 'string') {
-          elements.forEach((el) => {
+          elements.forEach(el => {
             const checkbox = el as HTMLInputElement;
             checkbox.checked = checkbox.value === value;
           });
         } else {
-          elements.forEach((el) => {
+          elements.forEach(el => {
             (el as HTMLInputElement).checked = Boolean(value);
           });
         }
@@ -1178,7 +1120,7 @@ export class EnhancedFormDetector {
       }
     } else if (field.type === 'radio') {
       if (elements.length > 1) {
-        elements.forEach((el) => {
+        elements.forEach(el => {
           const radio = el as HTMLInputElement;
           radio.checked = radio.value === value;
         });
@@ -1190,7 +1132,7 @@ export class EnhancedFormDetector {
     } else if (field.type === 'select-multiple') {
       const select = input as HTMLSelectElement;
       const values = Array.isArray(value) ? value : [value];
-      Array.from(select.options).forEach((option) => {
+      Array.from(select.options).forEach(option => {
         option.selected = values.includes(option.value);
       });
     } else {
@@ -1207,15 +1149,11 @@ export class EnhancedFormDetector {
   /**
    * Handle ReScript SelectBox components specifically
    */
-  private setReScriptSelectBoxValue(
-    button: HTMLButtonElement,
-    value: string
-  ): boolean {
+  private setReScriptSelectBoxValue(button: HTMLButtonElement, value: string): boolean {
     this._forceLog(`🎯 Setting ReScript SelectBox to "${value}"`);
 
     const container =
-      button.closest('[data-component-field-wrapper]') ||
-      button.closest('[data-selectbox-value]');
+      button.closest('[data-component-field-wrapper]') || button.closest('[data-selectbox-value]');
 
     if (!container) {
       this._forceLog('❌ SelectBox container not found');
@@ -1243,7 +1181,7 @@ export class EnhancedFormDetector {
         document.querySelector('.dropdown-menu') ||
         document.querySelector('[role="menu"]') ||
         // Look for any recently added dropdown-like elements
-        Array.from(document.querySelectorAll('div')).find((div) => {
+        Array.from(document.querySelectorAll('div')).find(div => {
           const style = window.getComputedStyle(div);
           return (
             style.position === 'absolute' &&
@@ -1257,26 +1195,21 @@ export class EnhancedFormDetector {
         this._forceLog(`✅ Found dropdown, looking for option "${value}"`);
 
         // Find option with case-insensitive search
-        let option = dropdown.querySelector(
-          `[data-dropdown-value="${value}"]`
-        ) as HTMLElement;
+        let option = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
         if (!option) {
           const allOptions = dropdown.querySelectorAll('[data-dropdown-value]');
-          option = Array.from(allOptions).find((opt) => {
+          option = Array.from(allOptions).find(opt => {
             const dataValue = opt.getAttribute('data-dropdown-value');
             return dataValue && dataValue.toLowerCase() === value.toLowerCase();
           }) as HTMLElement;
         }
 
         if (option) {
-          this._forceLog(
-            `🖱️ Clicking option: "${option.getAttribute('data-dropdown-value')}"`
-          );
+          this._forceLog(`🖱️ Clicking option: "${option.getAttribute('data-dropdown-value')}"`);
           option.click();
 
           // Update button attributes
-          const selectedValue =
-            option.getAttribute('data-dropdown-value') || value;
+          const selectedValue = option.getAttribute('data-dropdown-value') || value;
           button.setAttribute('data-value', selectedValue);
 
           // Update button text
@@ -1305,7 +1238,7 @@ export class EnhancedFormDetector {
   private triggerEvents(element: HTMLElement): void {
     const events = ['input', 'change', 'blur'];
 
-    events.forEach((eventType) => {
+    events.forEach(eventType => {
       const event = new Event(eventType, { bubbles: true, cancelable: true });
       element.dispatchEvent(event);
     });
@@ -1319,11 +1252,7 @@ export class EnhancedFormDetector {
   /**
    * Trigger field change callback
    */
-  private triggerFieldChange(
-    form: EnhancedDetectedForm,
-    fieldName: string,
-    value: any
-  ): void {
+  private triggerFieldChange(form: EnhancedDetectedForm, fieldName: string, value: unknown): void {
     if (this.config.onFieldChanged) {
       this.config.onFieldChanged(fieldName, value, form);
     }
@@ -1332,10 +1261,10 @@ export class EnhancedFormDetector {
   /**
    * Get React instance from DOM element with enhanced detection
    */
-  private getReactInstance(element: HTMLElement): any {
+  private getReactInstance(element: HTMLElement): ReactFiberNode | null {
     // Try different React instance keys
     const reactKeys = Object.keys(element).filter(
-      (key) =>
+      key =>
         key.startsWith('__reactInternalInstance') ||
         key.startsWith('__reactFiber') ||
         key.startsWith('_reactInternalFiber')
@@ -1345,7 +1274,7 @@ export class EnhancedFormDetector {
       const reactKey = reactKeys[0];
       if (reactKey) {
         this._forceLog(`🎯 Found React instance key: ${reactKey}`);
-        return (element as any)[reactKey];
+        return (element as unknown as Record<string, unknown>)[reactKey] as ReactFiberNode;
       }
     }
 
@@ -1355,7 +1284,7 @@ export class EnhancedFormDetector {
   /**
    * Extract React Final Form API from React instance with enhanced navigation
    */
-  private extractReactFinalFormApi(reactInstance: any): any {
+  private extractReactFinalFormApi(reactInstance: ReactFiberNode): DetectedFormApi | null {
     this._forceLog('🔍 Extracting React Final Form API...');
 
     // Strategy 1: Breadth-first search through the entire component tree
@@ -1366,66 +1295,74 @@ export class EnhancedFormDetector {
 
     while (queue.length > 0 && depth < maxDepth) {
       const batchSize = queue.length;
-      this._forceLog(
-        `🔍 Searching depth ${depth} with ${batchSize} components`
-      );
+      this._forceLog(`🔍 Searching depth ${depth} with ${batchSize} components`);
 
       for (let i = 0; i < batchSize; i++) {
         const current = queue.shift();
-        if (!current || visited.has(current)) continue;
+        if (!current || visited.has(current)) {
+          continue;
+        }
         visited.add(current);
 
         // Check current node for form API
         const formApi = this.checkNodeForFormApi(current, depth);
-        if (formApi) return formApi;
+        if (formApi) {
+          return formApi;
+        }
 
         // Add children to queue for next depth level
-        if (current.child) queue.push(current.child);
-        if (current.sibling) queue.push(current.sibling);
-        if (current.return) queue.push(current.return);
+        if (current.child) {
+          queue.push(current.child);
+        }
+        if (current.sibling) {
+          queue.push(current.sibling);
+        }
+        if (current.return) {
+          queue.push(current.return);
+        }
       }
       depth++;
     }
 
-    this._forceLog(
-      `❌ Could not find React Final Form API after ${depth} levels`
-    );
+    this._forceLog(`❌ Could not find React Final Form API after ${depth} levels`);
     return null;
   }
 
   /**
    * Check a single React fiber node for form API
    */
-  private checkNodeForFormApi(node: any, depth: number): any {
-    if (!node) return null;
+  private checkNodeForFormApi(
+    node: ReactFiberNode | null | undefined,
+    depth: number
+  ): DetectedFormApi | null {
+    if (!node) {
+      return null;
+    }
 
     // Strategy 1: Direct form API in memoizedProps
     if (node.memoizedProps?.form) {
+      const form = node.memoizedProps.form;
       this._forceLog(`✅ Found form API in memoizedProps at depth ${depth}`);
-      this._forceLog(
-        '🔍 Form API methods:',
-        Object.keys(node.memoizedProps.form)
-      );
-      return node.memoizedProps.form;
+      if (form && typeof form === 'object') {
+        this._forceLog('🔍 Form API methods:', Object.keys(form));
+      }
+      return form as DetectedFormApi;
     }
 
     // Strategy 2: Form API in render function/render props
     if (node.memoizedProps?.render) {
-      const renderProp = node.memoizedProps.render;
+      const renderProp = node.memoizedProps.render as unknown;
       if (typeof renderProp === 'function') {
         // This might be a render prop function that receives form API
         this._forceLog(`🔍 Found render prop function at depth ${depth}`);
-      } else if (typeof renderProp === 'object' && renderProp.form) {
+      } else if (renderProp !== null && typeof renderProp === 'object' && 'form' in renderProp) {
         this._forceLog(`✅ Found form API in render props at depth ${depth}`);
-        return renderProp.form;
+        return (renderProp as { form: unknown }).form as DetectedFormApi;
       }
     }
 
     // Strategy 3: Form API in children props
-    if (
-      node.memoizedProps?.children &&
-      typeof node.memoizedProps.children === 'function'
-    ) {
+    if (node.memoizedProps?.children && typeof node.memoizedProps.children === 'function') {
       this._forceLog(`🔍 Found children render prop at depth ${depth}`);
     }
 
@@ -1433,78 +1370,74 @@ export class EnhancedFormDetector {
     if (node.stateNode) {
       if (node.stateNode.form) {
         this._forceLog(`✅ Found form API in stateNode at depth ${depth}`);
-        return node.stateNode.form;
+        return node.stateNode.form as DetectedFormApi;
       }
 
       // Check for form methods directly on state node
-      if (
-        node.stateNode.change &&
-        node.stateNode.submit &&
-        node.stateNode.batch
-      ) {
-        this._forceLog(
-          `✅ Found form API methods directly on stateNode at depth ${depth}`
-        );
-        return node.stateNode;
+      if (node.stateNode.change && node.stateNode.submit && node.stateNode.batch) {
+        this._forceLog(`✅ Found form API methods directly on stateNode at depth ${depth}`);
+        return node.stateNode as DetectedFormApi;
       }
     }
 
     // Strategy 5: React Final Form context
-    if (node.dependencies?.firstContext) {
-      let context = node.dependencies.firstContext;
+    const nodeDeps = (node as unknown as Record<string, unknown>).dependencies as
+      | { firstContext?: unknown }
+      | undefined;
+    if (nodeDeps?.firstContext) {
+      let context = nodeDeps.firstContext as
+        | {
+            memoizedValue?: { form?: unknown; change?: unknown; submit?: unknown };
+            next?: unknown;
+          }
+        | undefined;
       while (context) {
         if (context.memoizedValue) {
           if (context.memoizedValue.form) {
-            this._forceLog(
-              `✅ Found form API in React context at depth ${depth}`
-            );
-            return context.memoizedValue.form;
+            this._forceLog(`✅ Found form API in React context at depth ${depth}`);
+            return context.memoizedValue.form as DetectedFormApi;
           }
           if (context.memoizedValue.change && context.memoizedValue.submit) {
-            this._forceLog(
-              `✅ Found form API directly in React context at depth ${depth}`
-            );
-            return context.memoizedValue;
+            this._forceLog(`✅ Found form API directly in React context at depth ${depth}`);
+            return context.memoizedValue as DetectedFormApi;
           }
         }
-        context = context.next;
+        context = context.next as typeof context;
       }
     }
 
     // Strategy 6: useForm hook in memoizedState
     if (node.memoizedState) {
-      let hook = node.memoizedState;
+      let hook = node.memoizedState as
+        | {
+            memoizedState?: Record<string, unknown> | null;
+            next?: unknown;
+          }
+        | undefined;
       while (hook) {
         if (hook.memoizedState && typeof hook.memoizedState === 'object') {
+          const state = hook.memoizedState;
           // Check for form API structure
-          if (
-            hook.memoizedState.change &&
-            hook.memoizedState.submit &&
-            hook.memoizedState.batch
-          ) {
+          if (state.change && state.submit && state.batch) {
             this._forceLog(`✅ Found form API in hooks at depth ${depth}`);
-            this._forceLog(
-              '🔍 Hook form API methods:',
-              Object.keys(hook.memoizedState)
-            );
-            return hook.memoizedState;
+            this._forceLog('🔍 Hook form API methods:', Object.keys(state));
+            return state as DetectedFormApi;
           }
 
           // Check for nested form API
-          if (hook.memoizedState.form) {
-            this._forceLog(
-              `✅ Found nested form API in hooks at depth ${depth}`
-            );
-            return hook.memoizedState.form;
+          if (state.form) {
+            this._forceLog(`✅ Found nested form API in hooks at depth ${depth}`);
+            return state.form as DetectedFormApi;
           }
         }
-        hook = hook.next;
+        hook = hook.next as typeof hook;
       }
     }
 
     // Strategy 7: Component type/name hints
     if (node.type) {
-      const typeName = node.type.displayName || node.type.name || '';
+      const typeObj = typeof node.type === 'object' && node.type !== null ? node.type : null;
+      const typeName = typeObj?.displayName || typeObj?.name || '';
       if (typeName.includes('Form') || typeName.includes('FinalForm')) {
         this._forceLog(
           `🎯 Found Form component "${typeName}" at depth ${depth}, checking props more thoroughly`
@@ -1520,10 +1453,8 @@ export class EnhancedFormDetector {
               'submit' in value &&
               'batch' in value
             ) {
-              this._forceLog(
-                `✅ Found form API in prop "${key}" of ${typeName} at depth ${depth}`
-              );
-              return value;
+              this._forceLog(`✅ Found form API in prop "${key}" of ${typeName} at depth ${depth}`);
+              return value as DetectedFormApi;
             }
           }
         }
@@ -1542,7 +1473,7 @@ export class EnhancedFormDetector {
   /**
    * Extract Formik API from React instance
    */
-  private extractFormikApi(reactInstance: any): any {
+  private extractFormikApi(reactInstance: ReactFiberNode): DetectedFormApi | null {
     // Navigate React component tree to find Formik API
     let current = reactInstance;
     let depth = 0;
@@ -1550,11 +1481,11 @@ export class EnhancedFormDetector {
 
     while (current && depth < maxDepth) {
       if (current.memoizedProps?.formik) {
-        return current.memoizedProps.formik;
+        return current.memoizedProps.formik as DetectedFormApi;
       }
 
       if (current.stateNode?.setFieldValue) {
-        return current.stateNode;
+        return current.stateNode as DetectedFormApi;
       }
 
       if (current.return) {
@@ -1574,17 +1505,14 @@ export class EnhancedFormDetector {
   /**
    * Set multiple field values at once
    */
-  public setFormValues(formId: string, values: Record<string, any>): boolean {
+  public setFormValues(formId: string, values: Record<string, unknown>): boolean {
     const form = this.forms.get(formId);
     if (!form) {
       this._forceLog(`❌ Form not found: ${formId}`);
       return false;
     }
 
-    this._forceLog(
-      `🚀 Setting multiple values in form ${formId}:`,
-      Object.keys(values)
-    );
+    this._forceLog(`🚀 Setting multiple values in form ${formId}:`, Object.keys(values));
 
     let success = true;
     Object.entries(values).forEach(([fieldName, value]) => {
@@ -1593,9 +1521,7 @@ export class EnhancedFormDetector {
       }
     });
 
-    this._forceLog(
-      `📊 Bulk set result: ${success ? 'SUCCESS' : 'PARTIAL_FAILURE'}`
-    );
+    this._forceLog(`📊 Bulk set result: ${success ? 'SUCCESS' : 'PARTIAL_FAILURE'}`);
     return success;
   }
 
@@ -1627,9 +1553,7 @@ export class EnhancedFormDetector {
       // { json: {...}, markdown: "..." } score against 'json' / 'markdown' even though no
       // HTML input has those names. Prefix matches (e.g. "json" vs "json.rules[0]...") get
       // half weight so exact matches still win ties.
-      const formApi = form.formApi as
-        | { getRegisteredFields?: () => string[] }
-        | undefined;
+      const formApi = form.formApi as { getRegisteredFields?: () => string[] } | undefined;
       const registered: string[] =
         formApi && typeof formApi.getRegisteredFields === 'function'
           ? formApi.getRegisteredFields()
@@ -1644,12 +1568,7 @@ export class EnhancedFormDetector {
           score += 1;
           continue;
         }
-        if (
-          registered.some(
-            (r) =>
-              r.startsWith(fieldName + '.') || r.startsWith(fieldName + '[')
-          )
-        ) {
+        if (registered.some(r => r.startsWith(fieldName + '.') || r.startsWith(fieldName + '['))) {
           score += 0.5;
         }
       }
@@ -1666,19 +1585,15 @@ export class EnhancedFormDetector {
       return bestMatch.form;
     }
 
-    this._forceLog(
-      `❌ No suitable form match found for fields: ${fieldNames.join(', ')}`
-    );
+    this._forceLog(`❌ No suitable form match found for fields: ${fieldNames.join(', ')}`);
     return null;
   }
 
   /**
    * Fill any suitable form with the provided field values
    */
-  public fillAnyForm(fields: Record<string, any>): boolean {
-    this._forceLog(
-      `🎯 Enhanced fillAnyForm called with ${Object.keys(fields).length} fields`
-    );
+  public fillAnyForm(fields: Record<string, unknown>): boolean {
+    this._forceLog(`🎯 Enhanced fillAnyForm called with ${Object.keys(fields).length} fields`);
 
     // Re-detect forms to ensure we have the latest
     this.detectAllForms();
@@ -1687,15 +1602,11 @@ export class EnhancedFormDetector {
     const bestForm = this.findBestFormMatch(fieldNames);
 
     if (!bestForm) {
-      this._forceLog(
-        `❌ No suitable form found for fields: ${fieldNames.join(', ')}`
-      );
+      this._forceLog(`❌ No suitable form found for fields: ${fieldNames.join(', ')}`);
       return false;
     }
 
-    this._forceLog(
-      `🚀 Using form ${bestForm.id} (${bestForm.formLibrary}) for filling`
-    );
+    this._forceLog(`🚀 Using form ${bestForm.id} (${bestForm.formLibrary}) for filling`);
 
     // Prefer the form library's own bulk-set API over DOM manipulation.
     // RFF's initialize() sets the entire values tree atomically, preserving
@@ -1704,25 +1615,18 @@ export class EnhancedFormDetector {
     // mounted <Field> components re-render with the new state.
     const api = bestForm.formApi as
       | {
-          initialize?: (values: Record<string, any>) => void;
-          getState?: () => { values?: Record<string, any> };
+          initialize?: (values: Record<string, unknown>) => void;
+          getState?: () => { values?: Record<string, unknown> };
         }
       | undefined;
-    if (
-      api &&
-      typeof api.initialize === 'function' &&
-      typeof api.getState === 'function'
-    ) {
+    if (api && typeof api.initialize === 'function' && typeof api.getState === 'function') {
       try {
         const current = api.getState()?.values ?? {};
         api.initialize({ ...current, ...fields });
         this._forceLog(`✨ Filled via formApi.initialize() on ${bestForm.id}`);
         return true;
       } catch (e) {
-        this._forceLog(
-          '⚠️ initialize() failed, falling back to per-field DOM writes:',
-          e
-        );
+        this._forceLog('⚠️ initialize() failed, falling back to per-field DOM writes:', e);
       }
     }
 
@@ -1748,23 +1652,21 @@ export class EnhancedFormDetector {
       }
     });
 
-    this._forceLog(
-      `📊 Reset result: ${success ? 'SUCCESS' : 'PARTIAL_FAILURE'}`
-    );
+    this._forceLog(`📊 Reset result: ${success ? 'SUCCESS' : 'PARTIAL_FAILURE'}`);
     return success;
   }
 
   /**
    * Get initial values for a specific form
    */
-  public getFormInitialValues(formId: string): Record<string, any> | null {
+  public getFormInitialValues(formId: string): Record<string, string | boolean | string[]> | null {
     const form = this.forms.get(formId);
     if (!form) {
       this._forceLog(`❌ Form not found: ${formId}`);
       return null;
     }
 
-    const initialValues: Record<string, any> = {};
+    const initialValues: Record<string, string | boolean | string[]> = {};
     form.fields.forEach((field, fieldName) => {
       initialValues[fieldName] = field.initialValue;
     });
@@ -1775,11 +1677,11 @@ export class EnhancedFormDetector {
   /**
    * Get initial values for all forms
    */
-  public getAllFormsInitialValues(): Record<string, Record<string, any>> {
-    const allInitialValues: Record<string, Record<string, any>> = {};
+  public getAllFormsInitialValues(): Record<string, Record<string, string | boolean | string[]>> {
+    const allInitialValues: Record<string, Record<string, string | boolean | string[]>> = {};
 
     this.forms.forEach((form, formId) => {
-      const formInitialValues: Record<string, any> = {};
+      const formInitialValues: Record<string, string | boolean | string[]> = {};
       form.fields.forEach((field, fieldName) => {
         formInitialValues[fieldName] = field.initialValue;
       });
@@ -1799,24 +1701,17 @@ export class EnhancedFormDetector {
       return false;
     }
 
-    form.fields.forEach((field, _fieldName) => {
-      const element = field.element as
-        | HTMLInputElement
-        | HTMLSelectElement
-        | HTMLTextAreaElement;
+    form.fields.forEach(field => {
+      const element = field.element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
       // Update current value based on element type
       if (field.type === 'checkbox') {
         field.value = (element as HTMLInputElement).checked;
       } else if (field.type === 'radio') {
-        field.value = (element as HTMLInputElement).checked
-          ? element.value
-          : '';
+        field.value = (element as HTMLInputElement).checked ? element.value : '';
       } else if (field.type === 'select-multiple') {
         const select = element as HTMLSelectElement;
-        field.value = Array.from(select.selectedOptions).map(
-          (option) => option.value
-        );
+        field.value = Array.from(select.selectedOptions).map(option => option.value);
       } else if (field.type === 'selectbox' && element.tagName === 'BUTTON') {
         field.value = element.getAttribute('data-value') || '';
       } else {
@@ -1841,7 +1736,7 @@ export class EnhancedFormDetector {
     // Refresh current values before comparing
     this.refreshFormValues(formId);
 
-    for (const [_fieldName, field] of form.fields) {
+    for (const [, field] of form.fields) {
       if (JSON.stringify(field.value) !== JSON.stringify(field.initialValue)) {
         this._forceLog(
           `🔍 Form ${formId} is modified - field ${field.name}: current=${JSON.stringify(field.value)}, initial=${JSON.stringify(field.initialValue)}`
@@ -1857,9 +1752,13 @@ export class EnhancedFormDetector {
   /**
    * Get modified fields (fields that differ from initial values)
    */
-  public getModifiedFields(
-    formId: string
-  ): Record<string, { currentValue: any; initialValue: any }> {
+  public getModifiedFields(formId: string): Record<
+    string,
+    {
+      currentValue: string | boolean | string[];
+      initialValue: string | boolean | string[];
+    }
+  > {
     const form = this.forms.get(formId);
     if (!form) {
       this._forceLog(`❌ Form not found: ${formId}`);
@@ -1871,7 +1770,10 @@ export class EnhancedFormDetector {
 
     const modifiedFields: Record<
       string,
-      { currentValue: any; initialValue: any }
+      {
+        currentValue: string | boolean | string[];
+        initialValue: string | boolean | string[];
+      }
     > = {};
 
     form.fields.forEach((field, fieldName) => {
@@ -1909,16 +1811,14 @@ export class EnhancedFormDetector {
       }
     });
 
-    this._forceLog(
-      `📊 Clear result: ${success ? 'SUCCESS' : 'PARTIAL_FAILURE'}`
-    );
+    this._forceLog(`📊 Clear result: ${success ? 'SUCCESS' : 'PARTIAL_FAILURE'}`);
     return success;
   }
 
   /**
    * Get form context in the format expected by the user
    */
-  public getFormContext(formId: string): any | null {
+  public getFormContext(formId: string): Record<string, unknown> | null {
     const form = this.forms.get(formId);
     if (!form) {
       this._forceLog(`❌ Form not found: ${formId}`);
@@ -1928,7 +1828,7 @@ export class EnhancedFormDetector {
     // Refresh values to get current state
     this.refreshFormValues(formId);
 
-    const fields = Array.from(form.fields.values()).map((field) => ({
+    const fields = Array.from(form.fields.values()).map(field => ({
       name: field.name,
       type: field.type,
       value: field.value,
@@ -1950,15 +1850,15 @@ export class EnhancedFormDetector {
   /**
    * Get all form contexts with initial values
    */
-  public getAllFormContexts(): any[] {
-    return Array.from(this.forms.values()).map((form) => {
+  public getAllFormContexts(): Record<string, unknown>[] {
+    return Array.from(this.forms.values()).map(form => {
       // Refresh values to get current state
       this.refreshFormValues(form.id);
 
       return {
         formId: form.id,
         formLibrary: form.formLibrary,
-        fields: Array.from(form.fields.values()).map((field) => ({
+        fields: Array.from(form.fields.values()).map(field => ({
           name: field.name,
           type: field.type,
           value: field.value,

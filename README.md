@@ -66,14 +66,7 @@ Action commands are simple JSON objects that describe what to do:
 
 ```typescript
 interface ActionCommand {
-  type:
-    | 'navigate'
-    | 'click'
-    | 'fill'
-    | 'fillForm'
-    | 'submitForm'
-    | 'screenshot'
-    | 'wait';
+  type: 'navigate' | 'click' | 'fill' | 'fillForm' | 'submitForm' | 'screenshot' | 'wait';
   parameters: Record<string, string>;
   timeout?: number;
   description?: string;
@@ -117,7 +110,7 @@ const context = await engine.capturePageContext();
 engine.registerForm('login-form', formElement);
 
 // Event handling
-engine.addEventListener('action_completed', (event) => {
+engine.addEventListener('action_completed', event => {
   console.log('Action completed:', event);
 });
 ```
@@ -235,8 +228,7 @@ async function handleUserMessage(message: string) {
     messages: [
       {
         role: 'system',
-        content:
-          'You are a web automation assistant. Return action commands as JSON.',
+        content: 'You are a web automation assistant. Return action commands as JSON.',
       },
       {
         role: 'user',
@@ -314,15 +306,15 @@ try {
 Monitor automation progress with event listeners:
 
 ```typescript
-automationEngine.addEventListener('form_filled', (event) => {
+automationEngine.addEventListener('form_filled', event => {
   console.log(`Filled ${event.data.fieldsCount} fields`);
 });
 
-automationEngine.addEventListener('action_failed', (event) => {
+automationEngine.addEventListener('action_failed', event => {
   console.error('Action failed:', event.data.error);
 });
 
-automationEngine.addEventListener('screenshot_taken', (event) => {
+automationEngine.addEventListener('screenshot_taken', event => {
   console.log('Screenshot captured:', event.data.width, 'x', event.data.height);
 });
 ```

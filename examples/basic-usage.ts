@@ -104,17 +104,17 @@ async function multipleActionsExample(): Promise<void> {
 async function eventListenerExample(): Promise<void> {
   const automationEngine = createAutomationEngine();
 
-  automationEngine.addEventListener('action_started', (event) => {
+  automationEngine.addEventListener('action_started', event => {
     // eslint-disable-next-line no-console
     console.log('Action started:', event);
   });
 
-  automationEngine.addEventListener('action_completed', (event) => {
+  automationEngine.addEventListener('action_completed', event => {
     // eslint-disable-next-line no-console
     console.log('Action completed:', event);
   });
 
-  automationEngine.addEventListener('form_filled', (event) => {
+  automationEngine.addEventListener('form_filled', event => {
     // eslint-disable-next-line no-console
     console.log('Form filled:', event);
   });

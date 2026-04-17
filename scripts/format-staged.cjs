@@ -15,7 +15,7 @@ function getChangedFiles() {
       encoding: 'utf8',
     })
       .split('\n')
-      .filter((file) => file.trim());
+      .filter(file => file.trim());
 
     console.log(`Found ${stagedFiles.length} staged files`);
     return stagedFiles;
@@ -47,11 +47,11 @@ function filterFormattableFiles(files) {
   ];
 
   const formattableFiles = files
-    .filter((file) => {
+    .filter(file => {
       const ext = path.extname(file).toLowerCase();
       return formattableExtensions.includes(ext);
     })
-    .filter((file) => {
+    .filter(file => {
       // Check if file still exists (not deleted)
       try {
         require('fs').accessSync(file);
@@ -78,7 +78,7 @@ function formatFiles(files) {
     const chunkSize = 50;
     for (let i = 0; i < files.length; i += chunkSize) {
       const chunk = files.slice(i, i + chunkSize);
-      const filesArg = chunk.map((f) => `"${f}"`).join(' ');
+      const filesArg = chunk.map(f => `"${f}"`).join(' ');
 
       console.log(
         `Formatting chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(files.length / chunkSize)}: ${chunk.length} files`

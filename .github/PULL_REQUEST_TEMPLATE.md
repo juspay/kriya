@@ -1,44 +1,54 @@
 ## Description
 
-Brief description of changes made in this pull request.
+<!-- What does this PR change, and why? -->
 
 ## Type of Change
 
-Please delete options that are not relevant.
+- [ ] feat — new feature (non-breaking)
+- [ ] fix — bug fix (non-breaking)
+- [ ] refactor — no behavior change
+- [ ] perf — performance improvement
+- [ ] docs — documentation only
+- [ ] test — adding/updating tests
+- [ ] chore — tooling/infra
+- [ ] BREAKING CHANGE — backwards-incompatible
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] This change requires a documentation update
+## How has this been tested?
 
-## How Has This Been Tested?
+<!-- Steps to verify. Attach repro output, screenshots, or linked CI run. -->
 
-Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce. Please also list any relevant details for your test configuration
+- [ ] Unit tests added/updated
+- [ ] Manually verified in browser (DOM/form flows)
+- [ ] Node CJS + ESM consumers tested
 
-- [ ] Test A
-- [ ] Test B
-
-**Test Configuration**:
+**Test environment**:
 
 - Node version:
-- OS:
 - Browser (if applicable):
 
-## Checklist:
+## Checklist
 
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published in downstream modules
+- [ ] **Single commit** on this branch (required — squash before pushing)
+- [ ] Commit message follows `type(scope): description` (Conventional Commits)
+- [ ] Code is strictly typed — no `any`, no `@ts-ignore`, no non-null `!`
+- [ ] No `console.log`/`debugger` left in `src/`
+- [ ] All public library functions return a typed `Result` (no throws)
+- [ ] `npm run lint`, `npm run type-check`, `npm test`, `npm run build` all pass locally
+- [ ] No hardcoded secrets or credentials
+- [ ] DOM writes avoid `innerHTML`/`eval`/`new Function`
+- [ ] Documentation updated (README / docs/ / JSDoc on public API)
+- [ ] CHANGELOG will be generated via semantic-release — no manual edit
 
-## Screenshots (if applicable):
+## Linked Issues
 
-Add screenshots to help explain your changes.
+<!-- Closes #123 -->
+
+## Screenshots / Recordings (if UI-adjacent)
 
 ## Additional Context
 
-Add any other context about the pull request here.
+<!-- Design decisions, tradeoffs, known follow-ups. -->
+
+---
+
+By submitting this PR you agree to the [single-commit-per-branch policy](./SINGLE_COMMIT_POLICY.md).

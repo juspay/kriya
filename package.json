@@ -1,62 +1,126 @@
 {
   "name": "@juspay/kriya",
   "version": "1.0.1",
-  "description": "Pure automation execution engine for web actions - no AI, no UI. Execute action commands from any AI.",
+  "description": "Pure automation execution engine for web actions — no AI, no UI. Execute action commands (click, fill, submit, navigate, capture) from any AI provider. TypeScript-first, browser + Node, dual CJS/ESM.",
+  "author": {
+    "name": "Juspay Technologies",
+    "email": "support@juspay.in",
+    "url": "https://juspay.io"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/juspay/kriya#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juspay/kriya.git"
+  },
+  "bugs": {
+    "url": "https://github.com/juspay/kriya/issues"
+  },
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/sponsors/juspay"
+  },
+  "engines": {
+    "node": ">=20.8.1",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.9.0",
   "type": "module",
-  "main": "dist/index.cjs",
-  "module": "dist/index.esm.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.esm.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.esm.js",
       "require": "./dist/index.cjs",
-      "import": "./dist/index.esm.js"
-    }
+      "default": "./dist/index.esm.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "!dist/**/*.map",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "automation",
+    "web-automation",
+    "browser-automation",
+    "kriya",
+    "form-filling",
+    "form-automation",
+    "dom-manipulation",
+    "ai-actions",
+    "ai-automation",
+    "action-executor",
+    "typescript",
+    "esm",
+    "cjs",
+    "zero-dependency",
+    "juspay"
   ],
   "scripts": {
     "build": "rollup -c",
     "build:watch": "rollup -c -w",
+    "dev": "npm run build:watch",
+    "clean": "rimraf dist .rollup.cache",
+    "reset": "npm run clean && rm -rf node_modules && npm ci",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "type-check": "tsc --noEmit",
-    "clean": "rimraf dist",
-    "prepublishOnly": "npm run clean && npm run build",
-    "dev": "npm run build:watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "format:staged": "node scripts/format-staged.cjs",
+    "audit": "npm audit --audit-level=high --omit=dev",
+    "validate": "npm run lint && npm run format:check && npm run type-check",
+    "validate:env": "node scripts/env-validation.cjs",
+    "validate:security": "node scripts/security-check.cjs",
+    "validate:build": "node scripts/build-validations.cjs",
+    "validate:commit": "node scripts/commit-validation.cjs",
+    "validate:all": "npm run validate && npm run validate:env && npm run validate:security && npm run validate:build && npm test",
+    "check:all": "npm run validate && npm run validate:commit && npm run audit",
+    "quality:metrics": "node scripts/quality-metrics.cjs",
+    "quality:report": "npm run quality:metrics && echo 'Quality metrics saved to quality-metrics.json'",
+    "quality:all": "npm run lint && npm run format:check && npm run quality:metrics",
     "docs:build": "mkdocs build --strict --clean",
     "docs:serve": "mkdocs serve",
     "docs:gh-deploy": "mkdocs gh-deploy --force",
-    "validate": "npm run lint && npm run format:check",
-    "validate:all": "npm run validate && npm run test",
-    "prepare": "husky install",
+    "docs:api": "typedoc",
+    "prepare": "husky",
+    "prepublishOnly": "npm run clean && npm run build",
     "pre-push": "npm run validate:all",
-    "release": "semantic-release"
-  },
-  "keywords": [
-    "automation",
-    "web-automation",
-    "kriya",
-    "form-filling",
-    "dom-manipulation",
-    "ai-actions",
-    "browser-automation",
-    "typescript"
-  ],
-  "author": "Your Team",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/juspay/kriya.git"
+    "release": "semantic-release",
+    "release:dry-run": "semantic-release --dry-run",
+    "test:semantic-release": "semantic-release --dry-run --no-ci"
   },
   "dependencies": {
     "html2canvas": "^1.4.1"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-final-form": ">=6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-final-form": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@commitlint/cli": "^17.0.0",
@@ -71,7 +135,7 @@
     "@semantic-release/commit-analyzer": "^11.0.0",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^9.0.0",
-    "@semantic-release/npm": "^11.0.0",
+    "@semantic-release/npm": "^12.0.2",
     "@semantic-release/release-notes-generator": "^12.0.0",
     "@types/jest": "^29.5.8",
     "@types/node": "^20.9.0",
@@ -98,43 +162,21 @@
     "typescript": "^5.3.2",
     "typescript-eslint": "^8.58.0"
   },
-  "peerDependencies": {
-    "react": ">=16.8.0",
-    "react-final-form": ">=6.0.0"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-final-form": {
-      "optional": true
-    }
-  },
-  "engines": {
-    "node": ">=16.0.0"
-  },
   "browserslist": [
     "> 1%",
     "last 2 versions",
     "not dead"
   ],
-  "bugs": {
-    "url": "https://github.com/juspay/kriya/issues"
-  },
-  "homepage": "https://github.com/juspay/kriya#readme",
-  "prettier": {
-    "tabWidth": 2,
-    "useTabs": false,
-    "semi": true,
-    "singleQuote": true,
-    "trailingComma": "es5"
-  },
   "lint-staged": {
     "src/**/*.{js,ts,jsx,tsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "tests/**/*.{js,ts}": [
       "eslint --fix",
       "prettier --write"
     ],
-    "*.{json,md}": [
+    "*.{json,md,yml,yaml}": [
       "prettier --write"
     ]
   }

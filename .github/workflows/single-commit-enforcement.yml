@@ -1,0 +1,210 @@
+name: Single Commit Per Branch Enforcement
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  enforce-single-commit:
+    name: 🔒 Single Commit Policy Validation
+    runs-on: ubuntu-latest
+    steps:
+      # NB: fetch origin BEFORE checkout so $BASE_BRANCH is resolvable even
+      # on actions/checkout default shallow clones.
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin "${BASE_REF}:refs/remotes/origin/${BASE_REF}" --force
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
+      - name: Validate Single Commit Policy
+        id: validate
+        env:
+          # Route attacker-controlled values (PR branch name, head SHA, base ref)
+          # through env vars — never interpolate directly into the `run:` script,
+          # which would template-expand into shell before execution.
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
+          BASE_REPO_ID: ${{ github.event.repository.id }}
+        run: |
+          set -euo pipefail
+          BASE_BRANCH="origin/${BASE_REF}"
+
+          if [ "${HEAD_REPO_ID}" != "${BASE_REPO_ID}" ]; then
+            echo "📡 External contributor detected"
+            git checkout "${HEAD_SHA}"
+            CURRENT_BRANCH="HEAD"
+          else
+            echo "🏠 Internal contributor detected"
+            git checkout "origin/${HEAD_REF}"
+            CURRENT_BRANCH="origin/${HEAD_REF}"
+          fi
+
+          COMMIT_COUNT=$(git rev-list --count "$CURRENT_BRANCH" "^$BASE_BRANCH" 2>/dev/null || echo "0")
+
+          {
+            echo "commits_ahead=$COMMIT_COUNT"
+            echo "branch_name=$HEAD_REF"
+            echo "base_branch=$BASE_BRANCH"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "📊 Commits ahead of $BASE_BRANCH: $COMMIT_COUNT"
+
+          if [ "$COMMIT_COUNT" -eq 0 ]; then
+            echo "✅ Branch is up to date with base"
+            echo "status=up_to_date" >> "$GITHUB_OUTPUT"
+          elif [ "$COMMIT_COUNT" -eq 1 ]; then
+            echo "✅ Exactly 1 commit — POLICY COMPLIANT"
+            echo "status=compliant" >> "$GITHUB_OUTPUT"
+            COMMIT_HASH=$(git rev-list -1 "$CURRENT_BRANCH" "^$BASE_BRANCH")
+            COMMIT_MSG=$(git log -1 --pretty=format:"%s" "$COMMIT_HASH")
+            COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an" "$COMMIT_HASH")
+            {
+              echo "commit_hash=$COMMIT_HASH"
+              echo "commit_author=$COMMIT_AUTHOR"
+            } >> "$GITHUB_OUTPUT"
+            # Use a random delimiter for the commit message to avoid injection
+            # via crafted messages containing "EOF" or newlines.
+            DELIM="EOF_$(openssl rand -hex 8)"
+            {
+              echo "commit_message<<$DELIM"
+              printf '%s\n' "$COMMIT_MSG"
+              echo "$DELIM"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ POLICY VIOLATION: Branch contains $COMMIT_COUNT commits"
+            echo "status=violation" >> "$GITHUB_OUTPUT"
+            git log --oneline "$CURRENT_BRANCH" "^$BASE_BRANCH"
+          fi
+
+      - name: Validate Commit Message Format
+        if: steps.validate.outputs.status == 'compliant'
+        env:
+          COMMIT_MSG: ${{ steps.validate.outputs.commit_message }}
+        run: |
+          set -euo pipefail
+          echo "🔍 Validating: '$COMMIT_MSG'"
+          if ! printf '%s' "$COMMIT_MSG" | grep -qE "^[a-z]+(\([^)]+\))?!?:\s.+"; then
+            echo "❌ Commit message doesn't follow semantic format"
+            echo "Expected: type(scope): description"
+            echo "Received: $COMMIT_MSG"
+            exit 1
+          fi
+          echo "✅ Commit message format valid"
+
+      - name: Check for Merge Commits
+        if: steps.validate.outputs.status == 'compliant'
+        env:
+          BASE_BRANCH: ${{ steps.validate.outputs.base_branch }}
+        run: |
+          set -euo pipefail
+          MERGE_COMMITS=$(git rev-list --merges HEAD "^$BASE_BRANCH")
+          if [ -n "$MERGE_COMMITS" ]; then
+            echo "❌ Branch contains merge commits — rebase instead of merging"
+            exit 1
+          fi
+          echo "✅ No merge commits"
+
+      - name: Squash Instructions
+        if: steps.validate.outputs.status == 'violation'
+        env:
+          COMMIT_COUNT: ${{ steps.validate.outputs.commits_ahead }}
+          BRANCH_NAME: ${{ steps.validate.outputs.branch_name }}
+        run: |
+          set -euo pipefail
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🚫 SINGLE COMMIT POLICY VIOLATION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Branch '$BRANCH_NAME' has $COMMIT_COUNT commits; exactly 1 required."
+          echo ""
+          echo "🔧 Squash via interactive rebase:"
+          echo "   git rebase -i HEAD~$COMMIT_COUNT"
+          echo "   # change 'pick' to 'squash' for all but the first"
+          echo "   git push --force-with-lease"
+          echo ""
+          echo "🎯 Or soft-reset:"
+          echo "   git reset --soft origin/main"
+          echo "   git commit -m 'type(scope): your message'"
+          echo "   git push --force-with-lease"
+          echo ""
+          echo "📋 Current commits:"
+          git log --oneline "HEAD~$COMMIT_COUNT..HEAD"
+          exit 1
+
+      - name: Check Comment Permissions
+        if: always()
+        id: check-permissions
+        env:
+          HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
+          BASE_REPO_ID: ${{ github.event.repository.id }}
+        run: |
+          if [ "$HEAD_REPO_ID" != "$BASE_REPO_ID" ]; then
+            echo "can_comment=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_comment=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Find existing comment
+        if: steps.validate.outputs.status == 'compliant' && steps.check-permissions.outputs.can_comment == 'true'
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        continue-on-error: true
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: Single Commit Policy
+
+      - name: Post success comment
+        if: steps.validate.outputs.status == 'compliant' && steps.check-permissions.outputs.can_comment == 'true'
+        uses: peter-evans/create-or-update-comment@v4
+        continue-on-error: true
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          body: |
+            ## ✅ Single Commit Policy — COMPLIANT
+
+            **Status**: 1 commit • semantic format valid • ready for squash merge
+
+            <details>
+            <summary>Validation details</summary>
+
+            - **Hash**: `${{ steps.validate.outputs.commit_hash }}`
+            - **Message**: ${{ steps.validate.outputs.commit_message }}
+            - **Author**: ${{ steps.validate.outputs.commit_author }}
+
+            </details>
+
+            ---
+            *🤖 Kriya Single Commit Enforcement*
+          edit-mode: replace
+
+      - name: Summary
+        if: always()
+        env:
+          STATUS: ${{ steps.validate.outputs.status }}
+        run: |
+          case "$STATUS" in
+            compliant) echo "✅ POLICY COMPLIANT";;
+            violation) echo "❌ POLICY VIOLATION";;
+            up_to_date) echo "ℹ️ BRANCH UP TO DATE";;
+            *) echo "⚠️ STATUS: $STATUS";;
+          esac
