@@ -21,7 +21,7 @@ export class ActionExecutor {
   private _formRegistry: FormRegistry | null;
   private _contextCapture: ContextCapture | null;
   public addEventListener:
-    | ((eventType: EventType, callback: EventCallback) => void)
+    | ((_eventType: EventType, _callback: EventCallback) => void)
     | null;
 
   constructor(config: AutomationConfig) {
@@ -57,7 +57,7 @@ export class ActionExecutor {
       if (this._config.screenshotOnError && this._contextCapture) {
         try {
           await this._contextCapture.captureScreenshot();
-        } catch (screenshotError) {
+        } catch (_screenshotError) {
           // Silently ignore screenshot errors
         }
       }
@@ -145,7 +145,9 @@ export class ActionExecutor {
     };
 
     if (action.parameters.x && action.parameters.y) {
-      (options as any).position = {
+      (
+        options as ClickOptions & { position?: { x: number; y: number } }
+      ).position = {
         x: parseInt(action.parameters.x, 10),
         y: parseInt(action.parameters.y, 10),
       };
@@ -184,18 +186,34 @@ export class ActionExecutor {
     }
 
     const formId = action.parameters.formId;
-    const fieldsParam = action.parameters.fields;
+    // Two supported payload shapes:
+    //   1. Nested envelope: { fields: { fieldA: ..., fieldB: ... } }
+    //   2. Flat: { fieldA: ..., fieldB: ... } — each top-level key (minus
+    //      reserved names like formId/fields/values) is a form field name
+    //      and its value is the field value. This matches how users commonly
+    //      author payloads where a form has a top-level field named "json"
+    //      that holds the real state tree.
+    const params = action.parameters as Record<string, unknown>;
+    const RESERVED = new Set(['formId', 'fields', 'values']);
+    let fieldsParam: unknown = params.fields ?? params.values;
+    if (fieldsParam === undefined) {
+      const flat: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (!RESERVED.has(k)) flat[k] = v;
+      }
+      if (Object.keys(flat).length > 0) fieldsParam = flat;
+    }
 
     if (!fieldsParam) {
       throw new AutomationError(
-        'FillForm action requires fields parameter',
+        'FillForm action requires fields (either a `fields`/`values` object or top-level field entries in `parameters`)',
         'VALIDATION_FAILED',
         { action }
       );
     }
 
     // Allow any value type, not just strings - supports arrays, objects, etc.
-    let fields: Record<string, any>;
+    let fields: Record<string, unknown>;
     try {
       fields =
         typeof fieldsParam === 'string' ? JSON.parse(fieldsParam) : fieldsParam;
