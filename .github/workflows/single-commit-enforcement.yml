@@ -22,7 +22,7 @@ jobs:
       # NB: fetch origin BEFORE checkout so $BASE_BRANCH is resolvable even
       # on actions/checkout default shallow clones.
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
