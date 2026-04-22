@@ -4,6 +4,43 @@
 
 Kriya is a pure automation execution engine for web actions. It executes action commands from ANY AI (OpenAI, Claude, Gemini, etc.) and handles web automation tasks like clicking, filling forms, navigation, and capturing page context.
 
+## STRICT Code Conventions (MUST follow)
+
+### 1. NEVER use `interface` — always use `type`
+
+This project uses `type` exclusively. Do NOT create `interface` declarations anywhere. This includes:
+
+- Exported types: `export type Foo = { ... };` (NOT `export interface Foo { ... }`)
+- Local types: `type Bar = { ... };` (NOT `interface Bar { ... }`)
+- Function-scoped types: same rule applies inside functions
+
+**Why:** `type` is more flexible (unions, intersections, mapped types, conditional types) and the project has standardized on it for consistency. The ESLint rule `@typescript-eslint/consistent-type-definitions: ['error', 'type']` enforces this mechanically — do not disable it.
+
+### 2. ALL exported type definitions go in `src/types/` — NEVER in feature folders
+
+- ALL `export type` declarations MUST live in `src/types/*.ts`
+- Do NOT create `types/` directories inside feature folders (e.g., NEVER create `src/forms/types/forms.types.ts`)
+- Do NOT create files named `*.types.ts` — just use the domain name: `src/types/forms.ts`
+- Re-export everything from `src/types/index.ts` so consumers can import via `import type { Foo } from '@/types'`
+- File-private helper types used only within a single file (e.g., a React fiber shape used by one detector) may stay inline as `type` aliases — but must still be `type`, never `interface`
+- Function-scoped types used only within a single function body may stay inline
+
+**Existing type files (reference):**
+
+```text
+src/types/
+├── actions.ts           # ActionCommand, ExecutionResult, Click/Fill/Wait/PressOptions, etc.
+├── context.ts           # PageContext, ElementContext, ScreenshotOptions, ViewportInfo, etc.
+├── core.ts              # AutomationConfig, WebAutomataAPI, DEFAULT_CONFIG
+├── errors.ts            # ErrorCode, AutomationError
+├── events.ts            # EventType, AutomationEvent, EventCallback
+├── forms.ts             # FormAPI, FormContext, FormFieldContext, FormRegistryConfig, etc.
+├── react-internals.ts   # ReactFiberNode — shared fiber-walker shape
+└── index.ts             # Barrel re-exports
+```
+
+**When adding new types:** Find the most relevant existing file in `src/types/` and add there. Only create a new file if no existing file fits the domain.
+
 ## TypeScript Coding Standards
 
 ### 1. Strict Type Safety
@@ -45,7 +82,7 @@ Kriya is a pure automation execution engine for web actions. It executes action 
 
 ```text
 src/
-├── types/           # Type definitions only
+├── types/          # The ONLY location for exported type definitions (see STRICT Conventions above)
 ├── core/           # Core automation engine
 ├── actions/        # Action execution logic
 ├── forms/          # Form handling and registry
@@ -56,9 +93,9 @@ src/
 ### 6. Import/Export Rules
 
 - **Named exports only** - No default exports
-- **Barrel exports** - Use index.ts files for clean imports
-- **Relative imports** within modules, absolute for cross-module
-- **Type-only imports** when importing only types
+- **Barrel exports** - Use `src/types/index.ts` to re-export all public types; other modules import via `import type { Foo } from '@/types'`
+- **Relative imports** within modules, absolute (`@/…`) for cross-module
+- **Type-only imports** — use `import type { Foo } from '@/types'` when importing only types
 
 ### 7. Error Handling
 
@@ -94,13 +131,13 @@ src/
 ### Type Definition
 
 ```typescript
-interface ActionCommand {
+export type ActionCommand = {
   readonly type: 'navigate' | 'click' | 'fill' | 'fillForm' | 'submitForm';
   readonly parameters: Readonly<Record<string, string>>;
   readonly timeout?: number;
-}
+};
 
-type ExecutionResult =
+export type ExecutionResult =
   | { success: true; data?: unknown }
   | { success: false; error: string; code: ErrorCode };
 ```
@@ -178,6 +215,9 @@ type ErrorCode =
 
 ## Forbidden Patterns
 
+- ❌ `interface` declarations — use `type` aliases (enforced by ESLint)
+- ❌ `export type` outside `src/types/`
+- ❌ `*.types.ts` filenames (use the bare domain name — `forms.ts`, not `forms.types.ts`)
 - ❌ `any` type usage
 - ❌ `console.log` in production
 - ❌ Mutable global state

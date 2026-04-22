@@ -1,4 +1,15 @@
 import { AutomationEngine } from '@/core/AutomationEngine';
+import type {
+  ActionCommand,
+  AutomationConfig,
+  EventCallback,
+  EventType,
+  ExecutionResult,
+  FormLibrary,
+  PageContext,
+  ScreenshotOptions,
+  WebAutomataAPI,
+} from '@/types';
 import { AutomationError } from '@/types';
 
 export { AutomationEngine } from '@/core/AutomationEngine';
@@ -34,63 +45,30 @@ export type {
   ScreenshotOptions,
   ViewportInfo,
   WaitOptions,
+  WebAutomataAPI,
 } from '@/types';
 
 export { AutomationError, DEFAULT_CONFIG } from '@/types';
 
-// Parameter names in a public interface are documentation only; the base
-// `no-unused-vars` rule misreads them because it predates TypeScript type
-// positions. The TS-aware rule (@typescript-eslint/no-unused-vars) correctly
-// ignores them. Scope the disable to this interface.
-/* eslint-disable no-unused-vars */
-export interface WebAutomataAPI {
-  initialize(formLibrary?: import('@/types').FormLibrary): void;
-  executeAction(
-    action: import('@/types').ActionCommand
-  ): Promise<import('@/types').ExecutionResult>;
-  executeActions(
-    actions: readonly import('@/types').ActionCommand[]
-  ): Promise<readonly import('@/types').ExecutionResult[]>;
-  capturePageContext(): Promise<import('@/types').PageContext>;
-  registerForm(formId: string, formElement: HTMLFormElement): void;
-  unregisterForm(formId: string): void;
-  addEventListener(
-    eventType: import('@/types').EventType,
-    callback: import('@/types').EventCallback
-  ): void;
-  removeEventListener(
-    eventType: import('@/types').EventType,
-    callback: import('@/types').EventCallback
-  ): void;
-  captureScreenshot(options?: Partial<import('@/types').ScreenshotOptions>): Promise<string>;
-  isInitialized(): boolean;
-  dispose(): void;
-}
-/* eslint-enable no-unused-vars */
-
-export function createAutomationEngine(
-  config?: Partial<import('@/types').AutomationConfig>
-): WebAutomataAPI {
+export function createAutomationEngine(config?: Partial<AutomationConfig>): WebAutomataAPI {
   const engine = new AutomationEngine(config);
 
   return {
-    initialize: (formLibrary?: import('@/types').FormLibrary): void => {
+    initialize: (formLibrary?: FormLibrary): void => {
       engine.initialize(formLibrary);
     },
 
-    executeAction: async (
-      action: import('@/types').ActionCommand
-    ): Promise<import('@/types').ExecutionResult> => {
+    executeAction: async (action: ActionCommand): Promise<ExecutionResult> => {
       return engine.executeAction(action);
     },
 
     executeActions: async (
-      actions: readonly import('@/types').ActionCommand[]
-    ): Promise<readonly import('@/types').ExecutionResult[]> => {
+      actions: readonly ActionCommand[]
+    ): Promise<readonly ExecutionResult[]> => {
       return engine.executeActions(actions);
     },
 
-    capturePageContext: async (): Promise<import('@/types').PageContext> => {
+    capturePageContext: async (): Promise<PageContext> => {
       return engine.capturePageContext();
     },
 
@@ -102,29 +80,19 @@ export function createAutomationEngine(
       engine.unregisterForm(formId);
     },
 
-    addEventListener: (
-      eventType: import('@/types').EventType,
-      callback: import('@/types').EventCallback
-    ): void => {
+    addEventListener: (eventType: EventType, callback: EventCallback): void => {
       engine.addEventListener(eventType, callback);
     },
 
-    removeEventListener: (
-      eventType: import('@/types').EventType,
-      callback: import('@/types').EventCallback
-    ): void => {
+    removeEventListener: (eventType: EventType, callback: EventCallback): void => {
       engine.removeEventListener(eventType, callback);
     },
 
-    captureScreenshot: async (
-      options?: Partial<import('@/types').ScreenshotOptions>
-    ): Promise<string> => {
+    captureScreenshot: async (options?: Partial<ScreenshotOptions>): Promise<string> => {
       const context = (
         engine as unknown as {
           _contextCapture?: {
-            captureScreenshot: (
-              _options?: Partial<import('@/types').ScreenshotOptions>
-            ) => Promise<string>;
+            captureScreenshot: (_options?: Partial<ScreenshotOptions>) => Promise<string>;
           };
         }
       )._contextCapture;

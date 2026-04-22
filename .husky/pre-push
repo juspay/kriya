@@ -20,4 +20,7 @@ node scripts/security-check.cjs --quick
 echo "📦 Build validation..."
 node scripts/build-validations.cjs
 
+echo "🧩 ReScript bindings compile..."
+npm run build:rescript
+
 echo "✅ Pre-push validations passed."
