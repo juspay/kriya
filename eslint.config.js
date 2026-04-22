@@ -48,6 +48,10 @@ export default [
       '@typescript-eslint/prefer-as-const': 'error',
       '@typescript-eslint/no-non-null-assertion': 'warn',
 
+      // Project convention: use `type` exclusively — no `interface`.
+      // See CLAUDE.md §"STRICT Code Conventions".
+      '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
+
       // Code quality gates.
       'max-depth': ['error', 6],
       'max-lines-per-function': ['warn', 300],

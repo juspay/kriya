@@ -1,6 +1,6 @@
 ## <small>1.0.2 (2026-04-17)</small>
 
-* fix(pipeline): repair CI gate, align release to main, and polish npm metadata ([85c0999](https://github.com/juspay/kriya/commit/85c0999))
+- fix(pipeline): repair CI gate, align release to main, and polish npm metadata ([85c0999](https://github.com/juspay/kriya/commit/85c0999))
 
 ## <small>1.0.1 (2026-04-17)</small>
 

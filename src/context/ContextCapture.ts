@@ -26,9 +26,9 @@ type CustomFieldInfo = Record<string, unknown>;
  * Minimal shape of the FormRegistry surface used by ContextCapture.
  * Typed loosely here to avoid a circular import with FormRegistry.
  */
-interface FormRegistryLike {
+type FormRegistryLike = {
   getFormContext?: () => readonly FormContext[];
-}
+};
 
 export class ContextCapture {
   private readonly _config: AutomationConfig;

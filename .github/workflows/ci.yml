@@ -50,6 +50,9 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: ReScript bindings compile
+        run: npm run build:rescript
+
   build-check:
     name: 📦 Build & Package Check
     runs-on: ubuntu-latest

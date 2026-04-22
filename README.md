@@ -330,6 +330,40 @@ automationEngine.addEventListener('screenshot_taken', event => {
 
 Fully typed with strict TypeScript configuration. No `any` types in production code.
 
+## ReScript Support
+
+Kriya ships first-class ReScript bindings in the `rescript/` folder. No need to hand-roll your own.
+
+**Requirements:** `rescript >= 11` and `@rescript/core >= 1.0`.
+
+**Setup** — in your own `rescript.json`:
+
+```json
+{
+  "bs-dependencies": ["@rescript/core", "@juspay/kriya"],
+  "bsc-flags": ["-open RescriptCore"]
+}
+```
+
+**Usage:**
+
+```rescript
+open Kriya
+
+let engine = createEngine(~debugMode=true, ~timeout=10000)
+engine->initialize
+
+let result = await engine->executeAction(navigate(~url="https://example.com"))
+
+// Fill a form by dict
+let fields = Dict.fromArray([("name", "Alice"), ("email", "alice@example.com")])
+let _ = await engine->executeFormFill(~fields)
+
+engine->disposeEngine
+```
+
+Everything the TypeScript API exposes has a ReScript binding — action builders (`navigate`, `click`, `fill`, `wait`, `press`, `screenshot`, `submitForm`, `fillForm`), engine lifecycle, event listeners, page-context capture, and screenshot capture.
+
 ## License
 
 MIT

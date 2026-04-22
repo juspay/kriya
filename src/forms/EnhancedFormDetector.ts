@@ -5,62 +5,13 @@
  * Formik, and native HTML forms with proper API extraction.
  */
 
-export interface EnhancedFormField {
-  element: HTMLElement;
-  elements?: HTMLElement[];
-  name: string;
-  type: string;
-  value: string | boolean | string[];
-  initialValue: string | boolean | string[]; // Track initial/default value
-  label?: string;
-  placeholder?: string;
-  required: boolean;
-  disabled: boolean;
-  formLibrary?: 'react-final-form' | 'formik' | 'native' | 'unknown';
-}
-
-/**
- * Loose handle for an extracted form API (react-final-form / formik / native).
- * Shapes vary across libraries; callers narrow via typeof/in checks.
- */
-export type DetectedFormApi = Record<string, unknown> & {
-  change?: (field: string, value: unknown) => void;
-  submit?: () => unknown;
-  getState?: () => Record<string, unknown>;
-  batch?: (fn: () => void) => void;
-  reset?: () => void;
-  initialize?: (values: Record<string, unknown>) => void;
-};
-
-/**
- * Minimal React fiber node shape used when walking a form element's internals.
- */
-type ReactFiberNode = {
-  memoizedProps?: Record<string, unknown>;
-  memoizedState?: Record<string, unknown> | null;
-  stateNode?: Record<string, unknown>;
-  type?: { displayName?: string; name?: string } | string | null;
-  return?: ReactFiberNode | null;
-  child?: ReactFiberNode | null;
-  sibling?: ReactFiberNode | null;
-};
-
-export interface EnhancedDetectedForm {
-  element: HTMLFormElement | HTMLElement;
-  id: string;
-  name?: string;
-  fields: Map<string, EnhancedFormField>;
-  formLibrary: 'react-final-form' | 'formik' | 'native' | 'unknown';
-  formApi?: DetectedFormApi; // The form's API object (if detected)
-}
-
-export interface EnhancedFormDetectorConfig {
-  autoDetect?: boolean;
-  includeDisabled?: boolean;
-  debugMode?: boolean;
-  onFormDetected?: (form: EnhancedDetectedForm) => void;
-  onFieldChanged?: (fieldName: string, value: unknown, form: EnhancedDetectedForm) => void;
-}
+import type {
+  DetectedFormApi,
+  EnhancedDetectedForm,
+  EnhancedFormDetectorConfig,
+  EnhancedFormField,
+  ReactFiberNode,
+} from '@/types';
 
 export class EnhancedFormDetector {
   private forms: Map<string, EnhancedDetectedForm> = new Map();

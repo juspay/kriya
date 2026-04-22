@@ -9,34 +9,17 @@ import type {
   FormFillResult,
   FormLibrary,
   FormRegistryConfig,
+  ReactFiberNode,
 } from '@/types';
 import { DEFAULT_FORM_REGISTRY_CONFIG } from '@/types';
 import { AutomationError } from '@/types';
 import { EnhancedFormDetector } from './EnhancedFormDetector';
 
 /**
- * Minimal shape of a React internal fiber node.
- * React does not publish types for its internals; this captures the subset
- * we walk/read when extracting react-final-form APIs off a DOM element.
- */
-interface ReactFiberNode {
-  memoizedProps?: Record<string, unknown> & {
-    onSubmit?: unknown;
-    form?: unknown;
-    formApi?: unknown;
-  };
-  memoizedState?: Record<string, unknown>;
-  stateNode?: Record<string, unknown> & { form?: unknown };
-  type?: { displayName?: string; name?: string } | string | null;
-  return?: ReactFiberNode | null;
-  child?: ReactFiberNode | null;
-  sibling?: ReactFiberNode | null;
-}
-
-/**
  * Minimal shape of a react-final-form API handle extracted from a fiber.
+ * File-private: only FormRegistry's fiber walker produces this shape.
  */
-interface ReactFinalFormHandle {
+type ReactFinalFormHandle = {
   change?: (field: string, value: unknown) => void;
   submit?: () => unknown;
   getState?: () => Record<string, unknown>;
@@ -45,7 +28,7 @@ interface ReactFinalFormHandle {
   initialize?: (values: Record<string, unknown>) => void;
   getRegisteredFields?: () => readonly string[];
   [key: string]: unknown;
-}
+};
 
 export class FormRegistry {
   private readonly _config: AutomationConfig;

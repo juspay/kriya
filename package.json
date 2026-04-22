@@ -43,6 +43,8 @@
     "!dist/**/*.test.*",
     "!dist/**/*.spec.*",
     "!dist/**/*.map",
+    "rescript",
+    "rescript.json",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -73,8 +75,9 @@
   "scripts": {
     "build": "rollup -c",
     "build:watch": "rollup -c -w",
+    "build:rescript": "rescript build",
     "dev": "npm run build:watch",
-    "clean": "rimraf dist .rollup.cache",
+    "clean": "rimraf dist .rollup.cache lib rescript/*.res.js rescript/*.bs.js",
     "reset": "npm run clean && rm -rf node_modules && npm ci",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
@@ -101,7 +104,7 @@
     "docs:gh-deploy": "mkdocs gh-deploy --force",
     "docs:api": "typedoc",
     "prepare": "husky",
-    "prepublishOnly": "npm run clean && npm run build",
+    "prepublishOnly": "npm run clean && npm run build && npm run build:rescript",
     "pre-push": "npm run validate:all",
     "release": "semantic-release",
     "release:dry-run": "semantic-release --dry-run",
@@ -111,14 +114,22 @@
     "html2canvas": "^1.4.1"
   },
   "peerDependencies": {
+    "@rescript/core": ">=1.0.0",
     "react": ">=16.8.0",
-    "react-final-form": ">=6.0.0"
+    "react-final-form": ">=6.0.0",
+    "rescript": ">=11.0.0"
   },
   "peerDependenciesMeta": {
+    "@rescript/core": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },
     "react-final-form": {
+      "optional": true
+    },
+    "rescript": {
       "optional": true
     }
   },
@@ -126,6 +137,7 @@
     "@commitlint/cli": "^17.0.0",
     "@commitlint/config-conventional": "^17.0.0",
     "@eslint/js": "^9.0.0",
+    "@rescript/core": "^1.6.1",
     "@rollup/plugin-alias": "^5.1.1",
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
@@ -150,6 +162,7 @@
     "jest-environment-jsdom": "^30.3.0",
     "lint-staged": "^16.1.5",
     "prettier": "^3.1.0",
+    "rescript": "^11.1.4",
     "rimraf": "^5.0.5",
     "rollup": "^4.5.0",
     "rollup-plugin-dts": "^6.1.0",
