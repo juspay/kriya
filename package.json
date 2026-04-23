@@ -1,6 +1,6 @@
 {
   "name": "@juspay/kriya",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Pure automation execution engine for web actions — no AI, no UI. Execute action commands (click, fill, submit, navigate, capture) from any AI provider. TypeScript-first, browser + Node, dual CJS/ESM.",
   "author": {
     "name": "Juspay Technologies",

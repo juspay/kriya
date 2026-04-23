@@ -1,3 +1,7 @@
+## <small>1.1.1 (2026-04-23)</small>
+
+* fix(actions): improve SPA navigation handling for link clicks with openedViaBlank guard ([41f01fe](https://github.com/juspay/kriya/commit/41f01fe))
+
 ## 1.1.0 (2026-04-22)
 
 - feat(rescript): add first-class rescript bindings and centralize types under src/types/ ([8fd4733](https://github.com/juspay/kriya/commit/8fd4733))
