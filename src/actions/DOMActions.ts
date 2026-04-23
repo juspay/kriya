@@ -1003,60 +1003,30 @@ export class DOMActions {
       }
     }
 
-    // Method 2: For links, use the same simple approach as navigate() function
+    // Method 2: For links with _blank target, try opening in new window
+    // Skip forced navigation for same-window links to allow SPA routing
+    let openedViaBlank = false;
     if (element.tagName.toLowerCase() === 'a') {
       const href = element.getAttribute('href');
       const target = element.getAttribute('target');
 
-      this.forcelog(`[KRIYA DEBUG] Link detected - href: ${href}, target: ${target}`);
-
-      if (href && (href.startsWith('http') || href.startsWith('/') || href.startsWith('./'))) {
-        // For relative URLs, construct the full URL
-        let fullUrl = href;
-        if (href.startsWith('/') || href.startsWith('./')) {
-          fullUrl = new URL(href, window.location.origin).href;
-          this.forcelog(`[KRIYA DEBUG] Converted relative URL to: ${fullUrl}`);
-        }
-
-        // Method 2a: Use the same simple approach as navigate() function
-        this.forcelog(
-          `[KRIYA DEBUG] Method 2a: Direct navigation (same as navigate function) for: ${fullUrl}`
-        );
+      if (href && target === '_blank') {
+        this.forcelog('[KRIYA DEBUG] _blank target detected, attempting window.open');
         try {
-          if (target === '_blank') {
-            // For _blank targets, try window.open first, then fallback to direct navigation
-            this.forcelog('[KRIYA DEBUG] Trying window.open for _blank target');
-            const newWindow = window.open(fullUrl, '_blank');
-            if (newWindow && !newWindow.closed) {
-              this.forcelog('[KRIYA DEBUG] window.open for _blank succeeded!');
-              element.focus();
-              return; // Success! Exit early
-            } else {
-              this.forcelog(
-                '[KRIYA DEBUG] window.open blocked, using direct navigation (same window)'
-              );
-              // Fallback to same window navigation (like navigate function)
-              window.location.href = fullUrl;
-              this.forcelog('[KRIYA DEBUG] Direct navigation executed (same as navigate function)');
-              return; // Success! Exit early
-            }
-          } else {
-            // For same window, use direct navigation (same as navigate function)
-            this.forcelog(
-              '[KRIYA DEBUG] Same window direct navigation (same as navigate function)'
-            );
-            window.location.href = fullUrl;
-            this.forcelog('[KRIYA DEBUG] Direct navigation executed (same as navigate function)');
-            return; // Success! Exit early
+          const newWindow = window.open(href, '_blank');
+          if (newWindow && !newWindow.closed) {
+            this.forcelog('[KRIYA DEBUG] window.open succeeded');
+            element.focus();
+            openedViaBlank = true;
           }
         } catch (error) {
-          this.forcelog('[KRIYA DEBUG] Direct navigation failed:', error);
+          this.forcelog('[KRIYA DEBUG] window.open failed:', error);
         }
       }
     }
 
     // Method 3: Try native click if immediate redirect didn't work
-    if (!clickHandled || element.tagName.toLowerCase() === 'a') {
+    if (!clickHandled && element.tagName.toLowerCase() !== 'a') {
       this.forcelog('[KRIYA DEBUG] Trying native click() method');
       try {
         (element as HTMLElement).click();
@@ -1064,6 +1034,8 @@ export class DOMActions {
       } catch (error) {
         this.forcelog('[KRIYA DEBUG] Native click() failed:', error);
       }
+    } else if (element.tagName.toLowerCase() === 'a') {
+      this.forcelog('[KRIYA DEBUG] Skipping native click() on link to avoid SPA navigation issues');
     }
 
     // Method 4: For links, try enhanced navigation techniques
@@ -1081,27 +1053,35 @@ export class DOMActions {
         this.forcelog(`[KRIYA DEBUG] Attempting enhanced navigation techniques for: ${targetUrl}`);
 
         // Method 3a: Try creating a temporary hidden link and clicking it
-        this.forcelog('[KRIYA DEBUG] Method 3a: Creating temporary link');
-        try {
-          const tempLink = document.createElement('a');
-          tempLink.href = targetUrl;
-          tempLink.target = target || '_blank';
-          tempLink.style.display = 'none';
-          tempLink.style.position = 'absolute';
-          tempLink.style.left = '-9999px';
-          document.body.appendChild(tempLink);
+        // Only do this for _blank targets to avoid SPA navigation issues
+        // Skip if window.open already succeeded
+        if (target === '_blank' && !openedViaBlank) {
+          this.forcelog('[KRIYA DEBUG] Method 3a: Creating temporary link for _blank target');
+          try {
+            const tempLink = document.createElement('a');
+            tempLink.href = targetUrl;
+            tempLink.target = '_blank';
+            tempLink.style.display = 'none';
+            tempLink.style.position = 'absolute';
+            tempLink.style.left = '-9999px';
+            document.body.appendChild(tempLink);
 
-          // Try clicking the temporary link
-          tempLink.click();
-          this.forcelog('[KRIYA DEBUG] Temporary link clicked');
+            // Try clicking the temporary link
+            tempLink.click();
+            this.forcelog('[KRIYA DEBUG] Temporary link clicked');
 
-          // Clean up
-          setTimeout(() => {
-            document.body.removeChild(tempLink);
-            this.forcelog('[KRIYA DEBUG] Temporary link cleaned up');
-          }, 100);
-        } catch (error) {
-          this.forcelog('[KRIYA DEBUG] Temporary link method failed:', error);
+            // Clean up
+            setTimeout(() => {
+              document.body.removeChild(tempLink);
+              this.forcelog('[KRIYA DEBUG] Temporary link cleaned up');
+            }, 100);
+          } catch (error) {
+            this.forcelog('[KRIYA DEBUG] Temporary link method failed:', error);
+          }
+        } else if (target === '_blank' && openedViaBlank) {
+          this.forcelog('[KRIYA DEBUG] Skipping temporary link - window.open already succeeded');
+        } else {
+          this.forcelog('[KRIYA DEBUG] Skipping temporary link - not a _blank target (SPA safe)');
         }
 
         // Method 3b: Try focus + Enter key simulation
@@ -1132,30 +1112,25 @@ export class DOMActions {
             `[KRIYA DEBUG] Current location after enhanced methods: ${currentLocation}`
           );
 
-          // Check if any method worked
-          if (target === '_blank' || currentLocation === window.location.href) {
-            this.forcelog('[KRIYA DEBUG] Enhanced direct navigation needed');
-
+          // Only use enhanced navigation for _blank targets
+          // For same-window links, we rely on synthetic events and SPA detection in Method 2
+          // Skip if window.open already succeeded
+          if (target === '_blank' && !openedViaBlank) {
+            this.forcelog('[KRIYA DEBUG] _blank target - using enhanced navigation');
             try {
-              if (target === '_blank') {
-                this._openInNewWindowWithFallbacks(targetUrl, currentLocation);
-              } else {
-                // For same window navigation
-                this.forcelog('[KRIYA DEBUG] Same window navigation');
-                try {
-                  window.location.href = targetUrl;
-                  this.forcelog('[KRIYA DEBUG] window.location.href set for same window');
-                } catch (navError) {
-                  this.forcelog('[KRIYA DEBUG] Same window navigation failed:', navError);
-                  this._showNavigationAssistance(targetUrl);
-                }
-              }
+              this._openInNewWindowWithFallbacks(targetUrl, currentLocation);
             } catch (error) {
               this.forcelog('[KRIYA DEBUG] Enhanced direct navigation failed:', error);
               this._showNavigationAssistance(href);
             }
+          } else if (target === '_blank' && openedViaBlank) {
+            this.forcelog(
+              '[KRIYA DEBUG] _blank target - skipping enhanced navigation, window.open already succeeded'
+            );
           } else {
-            this.forcelog('[KRIYA DEBUG] Enhanced methods appear to have worked - page changed');
+            this.forcelog(
+              '[KRIYA DEBUG] Same-window link - NOT forcing navigation. Relying on synthetic events.'
+            );
           }
         }, 300); // Increased delay to allow for navigation
       }
