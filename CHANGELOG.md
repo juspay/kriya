@@ -1,6 +1,6 @@
 ## 1.1.0 (2026-04-22)
 
-* feat(rescript): add first-class rescript bindings and centralize types under src/types/ ([8fd4733](https://github.com/juspay/kriya/commit/8fd4733))
+- feat(rescript): add first-class rescript bindings and centralize types under src/types/ ([8fd4733](https://github.com/juspay/kriya/commit/8fd4733))
 
 ## <small>1.0.2 (2026-04-17)</small>
 
