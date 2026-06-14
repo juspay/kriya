@@ -135,7 +135,7 @@ jobs:
 
       - name: 📤 Upload quality metrics artifact
         if: always() && hashFiles('quality-metrics.json') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quality-metrics-${{ github.sha }}
           path: quality-metrics.json
