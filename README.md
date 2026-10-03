@@ -60,6 +60,49 @@ console.log('Automation results:', results);
 
 ## Core Concepts
 
+### Scoped DOM and embedded navigation
+
+Pass `root` to scope element lookup, form detection, labels, focus and utility DOM to a
+`Document`, `ShadowRoot` or `Element`. An element root includes the element itself and its
+descendants. Queries and parent traversal stay inside that root; they do not pierce nested
+shadow trees or fall back to the host document. Manually registered forms must also belong
+to the configured root. Screenshots target the element root or a shadow root's host.
+
+```typescript
+const engine = createAutomationEngine({
+  root: appElement.shadowRoot!,
+  locationProvider: {
+    getHref: () => appRouter.currentUrl,
+    getTitle: () => appRouter.currentTitle,
+    navigate: async url => {
+      await appRouter.navigate(url);
+    },
+  },
+});
+engine.initialize();
+```
+
+`locationProvider.getHref()` is read on every capture and when resolving relative links.
+Return an absolute URL so relative links resolve against the app route.
+`getTitle()` is optional and defaults to the root's owner document title. `navigate(url)`
+may return void or a Promise; its Promise defines route completion, including when an
+action requests `waitForLoad`. Navigation errors become the existing `NETWORK_ERROR`
+result. Without a provider, navigation retains its window location and load-event behavior.
+Provider navigation also honors the action timeout.
+Provider-backed anchor hrefs are resolved before synthetic dispatch, then restored. App
+handlers can cancel navigation normally. Scoped clicks use native anchor activation once;
+they do not retry a canceled click or manually open an extra window.
+
+With an explicit root, synthetic click, input, change and keyboard events bubble and are
+composed. Native shadow form submissions are forwarded once as composed, cancellable
+submit events, preserving their submitter and propagating cancellation back to the native
+event. Form listeners are removed on disposal. Without these options, document targeting,
+default configuration and event flags retain their existing behavior.
+
+The exported types are `AutomationRoot` and `AutomationLocationProvider`; the same options
+are available in the ReScript `automationConfig` binding. This additive `feat` API is
+expected in the next minor release after 1.1.1; it has not been published by this change.
+
 ### 1. Action Commands
 
 Action commands are simple JSON objects that describe what to do:

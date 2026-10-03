@@ -4,7 +4,7 @@
 set -e
 
 # Fast, staged-only formatting & linting first
-npx lint-staged
+npx lint-staged --no-stash
 
 # Comprehensive local pre-commit gate:
 #   ESLint (strict), Prettier, tsc, gitleaks (if installed),

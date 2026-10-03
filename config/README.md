@@ -11,7 +11,7 @@ This directory contains configuration files for @juspay/kriya.
 
 ## Usage
 
-Configuration files are loaded based on the `NODE_ENV` environment variable. The config library (like [config](https://www.npmjs.com/package/config) or [dotenv](https://www.npmjs.com/package/dotenv)) will merge configuration files in the following order:
+Configuration files are loaded based on the `NODE_ENV` environment variable. The config library (like [config](https://github.com/node-config/node-config) or [dotenv](https://github.com/motdotla/dotenv)) will merge configuration files in the following order:
 
 1. default.json
 2. {NODE_ENV}.json (development.json, production.json, etc.)

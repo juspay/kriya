@@ -13,11 +13,15 @@ import type {
   ReactFiberNode,
 } from '@/types';
 
+import { DOMRoot } from '@/utils/DOMRoot';
+
 export class EnhancedFormDetector {
+  private readonly _dom: DOMRoot;
   private forms: Map<string, EnhancedDetectedForm> = new Map();
   private config: EnhancedFormDetectorConfig;
 
   constructor(config: EnhancedFormDetectorConfig = {}) {
+    this._dom = new DOMRoot(config);
     this.config = {
       autoDetect: true,
       includeDisabled: false,
@@ -108,7 +112,7 @@ export class EnhancedFormDetector {
     this._forceLog('🔍 Looking for React Final Form instances...');
 
     // Strategy 1: Look for standard HTML forms that might be React Final Forms
-    const htmlForms = document.querySelectorAll('form');
+    const htmlForms = this._dom.querySelectorAll('form');
 
     htmlForms.forEach((formElement, index) => {
       const reactInstance = this.getReactInstance(formElement);
@@ -136,7 +140,7 @@ export class EnhancedFormDetector {
     });
 
     // Strategy 2: Look for React Final Form containers without form tags (enhanced selectors)
-    const containers = document.querySelectorAll(
+    const containers = this._dom.querySelectorAll(
       '[data-react-final-form], .react-final-form, #generic-util-form, [id*="-form"], [id*="form-"]'
     );
     this._forceLog(`🔍 Found ${containers.length} potential React Final Form containers`);
@@ -177,7 +181,7 @@ export class EnhancedFormDetector {
 
     // Strategy 3: Search ALL elements for useForm() hooks (specific to user's pattern)
     this._forceLog('🔍 Searching ALL elements for useForm() hooks...');
-    const allElements = document.querySelectorAll('*');
+    const allElements = this._dom.querySelectorAll('*');
     let foundFormApis = 0;
 
     allElements.forEach((element, index) => {
@@ -192,7 +196,7 @@ export class EnhancedFormDetector {
           this._forceLog('🔍 useForm() API methods:', Object.keys(formApi));
 
           // Find the nearest form element or use this element
-          const formElement = element.closest('form') || (element as HTMLElement);
+          const formElement = this._dom.closest(element, 'form') || (element as HTMLElement);
           const formId = formElement.id || `react-final-form-usehook-${foundFormApis}`;
           const fields = this.detectFieldsInContainer(formElement, 'react-final-form');
 
@@ -296,7 +300,7 @@ export class EnhancedFormDetector {
     this._forceLog('🔍 Looking for Formik instances...');
 
     // Look for Formik containers
-    const formContainers = document.querySelectorAll('[data-formik], .formik-form');
+    const formContainers = this._dom.querySelectorAll('[data-formik], .formik-form');
 
     formContainers.forEach((container, index) => {
       const formElement = container as HTMLElement;
@@ -336,7 +340,7 @@ export class EnhancedFormDetector {
     const forms: EnhancedDetectedForm[] = [];
     this._forceLog('🔍 Looking for native HTML forms...');
 
-    const formElements = document.querySelectorAll('form');
+    const formElements = this._dom.querySelectorAll('form');
 
     this._forceLog(
       `📊 Total <form> elements: ${formElements.length}, Already detected: ${alreadyDetectedElements.size}`
@@ -469,7 +473,7 @@ export class EnhancedFormDetector {
   private createFormField(element: HTMLElement, formLibrary: string): EnhancedFormField | null {
     // Handle ReScript SelectBox components
     if (element.hasAttribute('data-value') && element.tagName === 'BUTTON') {
-      const container = element.closest('[data-component-field-wrapper]');
+      const container = this._dom.closest(element, '[data-component-field-wrapper]');
       if (container) {
         const name =
           container.getAttribute('data-component-field-wrapper') || element.id || 'unknown';
@@ -499,7 +503,7 @@ export class EnhancedFormDetector {
 
     // If no name, try to get from wrapper
     if (!name) {
-      const wrapper = element.closest('[data-component-field-wrapper]');
+      const wrapper = this._dom.closest(element, '[data-component-field-wrapper]');
       if (wrapper) {
         name = wrapper.getAttribute('data-component-field-wrapper') || '';
         name = name.replace(/^field-/, ''); // Remove field- prefix
@@ -534,7 +538,7 @@ export class EnhancedFormDetector {
 
     // Strategy 1: Label with for attribute
     if (input.id) {
-      const labelElement = document.querySelector(`label[for="${input.id}"]`);
+      const labelElement = this._dom.querySelector(`label[for="${input.id}"]`);
       if (labelElement) {
         label = labelElement.textContent?.trim();
       }
@@ -542,7 +546,7 @@ export class EnhancedFormDetector {
 
     // Strategy 2: Parent label
     if (!label) {
-      const parentLabel = input.closest('label');
+      const parentLabel = this._dom.closest(input, 'label');
       if (parentLabel) {
         label = parentLabel.textContent?.trim();
       }
@@ -550,7 +554,7 @@ export class EnhancedFormDetector {
 
     // Strategy 3: Sibling label
     if (!label) {
-      const siblingLabel = input.parentElement?.querySelector('label');
+      const siblingLabel = this._dom.parentElement(input)?.querySelector('label');
       if (siblingLabel) {
         label = siblingLabel.textContent?.trim();
       }
@@ -646,9 +650,9 @@ export class EnhancedFormDetector {
 
     // Strategy 2: Search for form API in the form container/parent elements
     const container =
-      element.closest('form') ||
-      element.closest('[data-react-final-form]') ||
-      element.closest('[id*="form"]');
+      this._dom.closest(element, 'form') ||
+      this._dom.closest(element, '[data-react-final-form]') ||
+      this._dom.closest(element, '[id*="form"]');
     if (container) {
       this._forceLog(`🔍 Searching for form API in container for field ${fieldName}`);
       const containerReactInstance = this.getReactInstance(container as HTMLElement);
@@ -711,14 +715,14 @@ export class EnhancedFormDetector {
     const allElements = [element];
 
     // Add parent elements
-    let parent = element.parentElement;
+    let parent = this._dom.parentElement(element);
     while (parent && allElements.length < 10) {
       allElements.push(parent);
-      parent = parent.parentElement;
+      parent = this._dom.parentElement(parent);
     }
 
     // Add sibling containers that might have form context
-    const containers = document.querySelectorAll('[id*="form"], [class*="form"], form');
+    const containers = this._dom.querySelectorAll('[id*="form"], [class*="form"], form');
     containers.forEach(container => {
       if (allElements.length < 20) {
         allElements.push(container as HTMLElement);
@@ -1104,7 +1108,8 @@ export class EnhancedFormDetector {
     this._forceLog(`🎯 Setting ReScript SelectBox to "${value}"`);
 
     const container =
-      button.closest('[data-component-field-wrapper]') || button.closest('[data-selectbox-value]');
+      this._dom.closest(button, '[data-component-field-wrapper]') ||
+      this._dom.closest(button, '[data-selectbox-value]');
 
     if (!container) {
       this._forceLog('❌ SelectBox container not found');
@@ -1125,14 +1130,14 @@ export class EnhancedFormDetector {
     setTimeout(() => {
       // Enhanced dropdown selectors for ReScript/Euler components
       const dropdown =
-        document.querySelector('[data-dropdown="dropdown"]') ||
+        this._dom.querySelector('[data-dropdown="dropdown"]') ||
         container.querySelector('[role="listbox"]') ||
-        document.querySelector('[class*="dropdown"][class*="open"]') ||
-        document.querySelector('[data-dropdown-container]') ||
-        document.querySelector('.dropdown-menu') ||
-        document.querySelector('[role="menu"]') ||
+        this._dom.querySelector('[class*="dropdown"][class*="open"]') ||
+        this._dom.querySelector('[data-dropdown-container]') ||
+        this._dom.querySelector('.dropdown-menu') ||
+        this._dom.querySelector('[role="menu"]') ||
         // Look for any recently added dropdown-like elements
-        Array.from(document.querySelectorAll('div')).find(div => {
+        Array.from(this._dom.querySelectorAll('div')).find(div => {
           const style = window.getComputedStyle(div);
           return (
             style.position === 'absolute' &&
@@ -1170,7 +1175,9 @@ export class EnhancedFormDetector {
           }
 
           // Trigger events
-          container.dispatchEvent(new Event('change', { bubbles: true }));
+          container.dispatchEvent(
+            new Event('change', { bubbles: true, ...this._dom.eventOptions })
+          );
           this._forceLog(`✅ SelectBox successfully set to "${selectedValue}"`);
         } else {
           this._forceLog(`❌ Option "${value}" not found in dropdown`);
@@ -1190,12 +1197,16 @@ export class EnhancedFormDetector {
     const events = ['input', 'change', 'blur'];
 
     events.forEach(eventType => {
-      const event = new Event(eventType, { bubbles: true, cancelable: true });
+      const event = new Event(eventType, {
+        bubbles: true,
+        cancelable: true,
+        ...this._dom.eventOptions,
+      });
       element.dispatchEvent(event);
     });
 
     // Also trigger React synthetic events
-    const reactEvent = new Event('input', { bubbles: true });
+    const reactEvent = new Event('input', { bubbles: true, ...this._dom.eventOptions });
     Object.defineProperty(reactEvent, 'target', { value: element });
     element.dispatchEvent(reactEvent);
   }

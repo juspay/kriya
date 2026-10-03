@@ -8,11 +8,15 @@ import type {
 } from '@/types';
 import { AutomationError } from '@/types';
 
+import { DOMRoot } from '@/utils/DOMRoot';
+
 export class DOMActions {
+  private readonly _dom: DOMRoot;
   private readonly _config: AutomationConfig;
   private _initialized: boolean;
 
   constructor(config: AutomationConfig) {
+    this._dom = new DOMRoot(config);
     this._config = config;
     this._initialized = false;
   }
@@ -29,13 +33,42 @@ export class DOMActions {
   }
 
   public initialize(): void {
+    this._dom.initialize();
     this._initialized = true;
   }
 
   public async navigate(options: NavigationOptions): Promise<void> {
     this._ensureInitialized();
 
-    if (typeof window === 'undefined' || !window.location) {
+    if (this._config.locationProvider) {
+      let navigationTimeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          Promise.resolve(this._config.locationProvider.navigate(options.url)),
+          new Promise<void>((_resolve, reject) => {
+            navigationTimeout = setTimeout(() => {
+              reject(
+                new AutomationError(
+                  `Navigation timeout after ${options.timeout ?? this._config.timeout}ms`,
+                  'EXECUTION_TIMEOUT'
+                )
+              );
+            }, options.timeout ?? this._config.timeout);
+          }),
+        ]);
+        return;
+      } catch (error) {
+        throw new AutomationError(
+          `Navigation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          'NETWORK_ERROR',
+          { url: options.url, originalError: error }
+        );
+      } finally {
+        clearTimeout(navigationTimeout);
+      }
+    }
+
+    if (!this._dom.canNavigate) {
       throw new AutomationError(
         'Navigation not supported in this environment',
         'BROWSER_NOT_SUPPORTED'
@@ -61,10 +94,10 @@ export class DOMActions {
           };
 
           window.addEventListener('load', handleLoad);
-          window.location.href = options.url;
+          this._dom.navigate(options.url);
         });
       } else {
-        window.location.href = options.url;
+        this._dom.navigate(options.url);
       }
     } catch (error) {
       throw new AutomationError(
@@ -153,7 +186,10 @@ export class DOMActions {
 
     // For fill, prioritize finding input elements
     const searchTarget = (options.selector || options.description || '').toString();
-    let element: HTMLElement | null = await this._findElementByText(searchTarget, true);
+    let element: HTMLElement | null =
+      this._config.root && options.selector
+        ? this._dom.querySelector<HTMLElement>(options.selector)
+        : await this._findElementByText(searchTarget, true);
 
     this.forcelog('[KRIYA DEBUG] Fill attempt - Found element:', element);
     this.forcelog(`[KRIYA DEBUG] Fill attempt - Element tag: ${element?.tagName}`);
@@ -174,12 +210,12 @@ export class DOMActions {
       const labelElement = element
         ? element.tagName.toLowerCase() === 'label'
           ? element
-          : element.closest('label')
+          : this._dom.closest(element, 'label')
         : null;
       if (labelElement) {
         const forAttr = labelElement.getAttribute('for');
         if (forAttr) {
-          const associatedInput = document.getElementById(forAttr) as HTMLElement;
+          const associatedInput = this._dom.getElementById(forAttr) as HTMLElement;
           if (associatedInput && this._isElementFillable(associatedInput)) {
             this.forcelog(
               // eslint-disable-next-line quotes
@@ -203,7 +239,11 @@ export class DOMActions {
       // Try to find sibling input element
       if (!element || !this._isElementFillable(element)) {
         const siblingInput = element?.nextElementSibling as HTMLElement;
-        if (siblingInput && this._isElementFillable(siblingInput)) {
+        if (
+          siblingInput &&
+          (!this._config.root || this._dom.contains(siblingInput)) &&
+          this._isElementFillable(siblingInput)
+        ) {
           this.forcelog('[KRIYA DEBUG] Found sibling input:', siblingInput);
           element = siblingInput;
         }
@@ -217,7 +257,7 @@ export class DOMActions {
       );
 
       // Look for input in parent elements (up to 3 levels)
-      let parent = element?.parentElement;
+      let parent = element ? this._dom.parentElement(element) : null;
       for (let i = 0; i < 3 && parent && element && !this._isElementFillable(element); i++) {
         const inputs = parent.querySelectorAll('input, textarea, select');
         for (const input of inputs) {
@@ -227,7 +267,7 @@ export class DOMActions {
             break;
           }
         }
-        parent = parent.parentElement;
+        parent = this._dom.parentElement(parent);
       }
     }
 
@@ -294,7 +334,7 @@ export class DOMActions {
     // Find the target element
     let element: HTMLElement | null = null;
     if (selector) {
-      element = document.querySelector(selector) as HTMLElement;
+      element = this._dom.querySelector(selector) as HTMLElement;
     } else if (description) {
       element = await this._findElementByText(description, true);
       if (!element) {
@@ -302,31 +342,31 @@ export class DOMActions {
       }
     }
 
-    // If no specific element, try document.activeElement — but only if it's a real input,
+    // If no specific element, try this._dom.activeElement — but only if it's a real input,
     // not body (which is the fallback after blur fires during fill)
     if (!element) {
-      const active = document.activeElement as HTMLElement;
-      if (active && active !== document.body && this._isElementFillable(active)) {
+      const active = this._dom.activeElement as HTMLElement;
+      if (active && active !== this._dom.container && this._isElementFillable(active)) {
         element = active;
       } else {
         // Last resort: find the most recently interacted visible input
         const inputs = Array.from(
-          document.querySelectorAll('input:not([type="hidden"]), textarea')
+          this._dom.querySelectorAll('input:not([type="hidden"]), textarea')
         ) as HTMLElement[];
         element =
           inputs.find(el => {
             const style = window.getComputedStyle(el);
             return style.display !== 'none' && style.visibility !== 'hidden';
-          }) || document.body;
+          }) || null;
       }
     }
 
-    const targetElement = element as HTMLElement;
+    const targetElement = element ?? this._dom.container;
 
     this.forcelog(`[KRIYA] Pressing key "${key}" on element:`, targetElement);
 
     // Focus the resolved element before dispatching key events
-    if (targetElement && targetElement.focus) {
+    if ('focus' in targetElement && typeof targetElement.focus === 'function') {
       targetElement.focus();
       await new Promise(resolve => setTimeout(resolve, 100));
     }
@@ -338,6 +378,7 @@ export class DOMActions {
       keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
       which: key === 'Enter' ? 13 : key.charCodeAt(0),
       bubbles: true,
+      ...this._dom.eventOptions,
       cancelable: true,
     });
 
@@ -347,6 +388,7 @@ export class DOMActions {
       keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
       which: key === 'Enter' ? 13 : key.charCodeAt(0),
       bubbles: true,
+      ...this._dom.eventOptions,
       cancelable: true,
     });
 
@@ -356,6 +398,7 @@ export class DOMActions {
       keyCode: key === 'Enter' ? 13 : key.charCodeAt(0),
       which: key === 'Enter' ? 13 : key.charCodeAt(0),
       bubbles: true,
+      ...this._dom.eventOptions,
       cancelable: true,
     });
 
@@ -367,6 +410,7 @@ export class DOMActions {
   }
 
   public dispose(): void {
+    this._dom.dispose();
     this._initialized = false;
   }
 
@@ -381,7 +425,7 @@ export class DOMActions {
 
   private async _findElement(selector?: string, description?: string): Promise<HTMLElement> {
     if (selector) {
-      const element = document.querySelector(selector) as HTMLElement;
+      const element = this._dom.querySelector(selector) as HTMLElement;
       if (element) {
         return element;
       }
@@ -402,7 +446,7 @@ export class DOMActions {
 
   private _findElementByDescription(description: string): HTMLElement | null {
     const lowerDescription = description.toLowerCase();
-    const elements = Array.from(document.querySelectorAll('*')) as HTMLElement[];
+    const elements = Array.from(this._dom.querySelectorAll('*')) as HTMLElement[];
 
     const scores = elements.map(element => ({
       element,
@@ -436,7 +480,7 @@ export class DOMActions {
 
       // Look for elements with YouTube in href
       const youtubeLinks = Array.from(
-        document.querySelectorAll('a[href*="youtube"]')
+        this._dom.querySelectorAll('a[href*="youtube"]')
       ) as HTMLElement[];
       this.forcelog(`[KRIYA DEBUG] Found ${youtubeLinks.length} elements with YouTube in href:`);
       youtubeLinks.forEach((link, index) => {
@@ -449,7 +493,7 @@ export class DOMActions {
 
       // Look for elements with data-design-system
       const designSystemElements = Array.from(
-        document.querySelectorAll('[data-design-system]')
+        this._dom.querySelectorAll('[data-design-system]')
       ) as HTMLElement[];
       this.forcelog(
         `[KRIYA DEBUG] Found ${designSystemElements.length} elements with data-design-system:`
@@ -562,7 +606,7 @@ export class DOMActions {
 
   private _findClickableParent(element: HTMLElement): HTMLElement | null {
     // Look for clickable parent elements up the DOM tree (up to 5 levels)
-    let current = element.parentElement;
+    let current = this._dom.parentElement(element);
     let depth = 0;
     const maxDepth = 5;
 
@@ -588,7 +632,7 @@ export class DOMActions {
         return current;
       }
 
-      current = current.parentElement;
+      current = this._dom.parentElement(current);
       depth++;
     }
 
@@ -944,13 +988,13 @@ export class DOMActions {
     }
 
     // Check if element is within a SelectBox component
-    if (element.closest('[data-selectbox-value]')) {
+    if (this._dom.closest(element, '[data-selectbox-value]')) {
       return true;
     }
 
     // Check if element is a button within a form field wrapper (could be a custom select)
-    if (tagName === 'button' && element.closest('[data-component-field-wrapper]')) {
-      const fieldWrapper = element.closest('[data-component-field-wrapper]');
+    if (tagName === 'button' && this._dom.closest(element, '[data-component-field-wrapper]')) {
+      const fieldWrapper = this._dom.closest(element, '[data-component-field-wrapper]');
       // If the field wrapper contains selectbox indicators, this button is fillable
       if (fieldWrapper?.querySelector('[data-selectbox-value]')) {
         return true;
@@ -974,10 +1018,23 @@ export class DOMActions {
     // Method 1: Try synthetic events first
     const eventOptions = {
       bubbles: true,
+      ...this._dom.eventOptions,
       cancelable: true,
       button: button === 'left' ? 0 : button === 'right' ? 2 : 1,
       detail: clickCount,
     };
+
+    if (this._config.root || this._config.locationProvider) {
+      this._withResolvedLink(element, () => {
+        for (let i = 0; i < clickCount; i++) {
+          element.dispatchEvent(new MouseEvent('mousedown', eventOptions));
+          element.dispatchEvent(new MouseEvent('mouseup', eventOptions));
+          element.dispatchEvent(new MouseEvent('click', eventOptions));
+        }
+      });
+      element.focus();
+      return;
+    }
 
     let clickHandled = false;
 
@@ -1013,7 +1070,10 @@ export class DOMActions {
       if (href && target === '_blank') {
         this.forcelog('[KRIYA DEBUG] _blank target detected, attempting window.open');
         try {
-          const newWindow = window.open(href, '_blank');
+          const newWindow = window.open(
+            this._config.locationProvider ? this._dom.resolveUrl(href) : href,
+            '_blank'
+          );
           if (newWindow && !newWindow.closed) {
             this.forcelog('[KRIYA DEBUG] window.open succeeded');
             element.focus();
@@ -1047,7 +1107,7 @@ export class DOMActions {
         // For relative URLs, use the full URL we constructed earlier
         let targetUrl = href;
         if (href.startsWith('/') || href.startsWith('./')) {
-          targetUrl = new URL(href, window.location.origin).href;
+          targetUrl = this._dom.resolveUrl(href);
           this.forcelog(`[KRIYA DEBUG] Using full URL for enhanced techniques: ${targetUrl}`);
         }
         this.forcelog(`[KRIYA DEBUG] Attempting enhanced navigation techniques for: ${targetUrl}`);
@@ -1058,13 +1118,13 @@ export class DOMActions {
         if (target === '_blank' && !openedViaBlank) {
           this.forcelog('[KRIYA DEBUG] Method 3a: Creating temporary link for _blank target');
           try {
-            const tempLink = document.createElement('a');
+            const tempLink = this._dom.createElement('a');
             tempLink.href = targetUrl;
             tempLink.target = '_blank';
             tempLink.style.display = 'none';
             tempLink.style.position = 'absolute';
             tempLink.style.left = '-9999px';
-            document.body.appendChild(tempLink);
+            this._dom.container.appendChild(tempLink);
 
             // Try clicking the temporary link
             tempLink.click();
@@ -1072,7 +1132,7 @@ export class DOMActions {
 
             // Clean up
             setTimeout(() => {
-              document.body.removeChild(tempLink);
+              this._dom.container.removeChild(tempLink);
               this.forcelog('[KRIYA DEBUG] Temporary link cleaned up');
             }, 100);
           } catch (error) {
@@ -1096,6 +1156,7 @@ export class DOMActions {
             keyCode: 13,
             which: 13,
             bubbles: true,
+            ...this._dom.eventOptions,
             cancelable: true,
           });
 
@@ -1107,7 +1168,7 @@ export class DOMActions {
 
         // Method 3c: Enhanced direct navigation with user gesture simulation
         setTimeout(() => {
-          const currentLocation = window.location.href;
+          const currentLocation = this._dom.href;
           this.forcelog(
             `[KRIYA DEBUG] Current location after enhanced methods: ${currentLocation}`
           );
@@ -1121,7 +1182,7 @@ export class DOMActions {
               this._openInNewWindowWithFallbacks(targetUrl, currentLocation);
             } catch (error) {
               this.forcelog('[KRIYA DEBUG] Enhanced direct navigation failed:', error);
-              this._showNavigationAssistance(href);
+              this._showNavigationAssistance(targetUrl);
             }
           } else if (target === '_blank' && openedViaBlank) {
             this.forcelog(
@@ -1149,6 +1210,7 @@ export class DOMActions {
     const rect = element.getBoundingClientRect();
     const eventOptions = {
       bubbles: true,
+      ...this._dom.eventOptions,
       cancelable: true,
       button: button === 'left' ? 0 : button === 'right' ? 2 : 1,
       detail: clickCount,
@@ -1156,10 +1218,31 @@ export class DOMActions {
       clientY: rect.top + position.y,
     };
 
-    for (let i = 0; i < clickCount; i++) {
-      element.dispatchEvent(new MouseEvent('mousedown', eventOptions));
-      element.dispatchEvent(new MouseEvent('mouseup', eventOptions));
-      element.dispatchEvent(new MouseEvent('click', eventOptions));
+    this._withResolvedLink(element, () => {
+      for (let i = 0; i < clickCount; i++) {
+        element.dispatchEvent(new MouseEvent('mousedown', eventOptions));
+        element.dispatchEvent(new MouseEvent('mouseup', eventOptions));
+        element.dispatchEvent(new MouseEvent('click', eventOptions));
+      }
+    });
+  }
+
+  private _withResolvedLink(element: HTMLElement, dispatch: () => void): void {
+    const href =
+      this._config.locationProvider && element.tagName.toLowerCase() === 'a'
+        ? element.getAttribute('href')
+        : null;
+    const resolvedHref = href !== null ? this._dom.resolveUrl(href) : null;
+    if (resolvedHref) {
+      element.setAttribute('href', resolvedHref);
+    }
+    try {
+      // Native anchor activation reads href during dispatch; resolve it before handlers/default action.
+      dispatch();
+    } finally {
+      if (href !== null && resolvedHref && element.getAttribute('href') === resolvedHref) {
+        element.setAttribute('href', href);
+      }
     }
   }
 
@@ -1170,8 +1253,8 @@ export class DOMActions {
       element.value = '';
     }
 
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true }));
+    element.dispatchEvent(new Event('input', { bubbles: true, ...this._dom.eventOptions }));
+    element.dispatchEvent(new Event('change', { bubbles: true, ...this._dom.eventOptions }));
   }
 
   private _fillElement(
@@ -1180,7 +1263,10 @@ export class DOMActions {
     triggerEvents: boolean
   ): void {
     // Handle ReScript SelectBox components (custom dropdowns)
-    if (this._detectSelectBoxComponent(element) || element.closest('[data-selectbox-value]')) {
+    if (
+      this._detectSelectBoxComponent(element) ||
+      this._dom.closest(element, '[data-selectbox-value]')
+    ) {
       this._fillReScriptSelectBox(element, value);
       return;
     }
@@ -1216,15 +1302,15 @@ export class DOMActions {
     }
 
     if (triggerEvents) {
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
+      element.dispatchEvent(new Event('input', { bubbles: true, ...this._dom.eventOptions }));
+      element.dispatchEvent(new Event('change', { bubbles: true, ...this._dom.eventOptions }));
     }
   }
 
   private _fillReScriptSelectBox(element: HTMLElement, value: string): void {
     // Find the SelectBox container and button
     const selectBoxContainer =
-      element.closest('[data-selectbox-value]') ||
+      this._dom.closest(element, '[data-selectbox-value]') ||
       (element.hasAttribute('data-selectbox-value') ? element : null);
 
     if (!selectBoxContainer) {
@@ -1247,10 +1333,10 @@ export class DOMActions {
     setTimeout(() => {
       // Look for the dropdown options
       const dropdown =
-        document.querySelector('[data-dropdown="dropdown"]') ||
+        this._dom.querySelector('[data-dropdown="dropdown"]') ||
         selectBoxContainer.querySelector('[role="listbox"]') ||
-        document.querySelector('[class*="dropdown"][class*="open"]') ||
-        document.querySelector('[class*="options"]');
+        this._dom.querySelector('[class*="dropdown"][class*="open"]') ||
+        this._dom.querySelector('[class*="options"]');
 
       if (!dropdown) {
         throw new AutomationError(
@@ -1322,11 +1408,14 @@ export class DOMActions {
       }
 
       // Trigger change events on the SelectBox container for React/form libraries
-      selectBoxContainer.dispatchEvent(new Event('change', { bubbles: true }));
+      selectBoxContainer.dispatchEvent(
+        new Event('change', { bubbles: true, ...this._dom.eventOptions })
+      );
       selectBoxContainer.dispatchEvent(
         new CustomEvent('select', {
           detail: { value: selectedValue },
           bubbles: true,
+          ...this._dom.eventOptions,
         })
       );
     }, 100); // Small delay to ensure dropdown is rendered
@@ -1344,7 +1433,7 @@ export class DOMActions {
       let element: HTMLElement | null = null;
 
       // First try as CSS selector
-      element = document.querySelector(selector) as HTMLElement;
+      element = this._dom.querySelector(selector) as HTMLElement;
 
       // If not found by CSS selector, try text-based search (like _findElement does)
       if (!element) {
@@ -1378,7 +1467,7 @@ export class DOMActions {
     // For fill operations, prioritize finding the actual input, not the label
     if (preferInput) {
       // First, find all input/textarea/select elements
-      const inputs = document.querySelectorAll('input, textarea, select');
+      const inputs = this._dom.querySelectorAll('input, textarea, select');
       for (const input of inputs) {
         const el = input as HTMLElement;
         // Check if input has matching attributes
@@ -1398,14 +1487,14 @@ export class DOMActions {
       }
 
       // Try to find label with matching text, then get associated input
-      const labels = document.querySelectorAll('label');
+      const labels = this._dom.querySelectorAll('label');
       for (const label of labels) {
         const labelText = (label.textContent || '').toLowerCase().trim();
         if (labelText.includes(searchText)) {
           // Try to find associated input
           const forAttr = label.getAttribute('for');
           if (forAttr) {
-            const inputById = document.getElementById(forAttr) as HTMLInputElement;
+            const inputById = this._dom.getElementById(forAttr) as HTMLInputElement;
             if (inputById && this._isElementFillable(inputById)) {
               this.forcelog(
                 '[KRIYA DEBUG] _findElementByText found input via label for:',
@@ -1427,12 +1516,12 @@ export class DOMActions {
       }
 
       // Look for input in same container as matching label
-      const allLabels = document.querySelectorAll('label, span, div');
+      const allLabels = this._dom.querySelectorAll('label, span, div');
       for (const el of allLabels) {
         const elText = (el.textContent || '').toLowerCase().trim();
         if (elText.includes(searchText)) {
           // Look for sibling or parent input
-          let parent = el.parentElement;
+          let parent = this._dom.parentElement(el);
           for (let i = 0; i < 3; i++) {
             if (!parent) {
               break;
@@ -1445,7 +1534,7 @@ export class DOMActions {
               );
               return nearbyInput;
             }
-            parent = parent.parentElement;
+            parent = this._dom.parentElement(parent);
           }
         }
       }
@@ -1468,7 +1557,7 @@ export class DOMActions {
     // Try exact match first
     for (const sel of selectors) {
       try {
-        const el = document.querySelector(sel) as HTMLElement;
+        const el = this._dom.querySelector(sel) as HTMLElement;
         if (el && this._isElementClickable(el)) {
           this.forcelog(`[KRIYA DEBUG] _findElementByText found via ${sel}:`, el);
           return el;
@@ -1480,7 +1569,7 @@ export class DOMActions {
 
     // Fallback: walk the DOM looking for matching text - but prioritize INPUT first
     // First pass: find matching INPUT elements
-    const inputElements = document.querySelectorAll('input, textarea, select');
+    const inputElements = this._dom.querySelectorAll('input, textarea, select');
     for (const input of inputElements) {
       const el = input as HTMLElement;
       if (
@@ -1495,9 +1584,10 @@ export class DOMActions {
     }
 
     // Second pass: find non-link elements with matching text
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, null);
+    const walker = this._dom.createTreeWalker();
 
-    let node: Node | null = walker.nextNode();
+    let node: Node | null =
+      this._config.root?.nodeType === Node.ELEMENT_NODE ? walker.currentNode : walker.nextNode();
     while (node) {
       if (node.nodeType === Node.ELEMENT_NODE) {
         const el = node as HTMLElement;
@@ -1571,7 +1661,7 @@ export class DOMActions {
     if (element.hasAttribute('data-selectbox-value')) {
       return true;
     }
-    if (element.closest('[data-selectbox-value]')) {
+    if (this._dom.closest(element, '[data-selectbox-value]')) {
       return true;
     }
 
@@ -1580,7 +1670,10 @@ export class DOMActions {
       if (element.hasAttribute('data-value') && element.querySelector('[data-button-text]')) {
         return true;
       }
-      if (element.hasAttribute('data-value') && element.closest('[data-selectbox-value]')) {
+      if (
+        element.hasAttribute('data-value') &&
+        this._dom.closest(element, '[data-selectbox-value]')
+      ) {
         return true;
       }
     }
@@ -1608,7 +1701,7 @@ export class DOMActions {
     }
 
     // Check if parent container has SelectBox patterns
-    const parent = element.parentElement;
+    const parent = this._dom.parentElement(element);
     if (parent) {
       const parentClass = String(parent.className || '').toLowerCase();
       if (parentClass.includes('selectbox') || parentClass.includes('select-box')) {
@@ -1637,7 +1730,7 @@ export class DOMActions {
     if (element.hasAttribute('data-component-field-wrapper')) {
       return true;
     }
-    if (element.closest('[data-component-field-wrapper]')) {
+    if (this._dom.closest(element, '[data-component-field-wrapper]')) {
       return true;
     }
     if (element.hasAttribute('data-form-label')) {
@@ -1656,7 +1749,7 @@ export class DOMActions {
     }
 
     // Check parent elements for FormRenderer patterns
-    let current = element.parentElement;
+    let current = this._dom.parentElement(element);
     let depth = 0;
     while (current && depth < 5) {
       // Check up to 5 levels up
@@ -1668,7 +1761,7 @@ export class DOMActions {
         return true;
       }
 
-      current = current.parentElement;
+      current = this._dom.parentElement(current);
       depth++;
     }
 
@@ -1704,7 +1797,7 @@ export class DOMActions {
     }
 
     // Look for selectbox value in parents
-    const selectboxContainer = element.closest('[data-selectbox-value]');
+    const selectboxContainer = this._dom.closest(element, '[data-selectbox-value]');
     if (selectboxContainer) {
       text = selectboxContainer.getAttribute('data-selectbox-value') || '';
       if (text) {
@@ -1752,7 +1845,7 @@ export class DOMActions {
     }
 
     // Look for field wrapper in parents
-    const fieldWrapper = element.closest('[data-component-field-wrapper]');
+    const fieldWrapper = this._dom.closest(element, '[data-component-field-wrapper]');
     if (fieldWrapper) {
       name = fieldWrapper.getAttribute('data-component-field-wrapper') || '';
       if (name) {
@@ -1769,7 +1862,9 @@ export class DOMActions {
     // Look for form label in the field
     const labelElement =
       element.querySelector('[data-form-label]') ||
-      element.closest('[data-component-field-wrapper]')?.querySelector('[data-form-label]');
+      this._dom
+        .closest(element, '[data-component-field-wrapper]')
+        ?.querySelector('[data-form-label]');
     if (labelElement) {
       name = labelElement.getAttribute('data-form-label') || labelElement.textContent?.trim() || '';
       if (name) {
@@ -1799,7 +1894,7 @@ export class DOMActions {
     }
 
     // Check parent elements for name attributes
-    let current = element.parentElement;
+    let current = this._dom.parentElement(element);
     let depth = 0;
     while (current && depth < 3) {
       // Check up to 3 levels up
@@ -1808,7 +1903,7 @@ export class DOMActions {
         return name.toLowerCase();
       }
 
-      current = current.parentElement;
+      current = this._dom.parentElement(current);
       depth++;
     }
 
@@ -1835,10 +1930,11 @@ export class DOMActions {
 
     const userGestureEvent = new MouseEvent('click', {
       bubbles: true,
+      ...this._dom.eventOptions,
       cancelable: true,
       view: window,
     });
-    document.dispatchEvent(userGestureEvent);
+    this._dom.root.dispatchEvent(userGestureEvent);
 
     // Method 3c1a..c: window.open variants.
     const variants: Array<string | undefined> = [
@@ -1873,20 +1969,20 @@ export class DOMActions {
     // Method 3c3: hidden form submission.
     try {
       this.forcelog('[KRIYA DEBUG] Method 3c3: Creating form submission');
-      const form = document.createElement('form');
+      const form = this._dom.createElement('form');
       form.action = targetUrl;
       form.target = '_blank';
       form.method = 'GET';
       form.style.display = 'none';
-      document.body.appendChild(form);
+      this._dom.container.appendChild(form);
       form.submit();
 
       setTimeout(() => {
-        document.body.removeChild(form);
+        this._dom.container.removeChild(form);
       }, 100);
 
       setTimeout(() => {
-        if (window.location.href === currentLocation) {
+        if (this._dom.href === currentLocation) {
           this.forcelog('[KRIYA DEBUG] Form submission also failed - trying final fallback');
           this._showNavigationAssistance(targetUrl);
         } else {
@@ -1907,7 +2003,7 @@ export class DOMActions {
 
     try {
       // Create a prominent notification overlay
-      const notification = document.createElement('div');
+      const notification = this._dom.createElement('div');
       notification.id = 'kriya-navigation-assist';
       notification.style.cssText = `
         position: fixed;
@@ -1929,8 +2025,8 @@ export class DOMActions {
       `;
 
       // Add CSS animation
-      if (!document.getElementById('kriya-styles')) {
-        const style = document.createElement('style');
+      if (!this._dom.getElementById('kriya-styles')) {
+        const style = this._dom.createElement('style');
         style.id = 'kriya-styles';
         style.textContent = `
           @keyframes kriyaSlideIn {
@@ -1942,7 +2038,7 @@ export class DOMActions {
             to { transform: translateX(100%); opacity: 0; }
           }
         `;
-        document.head.appendChild(style);
+        this._dom.styleContainer.appendChild(style);
       }
 
       notification.innerHTML = `
@@ -2050,19 +2146,19 @@ export class DOMActions {
 
       // Auto-dismiss after 10 seconds
       setTimeout(() => {
-        if (document.body.contains(notification)) {
+        if (this._dom.container.contains(notification)) {
           this._dismissNotification(notification);
         }
       }, 10000);
 
       // Remove any existing notifications
-      const existing = document.getElementById('kriya-navigation-assist');
+      const existing = this._dom.getElementById('kriya-navigation-assist');
       if (existing) {
         existing.remove();
       }
 
       // Add to page
-      document.body.appendChild(notification);
+      this._dom.container.appendChild(notification);
 
       // Automatically copy the link
       setTimeout(() => {
@@ -2091,17 +2187,17 @@ export class DOMActions {
   private _fallbackCopyToClipboard(text: string, button: HTMLButtonElement): void {
     try {
       // Create a temporary textarea element
-      const textArea = document.createElement('textarea');
+      const textArea = this._dom.createElement('textarea');
       textArea.value = text;
       textArea.style.position = 'fixed';
       textArea.style.left = '-999999px';
       textArea.style.top = '-999999px';
-      document.body.appendChild(textArea);
+      this._dom.container.appendChild(textArea);
       textArea.focus();
       textArea.select();
 
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
+      const successful = this._dom.document.execCommand('copy');
+      this._dom.container.removeChild(textArea);
 
       if (successful) {
         button.innerHTML = '✅ Copied!';

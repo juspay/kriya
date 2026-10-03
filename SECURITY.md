@@ -22,7 +22,7 @@ We take the security of @juspay/kriya seriously. If you discover a security vuln
 
 Please report security vulnerabilities by emailing us at:
 
-**opensource@juspay.in**
+**<opensource@juspay.in>**
 
 ### What to Include in Your Report
 
@@ -95,11 +95,11 @@ Stay informed about security updates:
 
 Security advisories for @juspay/kriya are published at:
 
-https://github.com/juspay/kriya/security/advisories
+<https://github.com/juspay/kriya/security/advisories>
 
 You can also view known vulnerabilities at:
 
-https://github.com/juspay/kriya/security
+<https://github.com/juspay/kriya/security>
 
 ## Bug Bounty Program
 
@@ -109,13 +109,13 @@ At this time, @juspay/kriya does not offer a paid bug bounty program. However, w
 - Provide credit in release notes for responsibly disclosed vulnerabilities
 - Consider adding you to our security hall of fame
 
-If you are interested in participating in security research for @juspay/kriya, please reach out to us at opensource@juspay.in.
+If you are interested in participating in security research for @juspay/kriya, please reach out to us at <opensource@juspay.in>.
 
 ## Contact
 
 For any security-related questions or concerns, please contact:
 
-**Email**: opensource@juspay.in
+**Email**: <opensource@juspay.in>
 
 For non-security related issues, please use the standard GitHub issue tracker.
 

@@ -33,7 +33,7 @@ Please select the type of documentation issue:
 
 Paste the relevant section or provide a quote:
 
-```
+```text
 Current documentation text here
 ```
 

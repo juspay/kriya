@@ -30,7 +30,10 @@ type ReactFinalFormHandle = {
   [key: string]: unknown;
 };
 
+import { DOMRoot } from '@/utils/DOMRoot';
+
 export class FormRegistry {
+  private readonly _dom: DOMRoot;
   private readonly _config: AutomationConfig;
   private readonly _formConfig: FormRegistryConfig;
   private readonly _forms: Map<string, FormAPI>;
@@ -40,6 +43,7 @@ export class FormRegistry {
   public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
 
   constructor(config: AutomationConfig) {
+    this._dom = new DOMRoot(config);
     this._config = config;
     this._formConfig = { ...DEFAULT_FORM_REGISTRY_CONFIG };
     this._forms = new Map();
@@ -63,6 +67,7 @@ export class FormRegistry {
       throw new AutomationError('FormRegistry is already initialized', 'INVALID_CONFIGURATION');
     }
 
+    this._dom.initialize();
     this._formLibrary = formLibrary ?? null;
     this._initialized = true;
 
@@ -73,6 +78,12 @@ export class FormRegistry {
 
   public registerForm(formId: string, formElement: HTMLFormElement): void {
     this._ensureInitialized();
+
+    if (this._config.root && !this._dom.contains(formElement)) {
+      throw new AutomationError('Form is outside the configured root', 'FORM_NOT_FOUND', {
+        formId,
+      });
+    }
 
     if (this._forms.has(formId)) {
       throw new AutomationError(
@@ -273,6 +284,7 @@ export class FormRegistry {
   }
 
   public dispose(): void {
+    this._dom.dispose();
     this._forms.clear();
     this._formElements.clear();
     this._formLibrary = null;
@@ -291,7 +303,7 @@ export class FormRegistry {
 
   private _detectAndRegisterForms(): void {
     this._forceLog('🔍 Starting form detection...');
-    const forms = document.querySelectorAll('form');
+    const forms = this._dom.querySelectorAll('form');
     this._forceLog(`📋 Found ${forms.length} <form> elements on page`);
 
     let successCount = 0;
@@ -753,13 +765,13 @@ export class FormRegistry {
   private _getFieldLabel(element: HTMLElement): string | undefined {
     const id = element.id;
     if (id) {
-      const label = document.querySelector(`label[for="${id}"]`);
+      const label = this._dom.querySelector(`label[for="${id}"]`);
       if (label) {
         return label.textContent?.trim() || undefined;
       }
     }
 
-    const parentLabel = element.closest('label');
+    const parentLabel = this._dom.closest(element, 'label');
     if (parentLabel) {
       return parentLabel.textContent?.trim() || undefined;
     }
@@ -809,7 +821,7 @@ export class FormRegistry {
     }
 
     // Strategy 4: Search globally for field wrappers (exact and with prefix)
-    const allWrappers = document.querySelectorAll('[data-component-field-wrapper]');
+    const allWrappers = this._dom.querySelectorAll('[data-component-field-wrapper]');
     for (const wrapper of allWrappers) {
       const wrapperName = wrapper.getAttribute('data-component-field-wrapper');
       if (wrapperName === fieldName || wrapperName === fieldWithPrefix) {
@@ -832,7 +844,7 @@ export class FormRegistry {
     }
 
     // Strategy 6: Global search by name (in case field is outside detected form)
-    element = document.querySelector(`[name="${fieldName}"]`) as HTMLElement;
+    element = this._dom.querySelector(`[name="${fieldName}"]`) as HTMLElement;
     if (element) {
       this._forceLog(`✅ Found field "${fieldName}" globally by name`);
       return element;
@@ -845,7 +857,8 @@ export class FormRegistry {
   private _fillElementAdvanced(element: HTMLElement, value: string): void {
     // Detect if this is a ReScript SelectBox component
     const isSelectBox =
-      this._detectSelectBoxComponent(element) || element.closest('[data-selectbox-value]') !== null;
+      this._detectSelectBoxComponent(element) ||
+      this._dom.closest(element, '[data-selectbox-value]') !== null;
 
     if (isSelectBox) {
       this._fillReScriptSelectBox(element, value);
@@ -856,8 +869,8 @@ export class FormRegistry {
     const tagName = element.tagName.toLowerCase();
     if (tagName === 'input' || tagName === 'textarea') {
       (element as HTMLInputElement).value = value;
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
+      element.dispatchEvent(new Event('input', { bubbles: true, ...this._dom.eventOptions }));
+      element.dispatchEvent(new Event('change', { bubbles: true, ...this._dom.eventOptions }));
     } else if (tagName === 'select') {
       const selectElement = element as HTMLSelectElement;
       const option = Array.from(selectElement.options).find(
@@ -866,7 +879,7 @@ export class FormRegistry {
 
       if (option) {
         selectElement.selectedIndex = option.index;
-        element.dispatchEvent(new Event('change', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true, ...this._dom.eventOptions }));
       }
     }
   }
@@ -876,7 +889,7 @@ export class FormRegistry {
     if (element.hasAttribute('data-selectbox-value')) {
       return true;
     }
-    if (element.closest('[data-selectbox-value]')) {
+    if (this._dom.closest(element, '[data-selectbox-value]')) {
       return true;
     }
 
@@ -885,7 +898,10 @@ export class FormRegistry {
       if (element.hasAttribute('data-value') && element.querySelector('[data-button-text]')) {
         return true;
       }
-      if (element.hasAttribute('data-value') && element.closest('[data-selectbox-value]')) {
+      if (
+        element.hasAttribute('data-value') &&
+        this._dom.closest(element, '[data-selectbox-value]')
+      ) {
         return true;
       }
     }
@@ -898,7 +914,7 @@ export class FormRegistry {
 
     // Find the SelectBox container and button
     const selectBoxContainer =
-      element.closest('[data-selectbox-value]') ||
+      this._dom.closest(element, '[data-selectbox-value]') ||
       (element.hasAttribute('data-selectbox-value') ? element : null);
 
     if (!selectBoxContainer) {
@@ -935,10 +951,10 @@ export class FormRegistry {
 
       // Look for the dropdown options
       const dropdown =
-        document.querySelector('[data-dropdown="dropdown"]') ||
+        this._dom.querySelector('[data-dropdown="dropdown"]') ||
         selectBoxContainer.querySelector('[role="listbox"]') ||
-        document.querySelector('[class*="dropdown"][class*="open"]') ||
-        document.querySelector('[class*="options"]');
+        this._dom.querySelector('[class*="dropdown"][class*="open"]') ||
+        this._dom.querySelector('[class*="options"]');
 
       if (!dropdown) {
         this._forceLog('❌ Dropdown not found after opening');
@@ -1032,11 +1048,14 @@ export class FormRegistry {
 
         // Trigger change events
         this._forceLog('📢 Triggering change events');
-        selectBoxContainer.dispatchEvent(new Event('change', { bubbles: true }));
+        selectBoxContainer.dispatchEvent(
+          new Event('change', { bubbles: true, ...this._dom.eventOptions })
+        );
         selectBoxContainer.dispatchEvent(
           new CustomEvent('select', {
             detail: { value: selectedValue },
             bubbles: true,
+            ...this._dom.eventOptions,
           })
         );
 
@@ -1102,8 +1121,8 @@ export class FormRegistry {
           element.tagName.toLowerCase() === 'select'
         ) {
           (element as HTMLInputElement).value = String(value);
-          element.dispatchEvent(new Event('input', { bubbles: true }));
-          element.dispatchEvent(new Event('change', { bubbles: true }));
+          element.dispatchEvent(new Event('input', { bubbles: true, ...this._dom.eventOptions }));
+          element.dispatchEvent(new Event('change', { bubbles: true, ...this._dom.eventOptions }));
         }
       }
     } else {
@@ -1113,6 +1132,29 @@ export class FormRegistry {
 
   private async _submitFormDirectly(formElement: HTMLFormElement): Promise<void> {
     this._forceLog('📤 Direct form submission via DOM');
+    if (this._config.root) {
+      const submittedEvents: Event[] = [];
+      const handleSubmit = (event: Event): void => {
+        submittedEvents.push(event);
+      };
+      const submitButton = formElement.querySelector<HTMLButtonElement | HTMLInputElement>(
+        'input[type="submit"]:not(:disabled), button[type="submit"]:not(:disabled), button:not([type]):not(:disabled)'
+      );
+      formElement.addEventListener('submit', handleSubmit);
+      try {
+        formElement.requestSubmit(submitButton ?? undefined);
+      } finally {
+        formElement.removeEventListener('submit', handleSubmit);
+      }
+      const submittedEvent = submittedEvents[0];
+      if (!submittedEvent) {
+        throw new AutomationError('Form validation prevented submission', 'VALIDATION_FAILED');
+      }
+      if (submittedEvent.defaultPrevented) {
+        throw new Error('Form submission was prevented');
+      }
+      return;
+    }
     return new Promise<void>((resolve, reject) => {
       const handleSubmit = (event: Event): void => {
         formElement.removeEventListener('submit', handleSubmit);
@@ -1162,7 +1204,7 @@ export class FormRegistry {
 
   // Debugging methods to help diagnose form detection issues
   private _logPageFormInfo(): void {
-    const allForms = document.querySelectorAll('form');
+    const allForms = this._dom.querySelectorAll('form');
     this._forceLog(`📋 Page Analysis: Found ${allForms.length} <form> elements on page`);
 
     allForms.forEach((form, index) => {
@@ -1467,6 +1509,7 @@ export class FormRegistry {
       this._forceLog('🔬 Initializing Enhanced Form Detector...');
       const enhancedDetector = new EnhancedFormDetector({
         autoDetect: true,
+        root: this._config.root,
         debugMode: true,
         includeDisabled: false,
       });

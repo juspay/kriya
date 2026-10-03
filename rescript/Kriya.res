@@ -78,6 +78,19 @@ type executionResult = {
 // ---------------------------------------------------------------------------
 
 // All fields optional — passed as Partial<AutomationConfig> to the factory.
+// Structural DOM handles accept Document, ShadowRoot or Element values from JS.
+type automationRoot
+
+external rootFromDocument: Dom.document => automationRoot = "%identity"
+external rootFromShadowRoot: Dom.shadowRoot => automationRoot = "%identity"
+external rootFromElement: Dom.element => automationRoot = "%identity"
+
+type automationLocationProvider = {
+  getHref: unit => string,
+  getTitle?: unit => string,
+  navigate: string => promise<unit>,
+}
+
 type automationConfig = {
   timeout?: int,
   retryAttempts?: int,
@@ -85,6 +98,8 @@ type automationConfig = {
   debugMode?: bool,
   formDetectionEnabled?: bool,
   contextCaptureEnabled?: bool,
+  root?: automationRoot,
+  locationProvider?: automationLocationProvider,
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +322,8 @@ let createEngine = (
   ~debugMode: option<bool>=?,
   ~formDetectionEnabled: option<bool>=?,
   ~contextCaptureEnabled: option<bool>=?,
+  ~root: option<automationRoot>=?,
+  ~locationProvider: option<automationLocationProvider>=?,
 ): engine => {
   let config: automationConfig = {
     ?timeout,
@@ -315,6 +332,8 @@ let createEngine = (
     ?debugMode,
     ?formDetectionEnabled,
     ?contextCaptureEnabled,
+    ?root,
+    ?locationProvider,
   }
   createAutomationEngine(config)
 }

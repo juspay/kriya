@@ -3,6 +3,14 @@ import type { PageContext, ScreenshotOptions } from './context';
 import type { EventCallback, EventType } from './events';
 import type { FormLibrary } from './forms';
 
+export type AutomationRoot = Document | ShadowRoot | Element;
+
+export type AutomationLocationProvider = {
+  readonly getHref: () => string;
+  readonly getTitle?: () => string;
+  readonly navigate: (url: string) => void | Promise<void>;
+};
+
 export type AutomationConfig = {
   readonly timeout: number;
   readonly retryAttempts: number;
@@ -10,6 +18,8 @@ export type AutomationConfig = {
   readonly debugMode: boolean;
   readonly formDetectionEnabled: boolean;
   readonly contextCaptureEnabled: boolean;
+  readonly root?: AutomationRoot;
+  readonly locationProvider?: AutomationLocationProvider;
 };
 
 export const DEFAULT_CONFIG: AutomationConfig = {

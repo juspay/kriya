@@ -1,3 +1,5 @@
+import type { AutomationRoot } from './core';
+
 export type FormFieldValueType = 'string' | 'number' | 'boolean' | 'array' | 'file';
 
 export type FormFieldValue = {
@@ -114,6 +116,7 @@ export type EnhancedDetectedForm = {
 };
 
 export type EnhancedFormDetectorConfig = {
+  root?: AutomationRoot;
   autoDetect?: boolean;
   includeDisabled?: boolean;
   debugMode?: boolean;
