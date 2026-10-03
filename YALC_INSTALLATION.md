@@ -73,7 +73,7 @@ await engine.executeAction({
 
 You should see detailed output like:
 
-```
+```text
 🔍 Starting fillAnyForm with fields: ["username", "email"]
 📊 Currently registered forms: 1
 ✅ Found React Final Form API, using enhanced API
@@ -93,6 +93,7 @@ When I make updates to the package:
    ```
 
 2. **Update in your project:**
+
    ```bash
    cd /path/to/your/dashboard
    yalc update @juspay/kriya
@@ -100,7 +101,7 @@ When I make updates to the package:
 
 ## 🐛 Debugging Common Issues
 
-### If "No suitable form found" error persists:
+### If "No suitable form found" error persists
 
 1. **Enable debug mode:**
 
@@ -123,7 +124,7 @@ When I make updates to the package:
    - What field names are available
    - Why field matching failed
 
-### If forms aren't being detected:
+### If forms aren't being detected
 
 1. **Manual re-scan:**
 

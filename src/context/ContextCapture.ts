@@ -30,7 +30,10 @@ type FormRegistryLike = {
   getFormContext?: () => readonly FormContext[];
 };
 
+import { DOMRoot } from '@/utils/DOMRoot';
+
 export class ContextCapture {
+  private readonly _dom: DOMRoot;
   private readonly _config: AutomationConfig;
   private readonly _captureConfig: ContextCaptureConfig;
   private _initialized: boolean;
@@ -38,6 +41,7 @@ export class ContextCapture {
   public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
 
   constructor(config: AutomationConfig) {
+    this._dom = new DOMRoot(config);
     this._config = config;
     this._captureConfig = { ...DEFAULT_CONTEXT_CAPTURE_CONFIG };
     this._initialized = false;
@@ -105,10 +109,10 @@ export class ContextCapture {
       forms = forms.concat(customForms.map(f => this._toFormContext(f)));
 
       const context: PageContext = {
-        pageUrl: window.location.href,
-        title: document.title,
+        pageUrl: this._dom.href,
+        title: this._dom.title,
         timestamp: Date.now(),
-        totalFormsFound: Math.max(document.querySelectorAll('form').length, forms.length),
+        totalFormsFound: Math.max(this._dom.querySelectorAll('form').length, forms.length),
         forms: forms,
         elements,
         viewport,
@@ -212,7 +216,7 @@ export class ContextCapture {
   }
 
   private async _captureScreenshotInternal(options: ScreenshotOptions): Promise<HTMLCanvasElement> {
-    const targetElement = options.fullPage ? document.body : document.documentElement;
+    const targetElement = this._dom.screenshotElement(options.fullPage);
 
     const html2canvasOptions = {
       allowTaint: true,
@@ -239,7 +243,7 @@ export class ContextCapture {
 
   private _extractElementContext(): readonly ElementContext[] {
     const elements: ElementContext[] = [];
-    const allElements = document.querySelectorAll('*');
+    const allElements = this._dom.querySelectorAll('*');
     const maxElements = this._captureConfig.maxElementsPerPage;
 
     let count = 0;
@@ -364,7 +368,7 @@ export class ContextCapture {
     if (rescriptFields.length > 0) {
       forms.push({
         formId: 'rescript-form-renderer-form',
-        action: window.location.href,
+        action: this._dom.href,
         method: 'POST',
         fields: rescriptFields,
         isRegistered: false,
@@ -394,7 +398,7 @@ export class ContextCapture {
       if (uniqueFormFields.length > 0) {
         forms.push({
           formId: 'react-final-form-fields',
-          action: window.location.href,
+          action: this._dom.href,
           method: 'POST',
           fields: uniqueFormFields,
           isRegistered: false,
@@ -678,7 +682,7 @@ export class ContextCapture {
     const fields: CustomFieldInfo[] = [];
 
     // Look for SelectBox components with proper value extraction
-    const selectBoxElements = document.querySelectorAll('[data-selectbox-value]');
+    const selectBoxElements = this._dom.querySelectorAll('[data-selectbox-value]');
     selectBoxElements.forEach((element, index) => {
       const buttonText = element.getAttribute('data-selectbox-value') || '';
 
@@ -688,7 +692,7 @@ export class ContextCapture {
       const displayText = element.querySelector('[data-button-text]')?.textContent?.trim() || '';
 
       // Try to find a meaningful field name from the wrapper or label
-      const wrapper = element.closest('[data-component-field-wrapper]');
+      const wrapper = this._dom.closest(element, '[data-component-field-wrapper]');
       const label = element.querySelector('[data-form-label]');
       const fieldName =
         wrapper?.getAttribute('data-component-field-wrapper') ||
@@ -710,17 +714,17 @@ export class ContextCapture {
     });
 
     // Look for other design system inputs
-    const inputs = document.querySelectorAll(
+    const inputs = this._dom.querySelectorAll(
       '[data-design-system="true"] input, [data-design-system="true"] textarea'
     );
     inputs.forEach((element, index) => {
       const input = element as HTMLInputElement | HTMLTextAreaElement;
 
       // Try to find a meaningful field name from the wrapper or nearby label
-      const wrapper = input.closest('[data-component-field-wrapper]');
+      const wrapper = this._dom.closest(input, '[data-component-field-wrapper]');
       const label =
         wrapper?.querySelector('[data-form-label]') ||
-        document.querySelector(`label[for="${input.id}"]`);
+        this._dom.querySelector(`label[for="${input.id}"]`);
       const fieldName =
         wrapper?.getAttribute('data-component-field-wrapper') ||
         input.name ||
@@ -745,12 +749,12 @@ export class ContextCapture {
 
   private _hasCustomSubmitButton(): boolean {
     // Look for common submit button patterns
-    const submitButtons = document.querySelectorAll(
+    const submitButtons = this._dom.querySelectorAll(
       'button[type="submit"], [data-button-type="submit"]'
     );
 
     // Also check for buttons with submit-related text content
-    const allButtons = document.querySelectorAll('button');
+    const allButtons = this._dom.querySelectorAll('button');
     const textBasedSubmitButtons = Array.from(allButtons).filter(button => {
       const text = button.textContent?.toLowerCase() || '';
       return text.includes('submit') || text.includes('save') || text.includes('apply');
@@ -767,7 +771,7 @@ export class ContextCapture {
     // Comprehensive detection for all InputFields.res patterns
 
     // 1. Detect Euler Dashboard Field Wrappers (Primary Pattern)
-    const fieldWrappers = document.querySelectorAll('[data-component-field-wrapper]');
+    const fieldWrappers = this._dom.querySelectorAll('[data-component-field-wrapper]');
     this._log(`Found ${fieldWrappers.length} field wrappers`);
 
     fieldWrappers.forEach((wrapper, index) => {
@@ -789,20 +793,22 @@ export class ContextCapture {
     });
 
     // 2. Detect standalone React Final Form inputs
-    const formInputs = document.querySelectorAll('input[name], select[name], textarea[name]');
+    const formInputs = this._dom.querySelectorAll('input[name], select[name], textarea[name]');
     this._log(`Found ${formInputs.length} standard form inputs`);
 
     formInputs.forEach((element, index) => {
       const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
       // Skip if already detected in field wrapper
-      if (input.closest('[data-component-field-wrapper]')) {
+      if (this._dom.closest(input, '[data-component-field-wrapper]')) {
         return;
       }
 
       // Check if this is part of a React Final Form
       const formContainer =
-        input.closest('form') || input.closest('[data-rff-ui]') || input.closest('[class*="form"]');
+        this._dom.closest(input, 'form') ||
+        this._dom.closest(input, '[data-rff-ui]') ||
+        this._dom.closest(input, '[class*="form"]');
 
       if (formContainer && input.name) {
         const fieldInfo = this._extractStandardFieldInfo(input, index);
@@ -825,13 +831,13 @@ export class ContextCapture {
     const fields: CustomFieldInfo[] = [];
 
     // Primary detection: Look for Euler dashboard SelectBox pattern with data attributes
-    const eulerSelectBoxes = document.querySelectorAll('[data-selectbox-value]');
+    const eulerSelectBoxes = this._dom.querySelectorAll('[data-selectbox-value]');
 
     eulerSelectBoxes.forEach((element, index) => {
       this._log(`Found Euler selectbox ${index}:`, element);
 
       // Get field wrapper for field name
-      const fieldWrapper = element.closest('[data-component-field-wrapper]');
+      const fieldWrapper = this._dom.closest(element, '[data-component-field-wrapper]');
       const fieldName =
         fieldWrapper?.getAttribute('data-component-field-wrapper') || `euler-selectbox-${index}`;
 
@@ -883,13 +889,13 @@ export class ContextCapture {
     });
 
     // Fallback: Look for SelectBox components by class patterns (for other implementations)
-    const classBasedSelectBoxes = document.querySelectorAll(
+    const classBasedSelectBoxes = this._dom.querySelectorAll(
       '[class*="selectbox"], [class*="dropdown"], [class*="select-box"], button[role="combobox"], [aria-haspopup="listbox"]'
     );
 
     classBasedSelectBoxes.forEach((element, index) => {
       // Skip if already detected by data attribute method
-      if (element.closest('[data-selectbox-value]')) {
+      if (this._dom.closest(element, '[data-selectbox-value]')) {
         return;
       }
 
@@ -969,7 +975,7 @@ export class ContextCapture {
     const fields: CustomFieldInfo[] = [];
 
     // Look for React Final Form field patterns
-    const formElements = document.querySelectorAll('input, select, textarea');
+    const formElements = this._dom.querySelectorAll('input, select, textarea');
 
     formElements.forEach((element, index) => {
       const input = element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -977,8 +983,8 @@ export class ContextCapture {
       // Check if this element has React Final Form characteristics
       const hasRFFCharacteristics =
         input.name || // Has name attribute (required for RFF)
-        input.closest('[data-rff-ui]') || // Explicit RFF marker
-        input.closest('form') || // Inside a form
+        this._dom.closest(input, '[data-rff-ui]') || // Explicit RFF marker
+        this._dom.closest(input, 'form') || // Inside a form
         input.hasAttribute('data-rff-field'); // Explicit field marker
 
       if (hasRFFCharacteristics) {
@@ -1008,9 +1014,9 @@ export class ContextCapture {
 
         // Find label
         const labelElement =
-          document.querySelector(`label[for="${input.id}"]`) ||
-          input.closest('label') ||
-          input.parentElement?.querySelector('label');
+          this._dom.querySelector(`label[for="${input.id}"]`) ||
+          this._dom.closest(input, 'label') ||
+          this._dom.parentElement(input)?.querySelector('label');
 
         const label = labelElement?.textContent?.trim() || '';
 
@@ -1037,7 +1043,7 @@ export class ContextCapture {
 
   private _hasReScriptSubmitButton(): boolean {
     // Look for submit buttons with ReScript/React patterns
-    const submitButtons = document.querySelectorAll(
+    const submitButtons = this._dom.querySelectorAll(
       'button[type="submit"],' +
         'button[class*="submit"],' +
         'button[class*="primary"],' +
@@ -1046,7 +1052,7 @@ export class ContextCapture {
     );
 
     // Also check for buttons with submit-related text content
-    const allButtons = document.querySelectorAll('button');
+    const allButtons = this._dom.querySelectorAll('button');
     const textBasedSubmitButtons = Array.from(allButtons).filter(button => {
       const text = button.textContent?.toLowerCase() || '';
       return (
@@ -1514,9 +1520,9 @@ export class ContextCapture {
 
     // Find associated label
     const labelElement =
-      document.querySelector(`label[for="${input.id}"]`) ||
-      input.closest('label') ||
-      input.parentElement?.querySelector('label');
+      this._dom.querySelector(`label[for="${input.id}"]`) ||
+      this._dom.closest(input, 'label') ||
+      this._dom.parentElement(input)?.querySelector('label');
 
     const label = labelElement?.textContent?.trim() || '';
 
@@ -1543,7 +1549,7 @@ export class ContextCapture {
     this._log('Detecting specialized ReScript components...');
 
     // 1. Detect Monaco Editor (Code Input)
-    const monacoEditors = document.querySelectorAll('.monaco-editor, [data-monaco-editor]');
+    const monacoEditors = this._dom.querySelectorAll('.monaco-editor, [data-monaco-editor]');
     monacoEditors.forEach((editor, index) => {
       const fieldName = editor.getAttribute('data-field-name') || `monaco-editor-${index}`;
       fields.push({
@@ -1558,7 +1564,7 @@ export class ContextCapture {
     });
 
     // 2. Detect Draft.js Rich Text Editors
-    const draftEditors = document.querySelectorAll('.DraftEditor-root, [data-draft-editor]');
+    const draftEditors = this._dom.querySelectorAll('.DraftEditor-root, [data-draft-editor]');
     draftEditors.forEach((editor, index) => {
       const fieldName = editor.getAttribute('data-field-name') || `draft-editor-${index}`;
       fields.push({
@@ -1573,7 +1579,7 @@ export class ContextCapture {
     });
 
     // 3. Detect Async SelectBoxes (with loading states)
-    const asyncSelects = document.querySelectorAll('[data-async-select], .async-selectbox');
+    const asyncSelects = this._dom.querySelectorAll('[data-async-select], .async-selectbox');
     asyncSelects.forEach((select, index) => {
       const fieldName = select.getAttribute('data-field-name') || `async-select-${index}`;
       const button = select.querySelector('button');
@@ -1590,7 +1596,7 @@ export class ContextCapture {
     });
 
     // 4. Detect Nested Dropdowns
-    const nestedDropdowns = document.querySelectorAll('[data-nested-dropdown]');
+    const nestedDropdowns = this._dom.querySelectorAll('[data-nested-dropdown]');
     nestedDropdowns.forEach((dropdown, index) => {
       const fieldName = dropdown.getAttribute('data-field-name') || `nested-dropdown-${index}`;
       fields.push({
@@ -1605,7 +1611,7 @@ export class ContextCapture {
     });
 
     // 5. Detect Calendar Inputs with highlighting
-    const calendarInputs = document.querySelectorAll(
+    const calendarInputs = this._dom.querySelectorAll(
       '[data-calendar-input], .calendar-highlighter'
     );
     calendarInputs.forEach((calendar, index) => {
@@ -1622,7 +1628,7 @@ export class ContextCapture {
     });
 
     // 6. Detect Time Range Inputs
-    const timeRanges = document.querySelectorAll('[data-time-range]');
+    const timeRanges = this._dom.querySelectorAll('[data-time-range]');
     timeRanges.forEach((timeRange, index) => {
       const fieldName = timeRange.getAttribute('data-field-name') || `time-range-${index}`;
       fields.push({
@@ -1709,9 +1715,9 @@ export class ContextCapture {
 
     // 3. Try to find associated label
     const labelElement =
-      document.querySelector(`label[for="${input.id}"]`) ||
-      input.closest('label') ||
-      input.parentElement?.querySelector('label');
+      this._dom.querySelector(`label[for="${input.id}"]`) ||
+      this._dom.closest(input, 'label') ||
+      this._dom.parentElement(input)?.querySelector('label');
 
     const labelText = labelElement?.textContent?.trim();
     if (labelText) {
@@ -1731,7 +1737,7 @@ export class ContextCapture {
     }
 
     // 6. Check if it's inside a field wrapper and extract from there - strip prefixes
-    const fieldWrapper = input.closest('[data-component-field-wrapper]');
+    const fieldWrapper = this._dom.closest(input, '[data-component-field-wrapper]');
     if (fieldWrapper) {
       const wrapperName = fieldWrapper.getAttribute('data-component-field-wrapper');
       if (wrapperName && wrapperName.trim()) {

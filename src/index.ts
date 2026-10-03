@@ -23,6 +23,8 @@ export type {
   ActionCommand,
   ActionType,
   AutomationConfig,
+  AutomationLocationProvider,
+  AutomationRoot,
   AutomationEvent,
   ClickOptions,
   ContextCaptureConfig,
