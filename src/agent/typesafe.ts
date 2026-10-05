@@ -80,6 +80,7 @@ type Plan<T> = {
 type Runtime = {
   readonly endpoint: string | undefined;
   readonly model: string;
+  readonly modelPrefixes: readonly string[] | undefined;
   readonly http: TaskHttp;
   readonly timeoutMs: number;
   readonly retry: TaskRetryPolicy;
@@ -164,6 +165,9 @@ const REALM_PROBE = 'docu' + 'ment';
 const PROBABILITY_TOLERANCE = 0.02;
 const ARGMAX_TOLERANCE = 1e-6;
 const MODEL_CHARS = 64;
+const MODEL_PREFIX_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]+-$/;
+const MODEL_PREFIX_MAX_LENGTH = 64;
+const MODEL_PREFIX_MAX_ENTRIES = 8;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const DECIMAL_PATTERN = /^\d+(\.\d+)?$/;
 const RETRYABLE_CODES: readonly TaskDeciderErrorCode[] = [
@@ -306,6 +310,23 @@ const resolveRetry = (partial: Partial<TaskRetryPolicy> | undefined): TaskRetryP
   };
 };
 
+const resolveModelPrefixes = (raw: unknown): readonly string[] | undefined => {
+  if (raw === undefined) {
+    return [TASK_TYPESAFE_MODEL_PREFIX];
+  }
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MODEL_PREFIX_MAX_ENTRIES) {
+    return undefined;
+  }
+  const entries: readonly unknown[] = raw;
+  const prefixes = entries.filter(
+    (entry): entry is string =>
+      typeof entry === 'string' &&
+      entry.length <= MODEL_PREFIX_MAX_LENGTH &&
+      MODEL_PREFIX_PATTERN.test(entry)
+  );
+  return prefixes.length === entries.length ? prefixes : undefined;
+};
+
 const defaultHttp: TaskHttp = async (url, init) => {
   const response = await fetch(url, {
     method: init.method,
@@ -356,6 +377,7 @@ const createRuntime = (config: TypeSafeTaskDeciderConfig): Runtime => {
       typeof config.model === 'string' && config.model !== ''
         ? config.model
         : TASK_TYPESAFE_DEFAULTS.model,
+    modelPrefixes: resolveModelPrefixes(config.allowedModelPrefixes),
     http: config.http ?? defaultHttp,
     timeoutMs: positive(config.timeoutMs) ?? TASK_TYPESAFE_DEFAULTS.timeoutMs,
     retry: resolveRetry(config.retry),
@@ -614,14 +636,19 @@ const readUsage = (value: unknown): TaskExchangeUsage | undefined => {
 
 const validateBody = (
   body: unknown,
-  asked: Readonly<Record<string, ChoiceQuestion>>
+  asked: Readonly<Record<string, ChoiceQuestion>>,
+  modelPrefixes: readonly string[]
 ): Validated | TaskDeciderError => {
   if (!isRecord(body)) {
     return failure('INVALID_RESPONSE', 'TypeSafe response was not a JSON object', false);
   }
   const model = own(body, 'model');
-  if (typeof model !== 'string' || !model.startsWith(TASK_TYPESAFE_MODEL_PREFIX)) {
-    return failure('INVALID_RESPONSE', 'TypeSafe response did not come from a jev model', false);
+  if (typeof model !== 'string' || !modelPrefixes.some(prefix => model.startsWith(prefix))) {
+    return failure(
+      'INVALID_RESPONSE',
+      'TypeSafe response did not come from an allowed model',
+      false
+    );
   }
   const answers = own(body, 'answers');
   if (!isRecord(answers)) {
@@ -707,7 +734,11 @@ const abortedError = (runtime: Runtime, guard: Guarded): TaskDeciderError =>
     ? failure('TIMEOUT', `TypeSafe call timed out after ${String(runtime.timeoutMs)} ms`, true)
     : failure('CANCELLED', 'TypeSafe call was cancelled', false);
 
-const finishAttempt = <T>(reading: Reading, plan: Plan<T>): Attempt<T> => {
+const finishAttempt = <T>(
+  reading: Reading,
+  plan: Plan<T>,
+  modelPrefixes: readonly string[]
+): Attempt<T> => {
   const requestId = reading.requestId === undefined ? {} : { requestId: reading.requestId };
   const status = reading.status === undefined ? {} : { status: reading.status };
   if (reading.kind === 'invalid') {
@@ -728,7 +759,7 @@ const finishAttempt = <T>(reading: Reading, plan: Plan<T>): Attempt<T> => {
       ...(reading.retryAfterMs === undefined ? {} : { retryAfterMs: reading.retryAfterMs }),
     };
   }
-  const validated = validateBody(reading.body, plan.set.questions);
+  const validated = validateBody(reading.body, plan.set.questions, modelPrefixes);
   if ('code' in validated) {
     const error = { ...validated, message: withRequestId(validated.message, reading.requestId) };
     return { ok: false, error, ...status, ...requestId };
@@ -764,7 +795,7 @@ const attemptOnce = async <T>(
     const reading = await raceAbort(guard.signal, async () =>
       readResponse(await runtime.http(endpoint, init), runtime, asked)
     );
-    attempt = finishAttempt(reading, plan);
+    attempt = finishAttempt(reading, plan, runtime.modelPrefixes ?? []);
     if (
       attempt.ok &&
       runtime.scrubCredentialText(attempt.validated.model) !== attempt.validated.model
@@ -938,6 +969,9 @@ const refusal = (
   }
   if (runtime.endpoint === undefined) {
     return failure('INVALID_REQUEST', 'TypeSafe endpoint is not allowed', false);
+  }
+  if (runtime.modelPrefixes === undefined) {
+    return failure('INVALID_REQUEST', 'TypeSafe allowed model prefixes are not valid', false);
   }
   if (runtime.credential() === '') {
     return failure('INVALID_REQUEST', 'TypeSafe API key is empty', false);

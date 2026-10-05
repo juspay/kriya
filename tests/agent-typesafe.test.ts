@@ -1465,6 +1465,88 @@ describe('response validation', () => {
     }
   });
 
+  it('accepts exactly the families in allowedModelPrefixes, which replace the default', async () => {
+    const answeredBy = async (model: string, prefixes: readonly string[]) => {
+      const { decider } = harness([{ answer: { choices: { argument: 'c1' }, model } }], {
+        allowedModelPrefixes: prefixes,
+      });
+      return decider.chooseArgument(argumentRequest(), context());
+    };
+    expect(succeeded(await answeredBy('xor-1.1', ['xor-'])).exchange.model).toBe('xor-1.1');
+    succeeded(await answeredBy('jev-1.13.0', ['xor-', 'jev-']));
+    succeeded(await answeredBy('xor-1.1', ['xor-', 'jev-']));
+    succeeded(await answeredBy('ab-1', ['ab-']));
+    const longest = `${'a'.repeat(63)}-`;
+    succeeded(await answeredBy(`${longest}1`, [longest]));
+    for (const [model, prefixes] of [
+      ['jev-1.13.0', ['xor-']],
+      ['XOR-1.1', ['xor-']],
+      ['xor1.1', ['xor-']],
+      ['gpt-4o', ['xor-', 'jev-']],
+    ] as const) {
+      const result = failed(await answeredBy(model, prefixes));
+      expect(result.error.code).toBe('INVALID_RESPONSE');
+      expect(result.error.retryable).toBe(false);
+    }
+  });
+
+  it('accepts a namespaced prefix while retaining exact family matching', async () => {
+    const { decider, http } = harness(
+      [
+        { answer: { choices: { argument: 'c1' }, model: 'org/model-1' } },
+        { answer: { choices: { argument: 'c1' }, model: 'other/model-1' } },
+      ],
+      { allowedModelPrefixes: ['org/model-'] }
+    );
+    expect(
+      succeeded(await decider.chooseArgument(argumentRequest(), context())).exchange.model
+    ).toBe('org/model-1');
+    expect(failed(await decider.chooseArgument(argumentRequest(), context())).error.code).toBe(
+      'INVALID_RESPONSE'
+    );
+    expect(http.calls).toHaveLength(2);
+  });
+
+  it('refuses every call, sending nothing, when allowedModelPrefixes is not valid', async () => {
+    const invalid: readonly unknown[] = [
+      [],
+      [''],
+      ['x'],
+      ['x-'],
+      ['xor'],
+      [' xor-'],
+      ['xor- '],
+      ['xor-', 5],
+      ['xor-', null],
+      ['étude-'],
+      ['org/model name-'],
+      ['/org/model-'],
+      [`${'a'.repeat(64)}-`],
+      Array.from({ length: 9 }, (_, index) => `m${String(index)}-`),
+      'xor-',
+      null,
+    ];
+    for (const prefixes of invalid) {
+      const { decider, http } = harness([ANSWER_CLICK], {
+        allowedModelPrefixes: prefixes as readonly string[],
+      });
+      const result = failed(await decider.chooseArgument(argumentRequest(), context()));
+      expect(result.error.code).toBe('INVALID_REQUEST');
+      expect(result.error.retryable).toBe(false);
+      expect(http.calls.length).toBe(0);
+    }
+  });
+
+  it('copies allowedModelPrefixes at construction, so a later edit cannot widen it', async () => {
+    const prefixes = ['jev-'];
+    const { decider } = harness([{ answer: { choices: { argument: 'c1' }, model: 'xor-1.1' } }], {
+      allowedModelPrefixes: prefixes,
+    });
+    prefixes.push('xor-');
+    const result = failed(await decider.chooseArgument(argumentRequest(), context()));
+    expect(result.error.code).toBe('INVALID_RESPONSE');
+  });
+
   it('records the resolved versioned model, never the requested alias', async () => {
     const { decider } = harness([{ answer: { choices: { argument: 'c1' }, model: 'jev-1.13.0' } }]);
     const { exchange } = succeeded(await decider.chooseArgument(argumentRequest(), context()));
