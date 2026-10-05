@@ -1804,7 +1804,8 @@ export type TaskExchange = {
   readonly requestedModel?: string;
   /**
    * Resolved versioned id from the response (jev-1.13.0), never the alias. A response whose model does
-   * not start with TASK_TYPESAFE_MODEL_PREFIX is INVALID_RESPONSE: another model answered.
+   * not start with one of the allowed prefixes (TypeSafeTaskDeciderConfig.allowedModelPrefixes, default
+   * TASK_TYPESAFE_MODEL_PREFIX) is INVALID_RESPONSE: another model answered.
    */
   readonly model?: string;
   /** x-typesafe-request-id of the final attempt. */
@@ -2048,6 +2049,14 @@ export type TypeSafeTaskDeciderConfig = {
   /** Tests and trusted extension pages only. */
   readonly allowBrowserKey?: boolean;
   readonly model?: string;
+  /**
+   * Model-id prefixes a response may carry; any other model is INVALID_RESPONSE. A list replaces the
+   * default [TASK_TYPESAFE_MODEL_PREFIX]. Matching is exact and case-sensitive. Each entry is 3 to 64
+   * ASCII identifier characters (letters, digits, '.', '_', '/', '-') starting with a letter or digit
+   * and ending in '-', at most 8 entries; an invalid list makes every call INVALID_REQUEST
+   * before anything is sent.
+   */
+  readonly allowedModelPrefixes?: readonly string[];
   readonly http?: TaskHttp;
   /** Per-attempt timeout; always applied, joined with the call's AbortSignal. Default TASK_TYPESAFE_DEFAULTS.timeoutMs. */
   readonly timeoutMs?: number;
