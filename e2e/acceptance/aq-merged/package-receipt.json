@@ -1,0 +1,160 @@
+{
+  "verified": true,
+  "branch": "feat/click-guide",
+  "sourceSha256": "8ca16734ad91947c40f3e5f4188bae0f7d7dc5f105f1aa294cc9d1264b03ce04",
+  "dist": {
+    "ok": true,
+    "exitCode": 0,
+    "sha256": "c43c16e0fca96e3437f61ee1a21c60cb32cbf3cbb70a093b9d1c97d7e5a1a0f6",
+    "reasons": [],
+    "files": {
+      "esm": {
+        "sha256": "92696b751dd273f6648ba7b493f33383421a8acc88b04cbb0c6c36c1ef4d2b58",
+        "bytes": 478798
+      },
+      "umd": {
+        "sha256": "c9e1cf8ed12a3ac4fb08827e2d6861e2825db6e9e6afc4b27f65c1b8e7c521b7",
+        "bytes": 479032
+      }
+    },
+    "newestSource": {
+      "file": "src/actions/strict.ts",
+      "mtimeMs": 1791217996700.1355
+    }
+  },
+  "exports": {
+    "createTaskAgent": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "createRemoteTaskHost": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "createAutomationTaskHost": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "installTaskBridge": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "createTypeSafeTaskDecider": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "createTaskPolicy": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "createRedactor": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "redactEnvelope": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "createResearchRequest": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    },
+    "toResearchResult": {
+      "esm": true,
+      "cjs": true,
+      "umd": true,
+      "types": true
+    }
+  },
+  "quality": [
+    {
+      "check": "tsc",
+      "exitCode": 0
+    },
+    {
+      "check": "test-types",
+      "exitCode": 0
+    },
+    {
+      "check": "eslint",
+      "exitCode": 0
+    },
+    {
+      "check": "jest",
+      "exitCode": 0,
+      "success": true,
+      "suites": 48,
+      "tests": 3739
+    },
+    {
+      "check": "prettier",
+      "exitCode": 0
+    },
+    {
+      "check": "protected",
+      "count": 61,
+      "mismatches": []
+    }
+  ],
+  "build": {
+    "sourceSha256": "8ca16734ad91947c40f3e5f4188bae0f7d7dc5f105f1aa294cc9d1264b03ce04",
+    "distSha256": "c43c16e0fca96e3437f61ee1a21c60cb32cbf3cbb70a093b9d1c97d7e5a1a0f6",
+    "dist": {
+      "ok": true,
+      "exitCode": 0,
+      "sha256": "c43c16e0fca96e3437f61ee1a21c60cb32cbf3cbb70a093b9d1c97d7e5a1a0f6",
+      "reasons": [],
+      "files": {
+        "esm": {
+          "sha256": "92696b751dd273f6648ba7b493f33383421a8acc88b04cbb0c6c36c1ef4d2b58",
+          "bytes": 478798
+        },
+        "umd": {
+          "sha256": "c9e1cf8ed12a3ac4fb08827e2d6861e2825db6e9e6afc4b27f65c1b8e7c521b7",
+          "bytes": 479032
+        }
+      },
+      "newestSource": {
+        "file": "src/actions/strict.ts",
+        "mtimeMs": 1791217996700.1355
+      }
+    },
+    "exitCode": 0,
+    "at": "2026-10-05T16:36:47.628Z",
+    "liveAcceptance": false
+  },
+  "chromiumDist": {
+    "kind": "dist integration; no model",
+    "passed": true,
+    "checks": [
+      "persistent host capabilities and authoritative location",
+      "strict fill through real engine",
+      "superseded snapshot rejects without mutation",
+      "full document navigation and fresh bridge reinjection",
+      "no browser page errors"
+    ],
+    "navigation": {
+      "status": "applied",
+      "effect": "applied"
+    },
+    "sha256": "c43c16e0fca96e3437f61ee1a21c60cb32cbf3cbb70a093b9d1c97d7e5a1a0f6"
+  }
+}

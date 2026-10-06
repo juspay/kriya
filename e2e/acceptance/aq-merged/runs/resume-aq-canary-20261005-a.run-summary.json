@@ -1,0 +1,124 @@
+{
+  "runId": "resume-aq-canary-20261005-a",
+  "startedAt": "2026-10-05T16:37:02.647Z",
+  "finishedAt": "2026-10-05T16:38:54.273Z",
+  "sha256": "c43c16e0fca96e3437f61ee1a21c60cb32cbf3cbb70a093b9d1c97d7e5a1a0f6",
+  "profile": {
+    "confidence": {
+      "action": 0.2,
+      "argument": 0.3,
+      "completion": 0.4
+    },
+    "observeOffscreen": true
+  },
+  "exitCode": 0,
+  "liveVerified": {
+    "passed": 8,
+    "total": 8
+  },
+  "faultInjected": {
+    "passed": 1,
+    "total": 1
+  },
+  "results": [
+    {
+      "id": "catalog-a-quoted-search-category",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 27656,
+      "calls": 65,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-a-brand-budget",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 31164,
+      "calls": 79,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-a-brand-priciest-first-with-cart",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 29912,
+      "calls": 78,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-b-kitchen-under-forty-saved",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 18029,
+      "calls": 41,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-b-multistep-spa",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 26309,
+      "calls": 48,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "fault-context-destroyed",
+      "kind": "fault",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 32258,
+      "calls": 79,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-a-already-off",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 4750,
+      "calls": 7,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-b-misleading-success",
+      "kind": "live",
+      "passed": true,
+      "status": "blocked",
+      "durationMs": 22469,
+      "calls": 35,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-a-fill-review",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 18549,
+      "calls": 32,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    }
+  ]
+}

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kriya · Jev</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #241c16;
+        --paper: #f4efe6;
+        --card: #fffaf3;
+        --line: rgba(36, 28, 22, 0.12);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(900px 420px at 10% -10%, rgba(255, 244, 214, 0.9), transparent 50%),
+          var(--paper);
+        color: var(--ink);
+        font:
+          17px/1.45 'Iowan Old Style',
+          Palatino,
+          Georgia,
+          serif;
+      }
+      main {
+        width: min(640px, calc(100% - 40px));
+        margin: 120px auto 80px;
+      }
+      p.kicker {
+        margin: 0 0 8px;
+        font:
+          12px/1 ui-sans-serif,
+          system-ui,
+          sans-serif;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #7a6a58;
+      }
+      h1 {
+        margin: 0 0 28px;
+        font-weight: 500;
+        font-size: 44px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 8px;
+        box-shadow: 0 20px 50px rgba(60, 40, 20, 0.06);
+      }
+      button.row {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        text-align: left;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        padding: 14px 16px;
+        border-radius: 16px;
+        cursor: pointer;
+      }
+      button.row:hover {
+        background: rgba(36, 28, 22, 0.04);
+      }
+      .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #243044;
+        color: #f4efe6;
+        font:
+          14px/1 ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      .meta {
+        display: block;
+        color: #7a6a58;
+        font:
+          13px/1.3 ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      #menu,
+      #notifications,
+      #email-panel {
+        display: none;
+        padding: 4px 8px 12px;
+      }
+      #menu.open,
+      #notifications.open,
+      #email-panel.open {
+        display: block;
+      }
+      .keyline {
+        margin-top: 28px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font:
+          13px/1 ui-sans-serif,
+          system-ui,
+          sans-serif;
+        color: #7a6a58;
+      }
+      .keyline input {
+        flex: 1;
+        border: 1px solid var(--line);
+        background: white;
+        border-radius: 10px;
+        padding: 8px 10px;
+        font: inherit;
+      }
+      .keyline button {
+        border: 0;
+        border-radius: 10px;
+        padding: 8px 12px;
+        background: #241c16;
+        color: #f4efe6;
+        font: inherit;
+        cursor: pointer;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "html2canvas": "/node_modules/html2canvas/dist/html2canvas.esm.js",
+          "@juspay/kriya": "/dist/index.esm.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <p class="kicker">Northwind account</p>
+      <h1>Where should we go?</h1>
+      <div class="card">
+        <button class="row" id="avatar" type="button">
+          <span class="avatar">A</span>
+          <span>Avery Quinn<span class="meta">Signed in</span></span>
+        </button>
+        <div id="menu">
+          <button class="row" id="settings" type="button">
+            Settings<span class="meta">Account and notifications</span>
+          </button>
+          <button class="row" id="help" type="button">Help</button>
+        </div>
+        <div id="notifications">
+          <button class="row" id="email" type="button">
+            Email notifications<span class="meta">On for every message</span>
+          </button>
+        </div>
+        <div id="email-panel">
+          <button class="row" id="turn-off" type="button">
+            Turn email off<span class="meta">Stop the letters</span>
+          </button>
+        </div>
+      </div>
+      <div class="keyline">
+        <input
+          id="key"
+          type="password"
+          autocomplete="off"
+          placeholder="TypeSafe key, kept in this tab"
+        />
+        <button id="use-jev" type="button">Ask Jev</button>
+      </div>
+    </main>
+    <script type="module">
+      import { mountJevGuide } from '@juspay/kriya';
+
+      const avatar = document.querySelector('#avatar');
+      const menu = document.querySelector('#menu');
+      const settings = document.querySelector('#settings');
+      const notifications = document.querySelector('#notifications');
+      const email = document.querySelector('#email');
+      const emailPanel = document.querySelector('#email-panel');
+      const turnOff = document.querySelector('#turn-off');
+
+      avatar.addEventListener('click', () => menu.classList.add('open'));
+      settings.addEventListener('click', () => notifications.classList.add('open'));
+      email.addEventListener('click', () => emailPanel.classList.add('open'));
+      turnOff.addEventListener('click', () => {
+        turnOff.querySelector('.meta').textContent = 'Email is off';
+      });
+
+      const stageDecider = request => {
+        const history = request.state.recentActions.map(entry => entry.action);
+        const criteria = request.questions.click_target?.criteria ?? {};
+        const wanted =
+          ['Avery Quinn', 'Settings', 'Email notifications', 'Turn email off'][history.length] ??
+          'Turn email off';
+        const match = Object.entries(criteria).find(([, criterion]) => {
+          const label = typeof criterion === 'string' ? criterion : criterion.element;
+          return label.includes(wanted);
+        });
+        const targetIndex = match?.[0] ?? Object.keys(criteria)[0];
+        return Promise.resolve({
+          ok: true,
+          operation: 'CLICK',
+          targetIndex,
+          confidence: 0.98,
+        });
+      };
+
+      let session = mountJevGuide({ decider: stageDecider });
+      const input = session.bar.querySelector('input');
+      input.value = 'turn off email notifications';
+
+      document.querySelector('#use-jev').addEventListener('click', () => {
+        const apiKey = document.querySelector('#key').value;
+        session.close();
+        session = mountJevGuide({ apiKey });
+        const next = session.bar.querySelector('input');
+        next.value = 'turn off email notifications';
+      });
+    </script>
+  </body>
+</html>

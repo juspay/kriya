@@ -1,0 +1,18 @@
+{
+  "label": "Source identity and protected-file proof (read-only)",
+  "at": "2026-10-05T18:14:57.731Z",
+  "originMain": "badeba1b1d3dd6f32b752f4e2f07aeec2193041e",
+  "sourceSha256": "8ca16734ad91947c40f3e5f4188bae0f7d7dc5f105f1aa294cc9d1264b03ce04",
+  "qualityReceiptSourceSha256": "8ca16734ad91947c40f3e5f4188bae0f7d7dc5f105f1aa294cc9d1264b03ce04",
+  "sourceMatchesQualityReceipt": true,
+  "qualityPassed": true,
+  "protectedFiles": {
+    "checked": 61,
+    "mismatches": []
+  },
+  "mp4": {
+    "checked": 8,
+    "mismatches": []
+  },
+  "passed": true
+}

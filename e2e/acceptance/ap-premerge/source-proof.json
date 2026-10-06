@@ -1,0 +1,86 @@
+{
+  "label": "Fresh source, HEAD and protected-file proof for the AP package (read-only; nothing committed, pushed or opened as a PR)",
+  "at": "2026-10-05T15:26:43.359Z",
+  "head": "98e1126a76dc2888a844f5f2f79822b19cd3c4bb",
+  "branch": "feat/click-guide",
+  "headEqualsHandoffHead": true,
+  "commitsAheadOfStart": 0,
+  "sourceSha256": "974f563f3586c6757f7645979b55b1fa528fc1ab707fa2b6d28a79048c629369",
+  "expectedSourceSha256": "974f563f3586c6757f7645979b55b1fa528fc1ab707fa2b6d28a79048c629369",
+  "sourceMatches": true,
+  "qualityReceiptSourceMatches": true,
+  "packageReceipt": {
+    "verified": true,
+    "exports": {
+      "createTaskAgent": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "createRemoteTaskHost": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "createAutomationTaskHost": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "installTaskBridge": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "createTypeSafeTaskDecider": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "createTaskPolicy": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "createRedactor": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "redactEnvelope": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "createResearchRequest": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      },
+      "toResearchResult": {
+        "esm": true,
+        "cjs": true,
+        "umd": true,
+        "types": true
+      }
+    }
+  },
+  "protectedCount": 61,
+  "protectedMismatches": [],
+  "protectedMp4Count": 8,
+  "worktree": {
+    "entries": 94,
+    "modified": 25,
+    "untracked": 69,
+    "deleted": 0
+  }
+}

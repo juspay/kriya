@@ -1,0 +1,16 @@
+{
+  "kind": "dist integration; no model",
+  "passed": true,
+  "checks": [
+    "persistent host capabilities and authoritative location",
+    "strict fill through real engine",
+    "superseded snapshot rejects without mutation",
+    "full document navigation and fresh bridge reinjection",
+    "no browser page errors"
+  ],
+  "navigation": {
+    "status": "applied",
+    "effect": "applied"
+  },
+  "sha256": "41869cfd512fe63330adc43293bb33746866b9933ad81c20223a65012a2d89bf"
+}

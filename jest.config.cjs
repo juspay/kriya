@@ -1,3 +1,4 @@
+/** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'jsdom',
   testMatch: ['<rootDir>/tests/**/*.test.ts'],
@@ -8,7 +9,18 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',
-      { tsconfig: { module: 'CommonJS', rootDir: '.', incremental: false } },
+      {
+        tsconfig: {
+          target: 'ES2020',
+          module: 'commonjs',
+          rootDir: '.',
+          incremental: false,
+          esModuleInterop: true,
+          strict: true,
+          noUncheckedIndexedAccess: true,
+          types: ['jest', 'node'],
+        },
+      },
     ],
   },
   clearMocks: true,

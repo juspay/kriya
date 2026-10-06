@@ -1,0 +1,12 @@
+{
+  "purpose": "Baseline for the package built after merging origin/main (juspay/kriya PR #49). Identical to protected-files.json except for the single exception below; the other 60 protected files, including every MP4 and HANDOFF.md, keep their original hashes.",
+  "exceptions": [
+    {
+      "file": "README.md",
+      "baselineSha256": "85bcfad9596e0fb917de91ae3f599caa9f9b9fc28f32ce34a9cd893201e6db67",
+      "mergedSha256": "d844d75183d97c2761ec1eacb76ba18a3d78045a31195b8a56c3db33c87fed44",
+      "reason": "origin/main added documentation to README.md; merging it necessarily changes the file.",
+      "proof": "git merge-file of (README.md from the proven tag click-guide-ap-proven, the merge-base README, origin/main README) produced zero conflicts and a file byte-identical to the merged README.md."
+    }
+  ]
+}

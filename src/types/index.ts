@@ -5,3 +5,5 @@ export * from './errors';
 export * from './events';
 export * from './forms';
 export * from './react-internals';
+export * from './guide';
+export * from './agent';

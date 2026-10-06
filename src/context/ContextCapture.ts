@@ -13,6 +13,7 @@ import type {
 } from '@/types';
 import { DEFAULT_CONTEXT_CAPTURE_CONFIG } from '@/types';
 import { AutomationError } from '@/types';
+import { DOMRoot } from '@/utils/DOMRoot';
 import html2canvas from 'html2canvas';
 
 /**
@@ -30,7 +31,8 @@ type FormRegistryLike = {
   getFormContext?: () => readonly FormContext[];
 };
 
-import { DOMRoot } from '@/utils/DOMRoot';
+// Debug logs describe a value by its size only; the value itself never reaches the console.
+const mask = (value: unknown): string => `[${String(value ?? '').length} chars]`;
 
 export class ContextCapture {
   private readonly _dom: DOMRoot;
@@ -59,14 +61,32 @@ export class ContextCapture {
    */
   private _log(...args: readonly unknown[]): void {
     if (this._config.debugMode) {
-      console.info('📋 Kriya:', ...args);
+      console.info('📋 Kriya:', ...args.map(arg => this._safeLogArg(arg)));
     }
   }
 
   private _warn(...args: readonly unknown[]): void {
     if (this._config.debugMode) {
-      console.warn('📋 Kriya:', ...args);
+      console.warn('📋 Kriya:', ...args.map(arg => this._safeLogArg(arg)));
     }
+  }
+
+  // Values are masked at the call sites; this is the net for error messages and element dumps, whose
+  // live `.value` would otherwise render in the console.
+  private _safeLogArg(arg: unknown): unknown {
+    const redactor = this._config.redactor;
+    if (typeof arg === 'string') {
+      return redactor ? redactor.scrub(arg) : arg;
+    }
+    if (arg instanceof Error) {
+      // Third-party code often echoes the value it rejected in its message; without a redactor nothing can
+      // tell which part is a typed value, so only the name is logged.
+      return redactor ? redactor.scrub(`${arg.name}: ${arg.message}`) : arg.name;
+    }
+    if (arg instanceof Element) {
+      return `<${arg.tagName.toLowerCase()}>`;
+    }
+    return redactor && typeof arg === 'object' && arg !== null ? redactor.scrubDeep(arg) : arg;
   }
 
   public initialize(): void {
@@ -545,9 +565,7 @@ export class ContextCapture {
     }
 
     const fieldType = typeof fieldInfo.type === 'string' ? fieldInfo.type : 'string';
-    this._log(
-      `Extracted field "${fieldName}" - type: ${fieldType}, value: "${String(fieldInfo.value)}"`
-    );
+    this._log(`Extracted field "${fieldName}" - type: ${fieldType}`);
 
     const normalizedValue =
       fieldInfo.value &&
@@ -834,7 +852,7 @@ export class ContextCapture {
     const eulerSelectBoxes = this._dom.querySelectorAll('[data-selectbox-value]');
 
     eulerSelectBoxes.forEach((element, index) => {
-      this._log(`Found Euler selectbox ${index}:`, element);
+      this._log(`Found Euler selectbox ${index}`);
 
       // Get field wrapper for field name
       const fieldWrapper = this._dom.closest(element, '[data-component-field-wrapper]');
@@ -865,7 +883,7 @@ export class ContextCapture {
         const isRequired = fieldWrapper?.querySelector('.text-red-950') !== null;
 
         this._log(
-          `Euler selectbox details - Name: ${fieldName}, Label: ${label}, Value: ${currentValue}, Display: ${displayText}`
+          `Euler selectbox details - Name: ${fieldName}, Label: ${label}, Value: ${mask(currentValue)}, Display: ${mask(displayText)}`
         );
 
         fields.push({

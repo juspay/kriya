@@ -1,6 +1,6 @@
 ## 1.2.0 (2026-10-04)
 
-* feat(core): scope automation to DOM roots and location providers ([d63f8ad](https://github.com/juspay/kriya/commit/d63f8ad))
+- feat(core): scope automation to DOM roots and location providers ([d63f8ad](https://github.com/juspay/kriya/commit/d63f8ad))
 
 ## <small>1.1.1 (2026-04-23)</small>
 

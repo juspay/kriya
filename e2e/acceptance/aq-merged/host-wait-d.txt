@@ -1,0 +1,4 @@
+2026-10-05T18:04:37Z wait load1=28.56 quiet=0
+2026-10-05T18:05:07Z wait load1=25.91 quiet=1
+2026-10-05T18:05:37Z wait load1=30.21 quiet=2
+2026-10-05T18:06:07Z WAIT DONE quiet=3 waited=90s

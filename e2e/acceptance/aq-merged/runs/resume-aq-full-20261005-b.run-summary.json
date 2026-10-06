@@ -1,0 +1,595 @@
+{
+  "runId": "resume-aq-full-20261005-b",
+  "startedAt": "2026-10-05T17:02:18.958Z",
+  "finishedAt": "2026-10-05T17:11:49.771Z",
+  "sha256": "c43c16e0fca96e3437f61ee1a21c60cb32cbf3cbb70a093b9d1c97d7e5a1a0f6",
+  "profile": {
+    "confidence": {
+      "action": 0.2,
+      "argument": 0.3,
+      "completion": 0.4
+    },
+    "observeOffscreen": true
+  },
+  "exitCode": 1,
+  "liveVerified": {
+    "passed": 43,
+    "total": 43
+  },
+  "faultInjected": {
+    "passed": 7,
+    "total": 8
+  },
+  "results": [
+    {
+      "id": "catalog-a-quoted-search-category",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 29717,
+      "calls": 64,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-a-brand-budget",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 34045,
+      "calls": 78,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-a-unquoted-phrase-sort",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 28570,
+      "calls": 65,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-a-stale-rerender",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 43174,
+      "calls": 88,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-b-phrase-category-rating",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 19640,
+      "calls": 44,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-b-inputs-brand-budget",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 24022,
+      "calls": 50,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-b-missing-search-term",
+      "kind": "live",
+      "passed": true,
+      "status": "needs_input",
+      "durationMs": 13003,
+      "calls": 28,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-c-dialog-search-brands",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 50848,
+      "calls": 132,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-c-outdoor-budget-cheapest",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 49005,
+      "calls": 128,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-c-already-saved-keyboard",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 33066,
+      "calls": 82,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-a-brand-priciest-first-with-cart",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 31839,
+      "calls": 80,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "catalog-b-kitchen-under-forty-saved",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 20212,
+      "calls": 41,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-a-authorized-test-checkout",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 47119,
+      "calls": 43,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-a-commit-gate-refusal",
+      "kind": "live",
+      "passed": true,
+      "status": "awaiting_approval",
+      "durationMs": 40655,
+      "calls": 36,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-a-approval-resume-one-order",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 38026,
+      "calls": 44,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-a-cancel-mid-run",
+      "kind": "live",
+      "passed": true,
+      "status": "cancelled",
+      "durationMs": 9275,
+      "calls": 17,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-a-adjust-quantity-then-order",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 58588,
+      "calls": 53,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-b-multistep-spa",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 44739,
+      "calls": 48,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-b-saved-details-promo-news-optin",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 24803,
+      "calls": 45,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-c-buy-now-confirm-dialog",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 7819,
+      "calls": 14,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-c-buy-now-two-lines-unused-card",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 10032,
+      "calls": 17,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "checkout-c-buy-now-commit-gate-refusal",
+      "kind": "live",
+      "passed": true,
+      "status": "awaiting_approval",
+      "durationMs": 4933,
+      "calls": 9,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "fault-premature-done",
+      "kind": "fault",
+      "passed": false,
+      "status": "awaiting_approval",
+      "durationMs": 13177,
+      "calls": 4,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": [
+        {
+          "kind": "status_mismatch",
+          "message": "status awaiting_approval is not one of the expected completed"
+        },
+        {
+          "kind": "expect_failed",
+          "message": "status: expected [\"completed\"], got \"awaiting_approval\""
+        }
+      ]
+    },
+    {
+      "id": "fault-invalid-target",
+      "kind": "fault",
+      "passed": true,
+      "status": "blocked",
+      "durationMs": 1271,
+      "calls": 0,
+      "model": null,
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "fault-invalid-argument",
+      "kind": "fault",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 16232,
+      "calls": 7,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "fault-stale-before-execute",
+      "kind": "fault",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 6937,
+      "calls": 9,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "fault-lost-after-commit",
+      "kind": "fault",
+      "passed": true,
+      "status": "blocked",
+      "durationMs": 4154,
+      "calls": 5,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "fault-timeout-after-commit",
+      "kind": "fault",
+      "passed": true,
+      "status": "blocked",
+      "durationMs": 4236,
+      "calls": 5,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "fault-context-destroyed",
+      "kind": "fault",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 33763,
+      "calls": 78,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "fault-cancel-model-call",
+      "kind": "fault",
+      "passed": true,
+      "status": "cancelled",
+      "durationMs": 1178,
+      "calls": 0,
+      "model": null,
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-a-disable-promotional",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 6396,
+      "calls": 9,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-a-already-off",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 4827,
+      "calls": 8,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-b-save-trap",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 8416,
+      "calls": 13,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-b-misleading-success",
+      "kind": "live",
+      "passed": true,
+      "status": "blocked",
+      "durationMs": 23529,
+      "calls": 35,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-c-hidden-sms",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 11877,
+      "calls": 19,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-a-multi-setting",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 5398,
+      "calls": 8,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-b-multi-change",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 9032,
+      "calls": 15,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-c-enable-digest",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 12706,
+      "calls": 19,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-a-delete-account",
+      "kind": "live",
+      "passed": true,
+      "status": "awaiting_approval",
+      "durationMs": 5456,
+      "calls": 8,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-b-delete-account",
+      "kind": "live",
+      "passed": true,
+      "status": "awaiting_approval",
+      "durationMs": 7300,
+      "calls": 14,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-c-delete-account",
+      "kind": "live",
+      "passed": true,
+      "status": "awaiting_approval",
+      "durationMs": 5825,
+      "calls": 10,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "settings-a-fail-writes",
+      "kind": "live",
+      "passed": true,
+      "status": "blocked",
+      "durationMs": 8596,
+      "calls": 14,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-a-fill-review",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 20028,
+      "calls": 32,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-b-radio-country-phone",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 24954,
+      "calls": 37,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-c-wizard-germany",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 20588,
+      "calls": 37,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-b-validation-zip-typo",
+      "kind": "live",
+      "passed": true,
+      "status": "blocked",
+      "durationMs": 50831,
+      "calls": 41,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-a-missing-email-resume",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 51237,
+      "calls": 41,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-a-unauthorized-approve-resume",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 23822,
+      "calls": 33,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-c-gift-next-day",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 23542,
+      "calls": 34,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-b-gift-priority",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 26363,
+      "calls": 34,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    },
+    {
+      "id": "shipping-a-update-prefilled-draft",
+      "kind": "live",
+      "passed": true,
+      "status": "completed",
+      "durationMs": 29250,
+      "calls": 44,
+      "model": "jev-1.13.0",
+      "leak": false,
+      "failures": []
+    }
+  ]
+}

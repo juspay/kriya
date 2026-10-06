@@ -1,0 +1,141 @@
+{
+  "label": "Independent read-only review of the merge of origin/main (juspay/kriya PR #49) into the TaskAgent branch. Reviewer findings are claims; each was re-checked against the source by the author before being accepted or rejected.",
+  "workflow": {
+    "name": "bounded-readonly-review",
+    "runId": "wf_eaacbccc-32e",
+    "maxConcurrency": 1,
+    "agents": 2,
+    "agentsErrored": 0
+  },
+  "packets": [
+    {
+      "id": "batch-001",
+      "sha256": "fa3d2b4442c69a66ef94a3e1a58eccffa96d90c5669b742a66ede3c77a56cf4f",
+      "coveredIds": [
+        "merge-change.txt:1-1115"
+      ],
+      "unstarted": [],
+      "deferred": []
+    },
+    {
+      "id": "batch-002",
+      "sha256": "202fb58c938728e1573d2114577719c149379abb7f85b9e0190e01cf70177b01",
+      "coveredIds": [
+        "merge-change.txt:1116-1899"
+      ],
+      "unstarted": [],
+      "deferred": []
+    }
+  ],
+  "claims": [
+    {
+      "n": 1,
+      "claim": "navigate commits the guard before a provider call and keeps the abort handling on the non-provider path",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-001"
+    },
+    {
+      "n": 2,
+      "claim": "fill keeps root scoping and the redacted debug log",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-001"
+    },
+    {
+      "n": 3,
+      "claim": "SelectBox fill is async, awaits the guarded sleep, checkpoints after the click, scopes lookups through the DOM root and keeps no setTimeout flow",
+      "verdict": "HOLDS",
+      "by": "reviewer could not tell (split packet); author read the function and counted 0 setTimeout calls inside it"
+    },
+    {
+      "n": 4,
+      "claim": "_fillElement awaits the SelectBox fill and uses the scoped closest",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-001"
+    },
+    {
+      "n": 5,
+      "claim": "DOMActions.dispose cancels pending waits and disposes the DOM root",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-001"
+    },
+    {
+      "n": 6,
+      "claim": "EnhancedFormDetector logs the masked value and uses the DOM root event options",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-002"
+    },
+    {
+      "n": 7,
+      "claim": "FormRegistry dispose cancels pending selects and disposes the root; the detector gets root and config debugMode",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-002"
+    },
+    {
+      "n": 8,
+      "claim": "AutomationConfig keeps redactor, root and locationProvider",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-002"
+    },
+    {
+      "n": 9,
+      "claim": "strict resolution is unchanged without a scope and confined to the scope with one",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-001"
+    },
+    {
+      "n": 10,
+      "claim": "jest config keeps the html2canvas mapping, clearMocks, strict options and testMatch",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-002"
+    },
+    {
+      "n": 11,
+      "claim": "the dom-free test exempts only DOMRoot.ts and asserts the agent core never imports it",
+      "verdict": "HOLDS",
+      "by": "reviewer, batch-002"
+    },
+    {
+      "n": 12,
+      "claim": "the new strict-root test fails if the scoping is removed",
+      "verdict": "HOLDS",
+      "by": "reviewer named the assertions; author removed the scoping from strict.ts and 5 of 6 tests failed (the invalid-selector control still passed), then restored the file byte-for-byte and 6 of 6 passed"
+    }
+  ],
+  "findings": [
+    {
+      "finding": "Provider navigation rewraps a timeout as NETWORK_ERROR and ignores the abort signal",
+      "disposition": "rejected",
+      "evidence": "upstream tests/root.test.ts asserts NETWORK_ERROR with message 'Navigation failed: Navigation timeout after 20ms' for a provider navigation that times out (lines 524-533); lines 318-337 assert NETWORK_ERROR for a provider that throws. The resolution added guard.commit() before the provider call, outside the try, so a pre-aborted run still throws EXECUTION_CANCELLED."
+    },
+    {
+      "finding": "A live DOM node is still passed to the debug logger",
+      "disposition": "not a defect",
+      "evidence": "forcelog snapshots every Element through _describe before printing (DOMActions.ts forcelog)."
+    },
+    {
+      "finding": "Delayed temp-link timers use the DOM root container after dispose",
+      "disposition": "pre-existing upstream code, unchanged by the merge, not changed"
+    },
+    {
+      "finding": "Scoped click path returns early and shows no guard.commit",
+      "disposition": "verified fine",
+      "evidence": "the legacy click path commits at DOMActions.ts lines 255-265, before _clickElement (line 273)."
+    },
+    {
+      "finding": "EnhancedFormDetector never disposes its DOMRoot",
+      "disposition": "pre-existing upstream design: the detector never calls DOMRoot.initialize, so it holds no listener to release"
+    },
+    {
+      "finding": "SelectBox timers and window.getComputedStyle remain in EnhancedFormDetector",
+      "disposition": "pre-existing, unchanged by the merge, not changed"
+    },
+    {
+      "finding": "_submitFormDirectly root path calls requestSubmit without an existence check",
+      "disposition": "pre-existing upstream behaviour, not changed"
+    },
+    {
+      "finding": "Found by the author, not the reviewer: the blank-value SelectBox guard in fill used an unscoped element.closest",
+      "disposition": "fixed (now this._dom.closest), before the source was frozen and hashed"
+    }
+  ]
+}

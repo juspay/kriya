@@ -13,6 +13,7 @@ Kriya is a TypeScript library that takes action commands from ANY AI and execute
 - ✅ **DOM element finding** with smart description matching
 - ✅ **Screenshot capture** with html2canvas integration
 - ✅ **Page context extraction** for AI analysis
+- ✅ **Click guide** that highlights the next control for a goal in plain language
 - ✅ **Event system** for monitoring automation progress
 - ✅ **TypeScript support** with strict type safety
 - ✅ **Production ready** with comprehensive error handling
@@ -127,6 +128,49 @@ Example:
 1. User: "Fill the registration form with John Doe"
 2. Your AI: `[{type: "fillForm", parameters: {"fields": "{\"name\": \"John Doe\"}"}}]`
 3. Kriya: Executes form filling automatically
+
+## Click guide
+
+Say what you are looking for. Kriya lists the controls actually on the page, asks a decider which one is the next step, and highlights it. You click. Kriya reads the page again and moves the highlight. It does not click for you.
+
+The decider is injected, same as the rest of Kriya. `createTypeSafeDecider` is the TypeSafe Jev adapter: one `choice` for the operation and one `choice` for the target, in a single request.
+
+```typescript
+import { createClickGuide, createTypeSafeDecider } from '@juspay/kriya';
+
+const guide = createClickGuide();
+const decide = createTypeSafeDecider({
+  apiKey: process.env.TYPESAFE_API_KEY ?? '',
+});
+
+const step = await guide.start('turn off email notifications', decide);
+// step.label is the control now outlined on the page.
+// A click on that control asks for the next one.
+// guide.stop() removes the outline.
+```
+
+`mountJevGuide` puts the same loop on the page as a command bar. With an API key it asks Jev. The outline eases from one control to the next, and the corner chip shows how long the decision took.
+
+```typescript
+import { mountJevGuide } from '@juspay/kriya';
+
+const session = mountJevGuide({ apiKey: process.env.TYPESAFE_API_KEY ?? '' });
+await session.submit('turn off email notifications');
+```
+
+Open `examples/jev-stage.html` to watch the outline move. That page uses a local stand-in until a TypeSafe key is supplied.
+
+`createResearchGuide` investigates one yes/no question. Each turn sends that same question, the current page, available actions, collected passages, and action history to Jev. Jev selects what to read or where to navigate and decides when it has enough evidence to answer. There are no checkpoints, supplied destinations, expected phrases, or required number of pages. Read-only exploration may proceed with uncertain action choices; the final answer requires confidence of at least 0.60. Previously tried navigation actions and already collected passages are excluded from later choices.
+
+`examples/breeze-jev.mjs` records the question “Does breeze.in offer one-click checkout?” with live Jev requests. It uses the existing browser tools and brand assets in `/tmp/amazon-guide` by default (`BREEZE_GUIDE_TOOLS_DIR` can override that directory):
+
+```bash
+node --env-file=/path/to/private.env examples/breeze-jev.mjs
+```
+
+The env file must supply `TYPESAFE_API_KEY` or `JEV_API_KEY`. The key stays in Node; the page sends its observations through a binding, and Node calls the [TypeSafe API](https://docs.typesafe.ai/api). Requests, responses, decisions, and verification frames go into `/tmp/amazon-guide/jev-verification/`. A successful live run updates `examples/breeze-automatic.mp4`; failed runs retain their own failure video. `BREEZE_GUIDE_QUESTION` changes the question, and `--no-publish` keeps a test run separate from the main video. The browser remains on breeze.in and excludes shopping, docs, directory embeds, and external navigation. This is an informational investigation and does not execute a purchase.
+
+Any function with the `GuideDecider` shape can stand in for Jev. A decider must choose an offered operation and, when required, an index from the corresponding target question.
 
 ## API Reference
 
