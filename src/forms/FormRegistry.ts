@@ -9,11 +9,15 @@ import type {
   FormFillResult,
   FormLibrary,
   FormRegistryConfig,
+  MutationGuard,
   ReactFiberNode,
 } from '@/types';
 import { DEFAULT_FORM_REGISTRY_CONFIG } from '@/types';
 import { AutomationError } from '@/types';
 import { EnhancedFormDetector } from './EnhancedFormDetector';
+import { NOOP_GUARD } from '@/actions/guard';
+import { fillStrict, selectNative, setChecked } from '@/actions/strict';
+import { DOMRoot } from '@/utils/DOMRoot';
 
 /**
  * Minimal shape of a react-final-form API handle extracted from a fiber.
@@ -30,7 +34,13 @@ type ReactFinalFormHandle = {
   [key: string]: unknown;
 };
 
-import { DOMRoot } from '@/utils/DOMRoot';
+type PendingSelect = {
+  readonly promise: Promise<void>;
+  readonly cancel: () => void;
+};
+
+// Debug logs describe a value by its size only; the value itself never reaches the console.
+const mask = (value: unknown): string => `[${String(value ?? '').length} chars]`;
 
 export class FormRegistry {
   private readonly _dom: DOMRoot;
@@ -40,6 +50,8 @@ export class FormRegistry {
   private readonly _formElements: Map<string, HTMLFormElement>;
   private _formLibrary: FormLibrary | null;
   private _initialized: boolean;
+  private readonly _pendingSelects = new Set<PendingSelect>();
+  private _collectingSelects: Set<PendingSelect> | undefined;
   public addEventListener: ((eventType: EventType, callback: EventCallback) => void) | null;
 
   constructor(config: AutomationConfig) {
@@ -59,7 +71,25 @@ export class FormRegistry {
     if (!this._config.debugMode) {
       return;
     }
-    console.info('🔍 KRIYA:', ...args);
+    console.info('🔍 KRIYA:', ...args.map(arg => this._safeLogArg(arg)));
+  }
+
+  // Values are masked at the call sites; this is the net for what they cannot know about: error messages
+  // from third-party form APIs, element dumps and objects.
+  private _safeLogArg(arg: unknown): unknown {
+    const redactor = this._config.redactor;
+    if (typeof arg === 'string') {
+      return redactor ? redactor.scrub(arg) : arg;
+    }
+    if (arg instanceof Error) {
+      // Third-party code often echoes the value it rejected in its message; without a redactor nothing can
+      // tell which part is a typed value, so only the name is logged.
+      return redactor ? redactor.scrub(`${arg.name}: ${arg.message}`) : arg.name;
+    }
+    if (arg instanceof Element) {
+      return `<${arg.tagName.toLowerCase()}>`;
+    }
+    return redactor && typeof arg === 'object' && arg !== null ? redactor.scrubDeep(arg) : arg;
   }
 
   public initialize(formLibrary?: FormLibrary): void {
@@ -136,7 +166,12 @@ export class FormRegistry {
     }
   }
 
-  public async fillForm(formId: string, fields: Record<string, unknown>): Promise<FormFillResult> {
+  public async fillForm(
+    formId: string,
+    fields: Record<string, unknown>,
+    guard: MutationGuard = NOOP_GUARD,
+    signal?: AbortSignal
+  ): Promise<FormFillResult> {
     this._ensureInitialized();
 
     const formApi = this._forms.get(formId);
@@ -146,11 +181,115 @@ export class FormRegistry {
       });
     }
 
-    return this._fillFormInternal(formApi, fields, formId);
+    return this._fillFormInternal(formApi, fields, formId, guard, signal);
   }
 
-  public async fillAnyForm(fields: Record<string, unknown>): Promise<FormFillResult> {
+  public async fillFormStrict(
+    formId: string,
+    fields: Record<string, unknown>,
+    guard: MutationGuard
+  ): Promise<FormFillResult> {
     this._ensureInitialized();
+    guard.checkpoint();
+    const form = this._formElements.get(formId);
+    if (!form || !form.isConnected) {
+      throw new AutomationError('The registered form is unavailable', 'FORM_NOT_FOUND');
+    }
+    const names = Object.keys(fields);
+    const failed = (): FormFillResult => ({
+      success: false,
+      fieldsCount: names.length,
+      filledFields: [],
+      failedFields: names,
+      formId,
+    });
+    const controls = Array.from(form.elements);
+    const plan: Array<{
+      readonly name: string;
+      readonly element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+      readonly value: string;
+    }> = [];
+    for (const name of names) {
+      const matches = controls.filter(control => {
+        return (
+          control instanceof HTMLElement &&
+          (control.getAttribute('name') === name || control.id === name)
+        );
+      });
+      const target = matches[0];
+      const value = fields[name];
+      if (
+        matches.length !== 1 ||
+        typeof value !== 'string' ||
+        !(
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement
+        )
+      ) {
+        return failed();
+      }
+      if (
+        target instanceof HTMLInputElement &&
+        ![
+          'text',
+          'email',
+          'password',
+          'tel',
+          'url',
+          'search',
+          'number',
+          'checkbox',
+          'radio',
+        ].includes(target.type)
+      ) {
+        return failed();
+      }
+      if (
+        target instanceof HTMLInputElement &&
+        ['checkbox', 'radio'].includes(target.type) &&
+        value !== 'true' &&
+        value !== 'false'
+      ) {
+        return failed();
+      }
+      plan.push({ name, element: target, value });
+    }
+    const filledFields: string[] = [];
+    for (const entry of plan) {
+      guard.checkpoint();
+      if (!entry.element.isConnected || entry.element.form !== form) {
+        throw new AutomationError('The selected form field is no longer available', 'TARGET_STALE');
+      }
+      const result =
+        entry.element instanceof HTMLSelectElement
+          ? selectNative(entry.element, 'value', entry.value, true, guard)
+          : entry.element instanceof HTMLInputElement &&
+              ['checkbox', 'radio'].includes(entry.element.type)
+            ? await setChecked(entry.element, entry.value === 'true', guard)
+            : fillStrict(entry.element, entry.value, guard, true);
+      if (!result.ok) {
+        throw new AutomationError(result.message, result.code);
+      }
+      if ('matched' in result.outcome && result.outcome.matched !== true) {
+        throw new AutomationError(
+          'A form field did not retain the requested state',
+          'READBACK_MISMATCH'
+        );
+      }
+      filledFields.push(entry.name);
+      guard.checkpoint();
+    }
+    return { success: true, fieldsCount: names.length, filledFields, failedFields: [], formId };
+  }
+
+  public async fillAnyForm(
+    fields: Record<string, unknown>,
+    guard: MutationGuard = NOOP_GUARD,
+    signal?: AbortSignal
+  ): Promise<FormFillResult> {
+    this._ensureInitialized();
+    guard.checkpoint();
 
     this._forceLog('🔍 Starting fillAnyForm with fields:', Object.keys(fields));
     this._forceLog(`📊 Currently registered forms: ${this._forms.size}`);
@@ -185,7 +324,7 @@ export class FormRegistry {
     const bestMatch = this._findBestFormMatch(fields);
     if (bestMatch) {
       this._forceLog(`✅ Found best match: ${bestMatch.formId} (score: ${bestMatch.score})`);
-      return this._fillFormInternal(bestMatch.formApi, fields, bestMatch.formId);
+      return this._fillFormInternal(bestMatch.formApi, fields, bestMatch.formId, guard, signal);
     }
 
     // PRIORITY 3: Try alternative matching strategies
@@ -193,7 +332,13 @@ export class FormRegistry {
     const alternativeMatch = this._findAlternativeFormMatch();
     if (alternativeMatch) {
       this._forceLog('✅ Found form using alternative matching');
-      return this._fillFormInternal(alternativeMatch.formApi, fields, alternativeMatch.formId);
+      return this._fillFormInternal(
+        alternativeMatch.formApi,
+        fields,
+        alternativeMatch.formId,
+        guard,
+        signal
+      );
     }
 
     // Log detailed field mismatch info
@@ -284,6 +429,9 @@ export class FormRegistry {
   }
 
   public dispose(): void {
+    for (const pending of [...this._pendingSelects]) {
+      pending.cancel();
+    }
     this._dom.dispose();
     this._forms.clear();
     this._formElements.clear();
@@ -498,7 +646,7 @@ export class FormRegistry {
       },
 
       change: (field: string, value: unknown): void => {
-        this._forceLog(`🔄 Changing field "${field}" to:`, value);
+        this._forceLog(`🔄 Changing field "${field}" to ${mask(value)}`);
         if (reactFormAPI.change) {
           reactFormAPI.change(field, value);
         } else {
@@ -598,18 +746,20 @@ export class FormRegistry {
   private async _fillFormInternal(
     formApi: FormAPI,
     fields: Record<string, unknown>,
-    formId?: string
+    formId?: string,
+    guard: MutationGuard = NOOP_GUARD,
+    signal?: AbortSignal
   ): Promise<FormFillResult> {
     const filledFields: string[] = [];
     const failedFields: string[] = [];
+    const pendingSelects = new Set<PendingSelect>();
 
     try {
       this._forceLog(
         `🚀 Filling form ${formId || 'any'} with ${Object.keys(fields).length} fields`
       );
       const fieldSummaries = Object.entries(fields).map(([name, value]) => {
-        const preview = String(value ?? '');
-        return `${name}: "${preview}" (${preview.length} chars)`;
+        return `${name}: ${mask(value)}`;
       });
       this._forceLog('📋 Field details:', fieldSummaries);
 
@@ -636,7 +786,8 @@ export class FormRegistry {
 
         try {
           // Use initialize for bulk setting of values (more efficient for React Final Form)
-          formApi.initialize(validFields);
+          guard.checkpoint();
+          this._collectSelects(pendingSelects, () => formApi.initialize?.(validFields));
 
           // Mark all valid fields as successfully filled
           filledFields.push(...Object.keys(validFields));
@@ -658,14 +809,31 @@ export class FormRegistry {
           this._forceLog('❌ Initialize error:', error);
 
           // Fallback to individual field changes if initialize fails
-          await this._fillFieldsIndividually(formApi, validFields, filledFields, failedFields);
+          await this._fillFieldsIndividually(
+            formApi,
+            validFields,
+            filledFields,
+            failedFields,
+            guard,
+            pendingSelects
+          );
         }
       } else {
         this._forceLog('🔄 Using individual field changes (no initialize method available)');
 
         // For native forms or React Final Form without initialize, use individual changes
-        await this._fillFieldsIndividually(formApi, validFields, filledFields, failedFields);
+        await this._fillFieldsIndividually(
+          formApi,
+          validFields,
+          filledFields,
+          failedFields,
+          guard,
+          pendingSelects
+        );
       }
+
+      await this._waitForSelects([...pendingSelects], signal);
+      guard.checkpoint();
 
       const result: FormFillResult = {
         success: failedFields.length === 0,
@@ -695,6 +863,10 @@ export class FormRegistry {
         'EXECUTION_FAILED',
         { formId, fields: Object.keys(fields), originalError: error }
       );
+    } finally {
+      for (const pending of pendingSelects) {
+        pending.cancel();
+      }
     }
   }
 
@@ -910,7 +1082,7 @@ export class FormRegistry {
   }
 
   private _fillReScriptSelectBox(element: HTMLElement, value: string): void {
-    this._forceLog(`🎯 Filling SelectBox with value: "${value}"`);
+    this._forceLog(`🎯 Filling SelectBox with ${mask(value)}`);
 
     // Find the SelectBox container and button
     const selectBoxContainer =
@@ -933,11 +1105,11 @@ export class FormRegistry {
     }
 
     const currentValue = triggerButton.getAttribute('data-value');
-    this._forceLog(`✅ Found trigger button with current value: "${currentValue}"`);
+    this._forceLog(`✅ Found trigger button with current ${mask(currentValue)}`);
 
     // Check if the value is already set correctly
     if (currentValue && currentValue.toLowerCase() === value.toLowerCase()) {
-      this._forceLog(`✅ Value "${value}" already set correctly, no need to change`);
+      this._forceLog(`✅ Value ${mask(value)} already set correctly, no need to change`);
       return;
     }
 
@@ -946,7 +1118,8 @@ export class FormRegistry {
     triggerButton.click();
 
     // Wait a moment for the dropdown to open, then select the option
-    setTimeout(() => {
+    this._scheduleSelect(checkpoint => {
+      checkpoint();
       this._forceLog('⏳ Looking for dropdown after timeout');
 
       // Look for the dropdown options
@@ -977,9 +1150,7 @@ export class FormRegistry {
       }
 
       if (optionToSelect) {
-        this._forceLog(
-          `✅ Found option by data-dropdown-value: "${optionToSelect.getAttribute('data-dropdown-value')}"`
-        );
+        this._forceLog('✅ Found option by data attribute');
       }
 
       // Look for exact text content match
@@ -996,9 +1167,7 @@ export class FormRegistry {
         }) as HTMLElement;
 
         if (optionToSelect) {
-          this._forceLog(
-            `✅ Found option by text content: "${optionToSelect.textContent?.trim()}"`
-          );
+          this._forceLog('✅ Found option by text content');
         }
       }
 
@@ -1016,17 +1185,16 @@ export class FormRegistry {
         }) as HTMLElement;
 
         if (optionToSelect) {
-          this._forceLog(
-            `✅ Found option by partial match: "${optionToSelect.textContent?.trim()}"`
-          );
+          this._forceLog('✅ Found option by partial match');
         }
       }
 
       if (optionToSelect) {
-        this._forceLog(`🖱️ Clicking option: "${optionToSelect.textContent?.trim()}"`);
+        this._forceLog('🖱️ Clicking the matched option');
 
         // Click the selected option
         optionToSelect.click();
+        checkpoint();
 
         // Update the button's data-value attribute
         const selectedValue =
@@ -1034,14 +1202,14 @@ export class FormRegistry {
           optionToSelect.textContent?.trim() ||
           value;
 
-        this._forceLog(`🔄 Updating button data-value to: "${selectedValue}"`);
+        this._forceLog(`🔄 Updating button data-value to ${mask(selectedValue)}`);
         triggerButton.setAttribute('data-value', selectedValue);
 
         // Update button text
         const buttonTextElement = triggerButton.querySelector('[data-button-text]');
         if (buttonTextElement) {
           const newText = optionToSelect.textContent?.trim() || value;
-          this._forceLog(`🔄 Updating button text to: "${newText}"`);
+          this._forceLog(`🔄 Updating button text to ${mask(newText)}`);
           buttonTextElement.textContent = newText;
           buttonTextElement.setAttribute('data-button-text', newText);
         }
@@ -1061,7 +1229,7 @@ export class FormRegistry {
 
         this._forceLog('✅ SelectBox fill completed successfully');
       } else {
-        this._forceLog(`❌ Option "${value}" not found in dropdown`);
+        this._forceLog(`❌ Option ${mask(value)} not found in dropdown`);
 
         // Log all available options for debugging
         const allOptions = dropdown.querySelectorAll('[data-dropdown-value]');
@@ -1073,7 +1241,81 @@ export class FormRegistry {
           }))
         );
       }
-    }, 150); // Increased timeout slightly
+    });
+  }
+
+  private _collectSelects(pending: Set<PendingSelect>, change: () => void): void {
+    const previous = this._collectingSelects;
+    this._collectingSelects = pending;
+    try {
+      change();
+    } finally {
+      this._collectingSelects = previous;
+    }
+  }
+
+  private _scheduleSelect(change: (checkpoint: () => void) => void): void {
+    let resolve: () => void = () => undefined;
+    let reject: (error: unknown) => void = () => undefined;
+    const promise = new Promise<void>((complete, fail) => {
+      resolve = complete;
+      reject = fail;
+    });
+    let finished = false;
+    const cleanup = (): boolean => {
+      if (finished) {
+        return false;
+      }
+      finished = true;
+      clearTimeout(timer);
+      this._pendingSelects.delete(pending);
+      return true;
+    };
+    const pending: PendingSelect = {
+      promise,
+      cancel: () => {
+        if (cleanup()) {
+          reject(new AutomationError('Form fill was cancelled', 'EXECUTION_CANCELLED'));
+        }
+      },
+    };
+    const timer = setTimeout(() => {
+      if (!this._initialized) {
+        pending.cancel();
+        return;
+      }
+      try {
+        change(() => {
+          if (finished || !this._initialized) {
+            throw new AutomationError('Form fill was cancelled', 'EXECUTION_CANCELLED');
+          }
+        });
+        cleanup();
+        resolve();
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    }, 150);
+    this._pendingSelects.add(pending);
+    this._collectingSelects?.add(pending);
+    void promise.catch(() => undefined);
+  }
+
+  private async _waitForSelects(
+    pending: readonly PendingSelect[],
+    signal?: AbortSignal
+  ): Promise<void> {
+    const cancel = (): void => pending.forEach(task => task.cancel());
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) {
+      cancel();
+    }
+    try {
+      await Promise.all(pending.map(task => task.promise));
+    } finally {
+      signal?.removeEventListener('abort', cancel);
+    }
   }
 
   private _batchFillFields(
@@ -1086,7 +1328,7 @@ export class FormRegistry {
         for (const [fieldName, fieldValue] of Object.entries(values)) {
           try {
             reactFormAPI.change?.(fieldName, fieldValue);
-            this._forceLog(`✅ Changed field "${fieldName}" to:`, fieldValue);
+            this._forceLog(`✅ Changed field "${fieldName}" to ${mask(fieldValue)}`);
           } catch (error) {
             this._forceLog(`❌ Failed to change field "${fieldName}":`, error);
           }
@@ -1097,7 +1339,7 @@ export class FormRegistry {
       for (const [fieldName, fieldValue] of Object.entries(values)) {
         try {
           reactFormAPI.change?.(fieldName, fieldValue);
-          this._forceLog(`✅ Changed field "${fieldName}" to:`, fieldValue);
+          this._forceLog(`✅ Changed field "${fieldName}" to ${mask(fieldValue)}`);
         } catch (error) {
           this._forceLog(`❌ Failed to change field "${fieldName}":`, error);
         }
@@ -1383,7 +1625,7 @@ export class FormRegistry {
       }
 
       validFields[fieldName] = String(fieldValue);
-      this._forceLog(`✅ Valid field: "${fieldName}" = "${fieldValue}"`);
+      this._forceLog(`✅ Valid field: "${fieldName}" = ${mask(fieldValue)}`);
     }
 
     return validFields;
@@ -1393,16 +1635,19 @@ export class FormRegistry {
     formApi: FormAPI,
     fields: Record<string, string>,
     filledFields: string[],
-    failedFields: string[]
+    failedFields: string[],
+    guard: MutationGuard = NOOP_GUARD,
+    pendingSelects = new Set<PendingSelect>()
   ): Promise<void> {
     this._forceLog('🔄 Filling fields individually with batch operation');
 
     return new Promise<void>(resolve => {
       formApi.batch(() => {
         for (const [fieldName, fieldValue] of Object.entries(fields)) {
+          guard.checkpoint();
           try {
-            this._forceLog(`🔄 Attempting to change field "${fieldName}" to "${fieldValue}"`);
-            formApi.change(fieldName, fieldValue);
+            this._forceLog(`🔄 Attempting to change field "${fieldName}" to ${mask(fieldValue)}`);
+            this._collectSelects(pendingSelects, () => formApi.change(fieldName, fieldValue));
             filledFields.push(fieldName);
             this._forceLog(`✅ Successfully changed field "${fieldName}"`);
           } catch (error) {
@@ -1510,7 +1755,7 @@ export class FormRegistry {
       const enhancedDetector = new EnhancedFormDetector({
         autoDetect: true,
         root: this._config.root,
-        debugMode: true,
+        debugMode: this._config.debugMode,
         includeDisabled: false,
       });
 

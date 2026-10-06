@@ -15,6 +15,9 @@ import type {
 
 import { DOMRoot } from '@/utils/DOMRoot';
 
+// Debug logs describe a value by its size only; the value itself never reaches the console.
+const mask = (value: unknown): string => `[${String(value ?? '').length} chars]`;
+
 export class EnhancedFormDetector {
   private readonly _dom: DOMRoot;
   private forms: Map<string, EnhancedDetectedForm> = new Map();
@@ -40,7 +43,19 @@ export class EnhancedFormDetector {
     if (!this.config.debugMode) {
       return;
     }
-    console.info('🔍 KRIYA-ENHANCED:', ...args);
+    console.info('🔍 KRIYA-ENHANCED:', ...args.map(arg => this._safeLogArg(arg)));
+  }
+
+  // Values are masked at the call sites; this is the net for error messages and element dumps, whose
+  // live `.value` would otherwise render in the console.
+  private _safeLogArg(arg: unknown): unknown {
+    if (arg instanceof Error) {
+      return arg.name;
+    }
+    if (arg instanceof Element) {
+      return `<${arg.tagName.toLowerCase()}>`;
+    }
+    return arg;
   }
 
   /**
@@ -511,7 +526,7 @@ export class EnhancedFormDetector {
     }
 
     if (!name) {
-      this._forceLog('⚠️ Skipping element without name/id:', element);
+      this._forceLog(`⚠️ Skipping ${element.tagName.toLowerCase()} element without name/id`);
       return null; // Skip elements without identifiers
     }
 
@@ -624,13 +639,13 @@ export class EnhancedFormDetector {
               hasInitialValues: !!state.initialValues,
               initialValuesKeys: state.initialValues ? Object.keys(state.initialValues) : [],
               hasFieldInInitialValues: state.initialValues && fieldName in state.initialValues,
-              fieldInitialValue: state.initialValues?.[fieldName],
-              allInitialValues: state.initialValues,
             });
 
             if (state.initialValues && fieldName in state.initialValues) {
               const raw = state.initialValues[fieldName];
-              this._forceLog(`✅ Found React Final Form initial value for ${fieldName}:`, raw);
+              this._forceLog(
+                `✅ Found React Final Form initial value for ${fieldName}: ${mask(raw)}`
+              );
               return raw as string | boolean | string[];
             } else {
               this._forceLog(
@@ -665,14 +680,12 @@ export class EnhancedFormDetector {
             };
             this._forceLog(`🔍 Container form state for ${fieldName}:`, {
               hasInitialValues: !!state.initialValues,
-              fieldValue: state.initialValues?.[fieldName],
             });
 
             if (state.initialValues && fieldName in state.initialValues) {
               const raw = state.initialValues[fieldName];
               this._forceLog(
-                `✅ Found React Final Form initial value in container for ${fieldName}:`,
-                raw
+                `✅ Found React Final Form initial value in container for ${fieldName}: ${mask(raw)}`
               );
               return raw as string | boolean | string[];
             }
@@ -687,8 +700,7 @@ export class EnhancedFormDetector {
     const formStateValue = this.searchForFormStateInReactTree(element, fieldName);
     if (formStateValue !== null && formStateValue !== undefined) {
       this._forceLog(
-        `✅ Found initial value via React hook search for ${fieldName}:`,
-        formStateValue
+        `✅ Found initial value via React hook search for ${fieldName}: ${mask(formStateValue)}`
       );
       if (
         typeof formStateValue === 'string' ||
@@ -777,7 +789,7 @@ export class EnhancedFormDetector {
         // Check if this looks like useFormState result
         if (state.initialValues && fieldName in state.initialValues) {
           const raw = state.initialValues[fieldName];
-          this._forceLog(`✅ Found initial value in React hook for ${fieldName}:`, raw);
+          this._forceLog(`✅ Found initial value in React hook for ${fieldName}: ${mask(raw)}`);
           return raw as DetectedFormApi;
         }
 
@@ -789,7 +801,9 @@ export class EnhancedFormDetector {
           fieldName in state.initialValues
         ) {
           const raw = state.initialValues[fieldName];
-          this._forceLog(`✅ Found initial value in form state hook for ${fieldName}:`, raw);
+          this._forceLog(
+            `✅ Found initial value in form state hook for ${fieldName}: ${mask(raw)}`
+          );
           return raw as DetectedFormApi;
         }
       }
@@ -824,7 +838,7 @@ export class EnhancedFormDetector {
         const init = context.memoizedValue.initialValues;
         if (init && fieldName in init) {
           const raw = init[fieldName];
-          this._forceLog(`✅ Found initial value in React context for ${fieldName}:`, raw);
+          this._forceLog(`✅ Found initial value in React context for ${fieldName}: ${mask(raw)}`);
           return raw;
         }
 
@@ -836,7 +850,9 @@ export class EnhancedFormDetector {
             const stateInit = (state as { initialValues?: Record<string, unknown> }).initialValues;
             if (stateInit && fieldName in stateInit) {
               const raw = stateInit[fieldName];
-              this._forceLog(`✅ Found initial value in context form API for ${fieldName}:`, raw);
+              this._forceLog(
+                `✅ Found initial value in context form API for ${fieldName}: ${mask(raw)}`
+              );
               return raw;
             }
           } catch {
@@ -865,7 +881,7 @@ export class EnhancedFormDetector {
         ?.initialValues;
       if (initialValues && fieldName in initialValues) {
         const raw = initialValues[fieldName];
-        this._forceLog(`🔍 Found Formik initial value for ${fieldName}:`, raw);
+        this._forceLog(`🔍 Found Formik initial value for ${fieldName}: ${mask(raw)}`);
         if (
           typeof raw === 'string' ||
           typeof raw === 'boolean' ||
@@ -929,7 +945,7 @@ export class EnhancedFormDetector {
       return false;
     }
 
-    this._forceLog(`🔄 Setting ${fieldName} = "${value}" in ${form.formLibrary} form`);
+    this._forceLog(`🔄 Setting ${fieldName} = ${mask(value)} in ${form.formLibrary} form`);
 
     try {
       switch (form.formLibrary) {
@@ -944,7 +960,7 @@ export class EnhancedFormDetector {
           return this.setNativeFormValue(field, value);
       }
     } catch (error) {
-      this._forceLog(`❌ Error setting field value: ${error}`);
+      this._forceLog('❌ Error setting field value:', error);
       return false;
     }
   }
@@ -972,14 +988,17 @@ export class EnhancedFormDetector {
               value === 'null'
             ) {
               const parsed = JSON.parse(value);
-              this._forceLog(
-                `🔄 Parsed JSON string for ${fieldName}: "${value}" → ${Array.isArray(parsed) ? `[${parsed.join(', ')}]` : typeof parsed === 'object' ? 'object' : parsed}`
-              );
+              const shape = Array.isArray(parsed)
+                ? `array (${parsed.length} items)`
+                : typeof parsed;
+              this._forceLog(`🔄 Parsed JSON string for ${fieldName}: ${mask(value)} → ${shape}`);
               processedValue = parsed;
             }
           } catch {
             // If parsing fails, use original value
-            this._forceLog(`⚠️ Could not parse JSON for ${fieldName}, using as string: "${value}"`);
+            this._forceLog(
+              `⚠️ Could not parse JSON for ${fieldName}, using as string: ${mask(value)}`
+            );
           }
         }
 
@@ -988,15 +1007,13 @@ export class EnhancedFormDetector {
         this.triggerFieldChange(form, fieldName, processedValue);
 
         // Log the actual value type being set
-        const valueDisplay = Array.isArray(processedValue)
-          ? `[${processedValue.join(', ')}] (array)`
+        const shape = Array.isArray(processedValue)
+          ? `array (${processedValue.length} items)`
           : processedValue !== null && typeof processedValue === 'object'
             ? `{object} (${Object.keys(processedValue as object).length} keys)`
-            : `"${String(processedValue)}" (${typeof processedValue})`;
+            : `${typeof processedValue} ${mask(processedValue)}`;
 
-        this._forceLog(
-          `✅ Successfully set ${fieldName} = ${valueDisplay} via React Final Form API`
-        );
+        this._forceLog(`✅ Successfully set ${fieldName} = ${shape} via React Final Form API`);
         return true;
       } catch (error) {
         this._forceLog(`❌ React Final Form API change() failed for ${fieldName}:`, error);
@@ -1097,7 +1114,7 @@ export class EnhancedFormDetector {
     // Trigger events to notify React/other libraries
     this.triggerEvents(element);
 
-    this._forceLog(`✅ Set ${field.name} = "${value}" via DOM manipulation`);
+    this._forceLog(`✅ Set ${field.name} = ${mask(value)} via DOM manipulation`);
     return true;
   }
 
@@ -1105,7 +1122,7 @@ export class EnhancedFormDetector {
    * Handle ReScript SelectBox components specifically
    */
   private setReScriptSelectBoxValue(button: HTMLButtonElement, value: string): boolean {
-    this._forceLog(`🎯 Setting ReScript SelectBox to "${value}"`);
+    this._forceLog(`🎯 Setting ReScript SelectBox to ${mask(value)}`);
 
     const container =
       this._dom.closest(button, '[data-component-field-wrapper]') ||
@@ -1118,7 +1135,7 @@ export class EnhancedFormDetector {
 
     const currentValue = button.getAttribute('data-value');
     if (currentValue && currentValue.toLowerCase() === value.toLowerCase()) {
-      this._forceLog(`✅ Value "${value}" already set correctly`);
+      this._forceLog(`✅ Value ${mask(value)} already set correctly`);
       return true;
     }
 
@@ -1148,7 +1165,7 @@ export class EnhancedFormDetector {
         });
 
       if (dropdown) {
-        this._forceLog(`✅ Found dropdown, looking for option "${value}"`);
+        this._forceLog(`✅ Found dropdown, looking for option ${mask(value)}`);
 
         // Find option with case-insensitive search
         let option = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
@@ -1161,7 +1178,7 @@ export class EnhancedFormDetector {
         }
 
         if (option) {
-          this._forceLog(`🖱️ Clicking option: "${option.getAttribute('data-dropdown-value')}"`);
+          this._forceLog('🖱️ Clicking the matched option');
           option.click();
 
           // Update button attributes
@@ -1178,9 +1195,9 @@ export class EnhancedFormDetector {
           container.dispatchEvent(
             new Event('change', { bubbles: true, ...this._dom.eventOptions })
           );
-          this._forceLog(`✅ SelectBox successfully set to "${selectedValue}"`);
+          this._forceLog(`✅ SelectBox successfully set to ${mask(selectedValue)}`);
         } else {
-          this._forceLog(`❌ Option "${value}" not found in dropdown`);
+          this._forceLog(`❌ Option ${mask(value)} not found in dropdown`);
         }
       } else {
         this._forceLog('❌ Dropdown not found after clicking');
@@ -1700,8 +1717,10 @@ export class EnhancedFormDetector {
 
     for (const [, field] of form.fields) {
       if (JSON.stringify(field.value) !== JSON.stringify(field.initialValue)) {
+        const current = mask(JSON.stringify(field.value));
+        const initial = mask(JSON.stringify(field.initialValue));
         this._forceLog(
-          `🔍 Form ${formId} is modified - field ${field.name}: current=${JSON.stringify(field.value)}, initial=${JSON.stringify(field.initialValue)}`
+          `🔍 Form ${formId} is modified - field ${field.name}: current=${current}, initial=${initial}`
         );
         return true;
       }

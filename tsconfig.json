@@ -36,6 +36,7 @@
       "@/actions": ["actions"],
       "@/forms": ["forms"],
       "@/context": ["context"],
+      "@/guide": ["guide"],
       "@/utils": ["utils"]
     }
   },

@@ -1,0 +1,36 @@
+{
+  "sourceSha256": "974f563f3586c6757f7645979b55b1fa528fc1ab707fa2b6d28a79048c629369",
+  "distSha256": "41869cfd512fe63330adc43293bb33746866b9933ad81c20223a65012a2d89bf",
+  "checks": [
+    {
+      "check": "tsc",
+      "exitCode": 0
+    },
+    {
+      "check": "test-types",
+      "exitCode": 0
+    },
+    {
+      "check": "eslint",
+      "exitCode": 0
+    },
+    {
+      "check": "jest",
+      "exitCode": 0,
+      "success": true,
+      "suites": 46,
+      "tests": 3700
+    },
+    {
+      "check": "prettier",
+      "exitCode": 0
+    },
+    {
+      "check": "protected",
+      "count": 61,
+      "mismatches": []
+    }
+  ],
+  "frozen": true,
+  "passed": true
+}

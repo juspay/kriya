@@ -107,3 +107,10 @@ screenshots/
 
 # Local development
 .local/
+# Local TaskAgent integration evidence and development bundles
+e2e/evidence/
+e2e/.cache/
+e2e/.build.lock
+
+# Local immutable TypeSafe documentation snapshots
+e2e/official-typesafe/docs/

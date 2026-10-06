@@ -1,0 +1,39 @@
+{
+  "sourceSha256": "8ca16734ad91947c40f3e5f4188bae0f7d7dc5f105f1aa294cc9d1264b03ce04",
+  "distSha256": "41869cfd512fe63330adc43293bb33746866b9933ad81c20223a65012a2d89bf",
+  "checks": [
+    {
+      "check": "tsc",
+      "exitCode": 0
+    },
+    {
+      "check": "test-types",
+      "exitCode": 0
+    },
+    {
+      "check": "eslint",
+      "exitCode": 0
+    },
+    {
+      "check": "jest",
+      "exitCode": 0,
+      "success": true,
+      "suites": 48,
+      "tests": 3739
+    },
+    {
+      "check": "prettier",
+      "exitCode": 0
+    },
+    {
+      "check": "protected",
+      "count": 61,
+      "mismatches": [
+        "README.md",
+        "examples/breeze-jev.mjs"
+      ]
+    }
+  ],
+  "frozen": true,
+  "passed": false
+}

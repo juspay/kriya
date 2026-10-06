@@ -1,4 +1,5 @@
-import type { ActionCommand, ExecutionResult } from './actions';
+import type { ActionCommand, ExecutionOptions, ExecutionResult } from './actions';
+import type { Redactor } from './agent';
 import type { PageContext, ScreenshotOptions } from './context';
 import type { EventCallback, EventType } from './events';
 import type { FormLibrary } from './forms';
@@ -18,6 +19,8 @@ export type AutomationConfig = {
   readonly debugMode: boolean;
   readonly formDetectionEnabled: boolean;
   readonly contextCaptureEnabled: boolean;
+  /** Scrubs events, error messages and debug output. Absent keeps legacy raw output. */
+  readonly redactor?: Redactor;
   readonly root?: AutomationRoot;
   readonly locationProvider?: AutomationLocationProvider;
 };
@@ -33,7 +36,7 @@ export const DEFAULT_CONFIG: AutomationConfig = {
 
 export type WebAutomataAPI = {
   initialize: (formLibrary?: FormLibrary) => void;
-  executeAction: (action: ActionCommand) => Promise<ExecutionResult>;
+  executeAction: (action: ActionCommand, options?: ExecutionOptions) => Promise<ExecutionResult>;
   executeActions: (actions: readonly ActionCommand[]) => Promise<readonly ExecutionResult[]>;
   capturePageContext: () => Promise<PageContext>;
   registerForm: (formId: string, formElement: HTMLFormElement) => void;

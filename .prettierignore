@@ -41,3 +41,13 @@ Thumbs.db
 *.tmp
 .cache
 .temp
+e2e/evidence/
+
+# Generated gate receipts
+e2e/salvage/jest-*.json
+
+# Immutable official documentation snapshots used for the TypeSafe field audit
+e2e/official-typesafe/docs/
+
+# Acceptance receipts, copied byte-for-byte from the runs that produced them
+e2e/acceptance/**/*.json

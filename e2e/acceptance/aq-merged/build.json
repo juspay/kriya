@@ -1,0 +1,27 @@
+{
+  "sourceSha256": "8ca16734ad91947c40f3e5f4188bae0f7d7dc5f105f1aa294cc9d1264b03ce04",
+  "distSha256": "c43c16e0fca96e3437f61ee1a21c60cb32cbf3cbb70a093b9d1c97d7e5a1a0f6",
+  "dist": {
+    "ok": true,
+    "exitCode": 0,
+    "sha256": "c43c16e0fca96e3437f61ee1a21c60cb32cbf3cbb70a093b9d1c97d7e5a1a0f6",
+    "reasons": [],
+    "files": {
+      "esm": {
+        "sha256": "92696b751dd273f6648ba7b493f33383421a8acc88b04cbb0c6c36c1ef4d2b58",
+        "bytes": 478798
+      },
+      "umd": {
+        "sha256": "c9e1cf8ed12a3ac4fb08827e2d6861e2825db6e9e6afc4b27f65c1b8e7c521b7",
+        "bytes": 479032
+      }
+    },
+    "newestSource": {
+      "file": "src/actions/strict.ts",
+      "mtimeMs": 1791217996700.1355
+    }
+  },
+  "exitCode": 0,
+  "at": "2026-10-05T16:36:47.628Z",
+  "liveAcceptance": false
+}

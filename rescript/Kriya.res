@@ -15,6 +15,9 @@ type actionType =
   | @as("screenshot") Screenshot
   | @as("wait") Wait
   | @as("press") Press
+  | @as("setChecked") SetChecked
+  | @as("select") Select
+  | @as("scroll") Scroll
 
 // Open bag of string parameters. kriya's ActionCommand.parameters is
 // `Record<string, string>`; this record lists the keys commonly read by
@@ -30,6 +33,12 @@ type actionParameters = {
   formId?: string, // submitForm, fillForm
   fields?: string, // fillForm — JSON-stringified field map
   reason?: string, // diagnostic
+  strict?: string,
+  matchBy?: string,
+  option?: string,
+  checked?: string,
+  direction?: string,
+  implicitSubmit?: string,
 }
 
 type actionCommand = {
@@ -63,6 +72,18 @@ type errorCode =
   | @as("SCREENSHOT_FAILED") ScreenshotFailed
   | @as("VALIDATION_FAILED") ValidationFailed
   | @as("BROWSER_NOT_SUPPORTED") BrowserNotSupported
+  | @as("EXECUTION_CANCELLED") ExecutionCancelled
+  | @as("TARGET_STALE") TargetStale
+  | @as("TARGET_AMBIGUOUS") TargetAmbiguous
+  | @as("TARGET_DISABLED") TargetDisabled
+  | @as("TARGET_OBSCURED") TargetObscured
+  | @as("NOT_EDITABLE") NotEditable
+  | @as("NOT_CHECKABLE") NotCheckable
+  | @as("OPTION_NOT_FOUND") OptionNotFound
+  | @as("OPTION_AMBIGUOUS") OptionAmbiguous
+  | @as("OPTION_DISABLED") OptionDisabled
+  | @as("UNSUPPORTED_STATE") UnsupportedState
+  | @as("READBACK_MISMATCH") ReadbackMismatch
 
 type executionResult = {
   success: bool,

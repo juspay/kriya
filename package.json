@@ -47,7 +47,10 @@
     "rescript.json",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/task-agent.md",
+    "docs/task-agent-contract.md",
+    "docs/task-agent-status.md"
   ],
   "sideEffects": false,
   "publishConfig": {

@@ -1,12 +1,30 @@
 import type {
+  ActionOutcome,
   AutomationConfig,
   ClickOptions,
+  ErrorCode,
   FillOptions,
+  MutationGuard,
   NavigationOptions,
+  ScrollOptions,
+  SelectOptions,
+  SetCheckedOptions,
   WaitOptions,
   PressOptions,
 } from '@/types';
 import { AutomationError } from '@/types';
+import { NOOP_GUARD } from '@/actions/guard';
+import { createRedactor } from '@/utils/redact';
+import {
+  clickStrict,
+  fillStrict,
+  pressStrict,
+  resolveStrictElement,
+  scroll as scrollStrict,
+  selectAriaOption,
+  selectNative,
+  setChecked as setCheckedStrict,
+} from '@/actions/strict';
 
 import { DOMRoot } from '@/utils/DOMRoot';
 
@@ -14,6 +32,7 @@ export class DOMActions {
   private readonly _dom: DOMRoot;
   private readonly _config: AutomationConfig;
   private _initialized: boolean;
+  private readonly _pendingWaits = new Set<() => void>();
 
   constructor(config: AutomationConfig) {
     this._dom = new DOMRoot(config);
@@ -29,7 +48,35 @@ export class DOMActions {
     if (!this._config.debugMode) {
       return;
     }
-    console.info('🔍 KRIYA-ENHANCED:', ...args);
+    try {
+      const redactor = this._config.redactor ?? createRedactor();
+      const snapshot = (value: unknown, seen: readonly object[] = []): unknown => {
+        if (value instanceof Element) {
+          return this._describe(value);
+        }
+        if (value instanceof Error) {
+          return this._config.redactor ? `${value.name}: ${value.message}` : value.name;
+        }
+        if (typeof value === 'function') {
+          return '[function]';
+        }
+        if (value === null || typeof value !== 'object') {
+          return value;
+        }
+        if (seen.includes(value) || seen.length >= 8) {
+          return '[object]';
+        }
+        const next = [...seen, value];
+        return Array.isArray(value)
+          ? value.map(child => snapshot(child, next))
+          : Object.fromEntries(
+              Object.entries(value).map(([key, child]) => [key, snapshot(child, next)])
+            );
+      };
+      console.info('🔍 KRIYA-ENHANCED:', ...args.map(arg => redactor.scrubDeep(snapshot(arg))));
+    } catch {
+      // A debug logger must never retain a live DOM node or alter an action's outcome.
+    }
   }
 
   public initialize(): void {
@@ -37,10 +84,15 @@ export class DOMActions {
     this._initialized = true;
   }
 
-  public async navigate(options: NavigationOptions): Promise<void> {
+  public async navigate(
+    options: NavigationOptions,
+    guard: MutationGuard = NOOP_GUARD,
+    signal?: AbortSignal
+  ): Promise<void> {
     this._ensureInitialized();
 
     if (this._config.locationProvider) {
+      guard.commit();
       let navigationTimeout: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([
@@ -75,10 +127,27 @@ export class DOMActions {
       );
     }
 
+    guard.commit();
+
     try {
       if (options.waitForLoad) {
         await new Promise<void>((resolve, reject) => {
+          const cleanup = (): void => {
+            clearTimeout(timeout);
+            window.removeEventListener('load', handleLoad);
+            signal?.removeEventListener('abort', onAbort);
+            this._pendingWaits.delete(onAbort);
+          };
+          const handleLoad = (): void => {
+            cleanup();
+            resolve();
+          };
+          const onAbort = (): void => {
+            cleanup();
+            reject(new AutomationError('Navigation was cancelled', 'EXECUTION_CANCELLED'));
+          };
           const timeout = setTimeout(() => {
+            cleanup();
             reject(
               new AutomationError(
                 `Navigation timeout after ${options.timeout ?? this._config.timeout}ms`,
@@ -86,20 +155,30 @@ export class DOMActions {
               )
             );
           }, options.timeout ?? this._config.timeout);
-
-          const handleLoad = (): void => {
-            clearTimeout(timeout);
-            window.removeEventListener('load', handleLoad);
-            resolve();
-          };
-
+          this._pendingWaits.add(onAbort);
+          signal?.addEventListener('abort', onAbort, { once: true });
           window.addEventListener('load', handleLoad);
-          this._dom.navigate(options.url);
+          if (signal?.aborted) {
+            onAbort();
+            return;
+          }
+          try {
+            this._dom.navigate(options.url);
+          } catch (error) {
+            cleanup();
+            reject(error);
+          }
         });
       } else {
         this._dom.navigate(options.url);
       }
     } catch (error) {
+      if (
+        error instanceof AutomationError &&
+        (error.code === 'EXECUTION_CANCELLED' || error.code === 'EXECUTION_TIMEOUT')
+      ) {
+        throw error;
+      }
       throw new AutomationError(
         `Navigation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'NETWORK_ERROR',
@@ -108,10 +187,22 @@ export class DOMActions {
     }
   }
 
-  public async click(options: ClickOptions): Promise<void> {
+  public async click(
+    options: ClickOptions,
+    guard: MutationGuard = NOOP_GUARD,
+    target?: HTMLElement,
+    signal?: AbortSignal
+  ): Promise<ActionOutcome | undefined> {
     this._ensureInitialized();
 
+    if (options.strict === true || target !== undefined) {
+      guard.checkpoint();
+      const element = this._resolveStrict(options.selector, target);
+      return this._unwrap(clickStrict(element, guard));
+    }
+
     let element = await this._findElement(options.selector, options.description);
+    guard.checkpoint();
 
     this.forcelog('[KRIYA DEBUG] Click attempt - Found element:', element);
     this.forcelog(`[KRIYA DEBUG] Click attempt - Element tag: ${element.tagName}`);
@@ -154,10 +245,25 @@ export class DOMActions {
 
     try {
       // Scroll element into view first
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const box = element.getBoundingClientRect();
+      const needsScroll =
+        box.top < 0 ||
+        box.left < 0 ||
+        box.bottom > window.innerHeight ||
+        box.right > window.innerWidth;
+      if (needsScroll) {
+        guard.commit();
+        element.scrollIntoView({ behavior: 'instant', block: 'center' });
+      }
 
       // Wait a small moment for scroll to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await this._sleep(100, guard, signal);
+
+      if (guard.committed) {
+        guard.checkpoint();
+      } else {
+        guard.commit();
+      }
 
       if (options.position) {
         this.forcelog('[KRIYA DEBUG] Clicking at position:', options.position);
@@ -170,19 +276,40 @@ export class DOMActions {
       this.forcelog('[KRIYA DEBUG] Click events dispatched successfully');
     } catch (error) {
       this.forcelog('[KRIYA DEBUG] Click failed with error:', error);
+      if (error instanceof AutomationError && error.code === 'EXECUTION_CANCELLED') {
+        throw error;
+      }
       throw new AutomationError(
         `Click failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'EXECUTION_FAILED',
         { selector: options.selector, originalError: error }
       );
     }
+
+    return undefined;
   }
 
-  public async fill(options: FillOptions): Promise<void> {
+  /**
+   * `sensitive` marks the value as secret for the caller (the command listed it in `sensitiveParameters`);
+   * strict outcomes then omit the length. Structurally sensitive fields are detected without it.
+   */
+  public async fill(
+    options: FillOptions,
+    guard: MutationGuard = NOOP_GUARD,
+    target?: HTMLElement,
+    sensitive: boolean = false,
+    signal?: AbortSignal
+  ): Promise<ActionOutcome | undefined> {
     this._ensureInitialized();
 
+    if (options.strict === true || target !== undefined) {
+      guard.checkpoint();
+      const element = this._resolveStrict(options.selector, target);
+      return this._unwrap(fillStrict(element, options.value, guard, sensitive));
+    }
+
     this.forcelog(`[KRIYA DEBUG] Fill attempt - Description: "${options.description}"`);
-    this.forcelog(`[KRIYA DEBUG] Fill attempt - Value to fill: "${options.value}"`);
+    this.forcelog(`[KRIYA DEBUG] Fill attempt - Value to fill: ${this._mask(options.value)}`);
 
     // For fill, prioritize finding input elements
     const searchTarget = (options.selector || options.description || '').toString();
@@ -190,8 +317,9 @@ export class DOMActions {
       this._config.root && options.selector
         ? this._dom.querySelector<HTMLElement>(options.selector)
         : await this._findElementByText(searchTarget, true);
+    guard.checkpoint();
 
-    this.forcelog('[KRIYA DEBUG] Fill attempt - Found element:', element);
+    this.forcelog('[KRIYA DEBUG] Fill attempt - Found element:', this._describe(element));
     this.forcelog(`[KRIYA DEBUG] Fill attempt - Element tag: ${element?.tagName}`);
     this.forcelog(
       `[KRIYA DEBUG] Fill attempt - Element type: ${(element as HTMLInputElement)?.type}`
@@ -220,7 +348,7 @@ export class DOMActions {
             this.forcelog(
               // eslint-disable-next-line quotes
               "[KRIYA DEBUG] Found associated input via label 'for' attribute:",
-              associatedInput
+              this._describe(associatedInput)
             );
             element = associatedInput;
           }
@@ -230,7 +358,7 @@ export class DOMActions {
         if (!element || !this._isElementFillable(element)) {
           const inputInside = labelElement.querySelector('input, textarea, select') as HTMLElement;
           if (inputInside && this._isElementFillable(inputInside)) {
-            this.forcelog('[KRIYA DEBUG] Found input inside label:', inputInside);
+            this.forcelog('[KRIYA DEBUG] Found input inside label:', this._describe(inputInside));
             element = inputInside;
           }
         }
@@ -244,7 +372,7 @@ export class DOMActions {
           (!this._config.root || this._dom.contains(siblingInput)) &&
           this._isElementFillable(siblingInput)
         ) {
-          this.forcelog('[KRIYA DEBUG] Found sibling input:', siblingInput);
+          this.forcelog('[KRIYA DEBUG] Found sibling input:', this._describe(siblingInput));
           element = siblingInput;
         }
       }
@@ -262,7 +390,10 @@ export class DOMActions {
         const inputs = parent.querySelectorAll('input, textarea, select');
         for (const input of inputs) {
           if (this._isElementFillable(input as HTMLElement)) {
-            this.forcelog('[KRIYA DEBUG] Found fillable input in parent context:', input);
+            this.forcelog(
+              '[KRIYA DEBUG] Found fillable input in parent context:',
+              this._describe(input as HTMLElement)
+            );
             element = input as HTMLElement;
             break;
           }
@@ -272,50 +403,69 @@ export class DOMActions {
     }
 
     if (!element || !this._isElementFillable(element)) {
-      this.forcelog('[KRIYA DEBUG] Fill failed - Element is not fillable:', element);
+      this.forcelog(
+        '[KRIYA DEBUG] Fill failed - Element is not fillable:',
+        this._describe(element)
+      );
       throw new AutomationError('Element is not fillable', 'ELEMENT_NOT_FOUND', {
         selector: options.selector,
         description: options.description,
       });
     }
 
-    try {
-      const inputElement = element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    const inputElement = element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
-      this.forcelog('[KRIYA DEBUG] Filling element:', inputElement);
-      this.forcelog(`[KRIYA DEBUG] Current value: "${inputElement.value}"`);
+    // A blank value would click an arbitrary option through the SelectBox partial match.
+    if (
+      options.value === '' &&
+      (this._detectSelectBoxComponent(inputElement) ||
+        this._dom.closest(inputElement, '[data-selectbox-value]'))
+    ) {
+      throw new AutomationError('Blank value is not supported for SelectBox', 'VALIDATION_FAILED');
+    }
+
+    guard.commit();
+
+    try {
+      this.forcelog('[KRIYA DEBUG] Filling element:', this._describe(inputElement));
+      this.forcelog(`[KRIYA DEBUG] Current value: ${this._mask(inputElement.value)}`);
 
       if (options.clearFirst) {
         this._clearElement(inputElement);
       }
 
-      this._fillElement(inputElement, options.value, options.triggerEvents);
+      await this._fillElement(inputElement, options.value, options.triggerEvents, guard, signal);
 
-      this.forcelog(`[KRIYA DEBUG] Fill completed - New value: "${inputElement.value}"`);
+      this.forcelog(`[KRIYA DEBUG] Fill completed - New value: ${this._mask(inputElement.value)}`);
     } catch (error) {
       this.forcelog('[KRIYA DEBUG] Fill failed with error:', error);
+      if (error instanceof AutomationError && error.code === 'EXECUTION_CANCELLED') {
+        throw error;
+      }
       throw new AutomationError(
         `Fill failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'EXECUTION_FAILED',
         {
           selector: options.selector,
-          value: options.value,
+          valueLength: typeof options.value === 'string' ? options.value.length : 0,
           originalError: error,
         }
       );
     }
+
+    return undefined;
   }
 
-  public async wait(options: WaitOptions): Promise<void> {
+  public async wait(options: WaitOptions, guard: MutationGuard = NOOP_GUARD): Promise<void> {
     this._ensureInitialized();
 
     if (options.duration) {
-      await new Promise(resolve => setTimeout(resolve, options.duration));
+      await this._sleep(options.duration, guard);
       return;
     }
 
     if (options.selector && options.condition) {
-      await this._waitForCondition(options.selector, options.condition, options.timeout);
+      await this._waitForCondition(options.selector, options.condition, options.timeout, guard);
       return;
     }
 
@@ -326,8 +476,20 @@ export class DOMActions {
     );
   }
 
-  public async press(options: PressOptions): Promise<void> {
+  public async press(
+    options: PressOptions,
+    guard: MutationGuard = NOOP_GUARD,
+    target?: HTMLElement
+  ): Promise<ActionOutcome | undefined> {
     this._ensureInitialized();
+
+    if (options.strict === true || target !== undefined) {
+      guard.checkpoint();
+      const element = this._resolveStrict(options.selector, target);
+      return this._unwrap(
+        pressStrict(element, options.key, options.implicitSubmit === true, guard)
+      );
+    }
 
     const { key, selector, description } = options;
 
@@ -340,6 +502,7 @@ export class DOMActions {
       if (!element) {
         element = this._findElementByDescription(description);
       }
+      guard.checkpoint();
     }
 
     // If no specific element, try this._dom.activeElement — but only if it's a real input,
@@ -368,8 +531,10 @@ export class DOMActions {
     // Focus the resolved element before dispatching key events
     if ('focus' in targetElement && typeof targetElement.focus === 'function') {
       targetElement.focus();
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await this._sleep(100, guard);
     }
+
+    guard.commit();
 
     // Create and dispatch keyboard events
     const keydownEvent = new KeyboardEvent('keydown', {
@@ -407,11 +572,130 @@ export class DOMActions {
     targetElement.dispatchEvent(keyupEvent);
 
     this.forcelog(`[KRIYA] Key "${key}" pressed successfully`);
+
+    return undefined;
+  }
+
+  public async select(
+    options: SelectOptions,
+    guard: MutationGuard = NOOP_GUARD,
+    target?: HTMLElement
+  ): Promise<ActionOutcome> {
+    this._ensureInitialized();
+    guard.checkpoint();
+    const element = this._resolveStrict(options.selector, target);
+    if (element.localName === 'select') {
+      return this._unwrap(
+        selectNative(
+          element as HTMLSelectElement,
+          options.matchBy,
+          options.option,
+          options.triggerEvents,
+          guard
+        )
+      );
+    }
+    return this._unwrap(await selectAriaOption(element, guard));
+  }
+
+  public async setChecked(
+    options: SetCheckedOptions,
+    guard: MutationGuard = NOOP_GUARD,
+    target?: HTMLElement
+  ): Promise<ActionOutcome> {
+    this._ensureInitialized();
+    guard.checkpoint();
+    const element = this._resolveStrict(options.selector, target);
+    return this._unwrap(await setCheckedStrict(element, options.checked, guard));
+  }
+
+  /** Always strict: without a target or selector it scrolls the page, never another element. */
+  public async scroll(
+    options: ScrollOptions,
+    guard: MutationGuard = NOOP_GUARD,
+    target?: HTMLElement
+  ): Promise<ActionOutcome> {
+    this._ensureInitialized();
+    guard.checkpoint();
+    const pageScroll =
+      target === undefined && (options.selector === undefined || options.selector === '');
+    const container = pageScroll ? undefined : this._resolveStrict(options.selector, target);
+    return this._unwrap(scrollStrict(options.direction, container, guard));
   }
 
   public dispose(): void {
+    for (const cancel of [...this._pendingWaits]) {
+      cancel();
+    }
     this._dom.dispose();
     this._initialized = false;
+  }
+
+  private async _sleep(ms: number, guard: MutationGuard, signal?: AbortSignal): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = (): void => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
+        this._pendingWaits.delete(cancel);
+      };
+      const cancel = (): void => {
+        cleanup();
+        reject(new AutomationError('Operation was cancelled', 'EXECUTION_CANCELLED'));
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, ms);
+      this._pendingWaits.add(cancel);
+      signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted) {
+        cancel();
+      }
+    });
+    guard.checkpoint();
+  }
+
+  private _resolveStrict(
+    selector: string | undefined,
+    target: HTMLElement | undefined
+  ): HTMLElement {
+    const resolved = resolveStrictElement(
+      selector,
+      target,
+      this._config.root ? this._dom : undefined
+    );
+    if (!resolved.ok) {
+      throw new AutomationError(resolved.message, resolved.code);
+    }
+    return resolved.element;
+  }
+
+  private _unwrap(
+    result:
+      | { readonly ok: true; readonly outcome: ActionOutcome }
+      | {
+          readonly ok: false;
+          readonly code: ErrorCode;
+          readonly message: string;
+        }
+  ): ActionOutcome {
+    if (!result.ok) {
+      throw new AutomationError(result.message, result.code);
+    }
+    return result.outcome;
+  }
+
+  /** Debug logs never print a live element (devtools would render its value) or a value. */
+  private _describe(element: Element | null | undefined): string {
+    if (!element) {
+      return 'none';
+    }
+    const type = element.getAttribute('type');
+    return type ? `${element.tagName.toLowerCase()}[type=${type}]` : element.tagName.toLowerCase();
+  }
+
+  private _mask(value: unknown): string {
+    return `[${typeof value === 'string' ? value.length : 0} chars]`;
   }
 
   private _ensureInitialized(): void {
@@ -1257,17 +1541,19 @@ export class DOMActions {
     element.dispatchEvent(new Event('change', { bubbles: true, ...this._dom.eventOptions }));
   }
 
-  private _fillElement(
+  private async _fillElement(
     element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
     value: string,
-    triggerEvents: boolean
-  ): void {
+    triggerEvents: boolean,
+    guard: MutationGuard,
+    signal?: AbortSignal
+  ): Promise<void> {
     // Handle ReScript SelectBox components (custom dropdowns)
     if (
       this._detectSelectBoxComponent(element) ||
       this._dom.closest(element, '[data-selectbox-value]')
     ) {
-      this._fillReScriptSelectBox(element, value);
+      await this._fillReScriptSelectBox(element, value, guard, signal);
       return;
     }
 
@@ -1281,7 +1567,9 @@ export class DOMActions {
       if (option) {
         selectElement.selectedIndex = option.index;
       } else {
-        throw new AutomationError(`Option not found in select: ${value}`, 'ELEMENT_NOT_FOUND');
+        throw new AutomationError('Option not found in select', 'ELEMENT_NOT_FOUND', {
+          valueLength: value.length,
+        });
       }
     } else {
       // Handle standard input/textarea elements
@@ -1307,7 +1595,12 @@ export class DOMActions {
     }
   }
 
-  private _fillReScriptSelectBox(element: HTMLElement, value: string): void {
+  private async _fillReScriptSelectBox(
+    element: HTMLElement,
+    value: string,
+    guard: MutationGuard,
+    signal?: AbortSignal
+  ): Promise<void> {
     // Find the SelectBox container and button
     const selectBoxContainer =
       this._dom.closest(element, '[data-selectbox-value]') ||
@@ -1330,106 +1623,105 @@ export class DOMActions {
     this._clickElement(triggerButton, 'left', 1);
 
     // Wait a moment for the dropdown to open
-    setTimeout(() => {
-      // Look for the dropdown options
-      const dropdown =
-        this._dom.querySelector('[data-dropdown="dropdown"]') ||
-        selectBoxContainer.querySelector('[role="listbox"]') ||
-        this._dom.querySelector('[class*="dropdown"][class*="open"]') ||
-        this._dom.querySelector('[class*="options"]');
+    await this._sleep(100, guard, signal);
 
-      if (!dropdown) {
-        throw new AutomationError(
-          'SelectBox dropdown not found after opening',
-          'ELEMENT_NOT_FOUND'
-        );
-      }
+    // Look for the dropdown options
+    const dropdown =
+      this._dom.querySelector('[data-dropdown="dropdown"]') ||
+      selectBoxContainer.querySelector('[role="listbox"]') ||
+      this._dom.querySelector('[class*="dropdown"][class*="open"]') ||
+      this._dom.querySelector('[class*="options"]');
 
-      // Find the option to select (try multiple strategies)
-      let optionToSelect: HTMLElement | null = null;
+    if (!dropdown) {
+      throw new AutomationError('SelectBox dropdown not found after opening', 'ELEMENT_NOT_FOUND');
+    }
 
-      // Strategy 1: Look for exact data-dropdown-value match
-      optionToSelect = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
+    // Find the option to select (try multiple strategies)
+    let optionToSelect: HTMLElement | null = null;
 
-      // Strategy 2: Look for exact text content match
-      if (!optionToSelect) {
-        const options = dropdown.querySelectorAll(
-          '[data-dropdown-value], [role="option"], li, div[class*="option"]'
-        );
-        optionToSelect = Array.from(options).find(option => {
-          const text = option.textContent?.trim().toLowerCase();
-          const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
-          const targetValue = value.toLowerCase();
+    // Strategy 1: Look for exact data-dropdown-value match
+    optionToSelect = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
 
-          return text === targetValue || dataValue === targetValue;
-        }) as HTMLElement;
-      }
-
-      // Strategy 3: Look for partial text match
-      if (!optionToSelect) {
-        const options = dropdown.querySelectorAll(
-          '[data-dropdown-value], [role="option"], li, div[class*="option"]'
-        );
-        optionToSelect = Array.from(options).find(option => {
-          const text = option.textContent?.trim().toLowerCase();
-          const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
-          const targetValue = value.toLowerCase();
-
-          return text?.includes(targetValue) || dataValue?.includes(targetValue);
-        }) as HTMLElement;
-      }
-
-      if (!optionToSelect) {
-        throw new AutomationError(
-          `Option "${value}" not found in SelectBox dropdown`,
-          'ELEMENT_NOT_FOUND'
-        );
-      }
-
-      // Click the selected option
-      this._clickElement(optionToSelect, 'left', 1);
-
-      // Update the button's data-value attribute to reflect the selection
-      const selectedValue =
-        optionToSelect.getAttribute('data-dropdown-value') ||
-        optionToSelect.textContent?.trim() ||
-        value;
-
-      triggerButton.setAttribute('data-value', selectedValue);
-
-      // Update button text if it has data-button-text element
-      const buttonTextElement = triggerButton.querySelector('[data-button-text]');
-      if (buttonTextElement) {
-        buttonTextElement.textContent = optionToSelect.textContent?.trim() || value;
-        buttonTextElement.setAttribute(
-          'data-button-text',
-          optionToSelect.textContent?.trim() || value
-        );
-      }
-
-      // Trigger change events on the SelectBox container for React/form libraries
-      selectBoxContainer.dispatchEvent(
-        new Event('change', { bubbles: true, ...this._dom.eventOptions })
+    // Strategy 2: Look for exact text content match
+    if (!optionToSelect) {
+      const options = dropdown.querySelectorAll(
+        '[data-dropdown-value], [role="option"], li, div[class*="option"]'
       );
-      selectBoxContainer.dispatchEvent(
-        new CustomEvent('select', {
-          detail: { value: selectedValue },
-          bubbles: true,
-          ...this._dom.eventOptions,
-        })
+      optionToSelect = Array.from(options).find(option => {
+        const text = option.textContent?.trim().toLowerCase();
+        const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
+        const targetValue = value.toLowerCase();
+
+        return text === targetValue || dataValue === targetValue;
+      }) as HTMLElement;
+    }
+
+    // Strategy 3: Look for partial text match
+    if (!optionToSelect) {
+      const options = dropdown.querySelectorAll(
+        '[data-dropdown-value], [role="option"], li, div[class*="option"]'
       );
-    }, 100); // Small delay to ensure dropdown is rendered
+      optionToSelect = Array.from(options).find(option => {
+        const text = option.textContent?.trim().toLowerCase();
+        const dataValue = option.getAttribute('data-dropdown-value')?.toLowerCase();
+        const targetValue = value.toLowerCase();
+
+        return text?.includes(targetValue) || dataValue?.includes(targetValue);
+      }) as HTMLElement;
+    }
+
+    if (!optionToSelect) {
+      throw new AutomationError('Option not found in SelectBox dropdown', 'ELEMENT_NOT_FOUND', {
+        valueLength: value.length,
+      });
+    }
+
+    // Click the selected option
+    this._clickElement(optionToSelect, 'left', 1);
+    guard.checkpoint();
+
+    // Update the button's data-value attribute to reflect the selection
+    const selectedValue =
+      optionToSelect.getAttribute('data-dropdown-value') ||
+      optionToSelect.textContent?.trim() ||
+      value;
+
+    triggerButton.setAttribute('data-value', selectedValue);
+
+    // Update button text if it has data-button-text element
+    const buttonTextElement = triggerButton.querySelector('[data-button-text]');
+    if (buttonTextElement) {
+      buttonTextElement.textContent = optionToSelect.textContent?.trim() || value;
+      buttonTextElement.setAttribute(
+        'data-button-text',
+        optionToSelect.textContent?.trim() || value
+      );
+    }
+
+    // Trigger change events on the SelectBox container for React/form libraries
+    selectBoxContainer.dispatchEvent(
+      new Event('change', { bubbles: true, ...this._dom.eventOptions })
+    );
+    selectBoxContainer.dispatchEvent(
+      new CustomEvent('select', {
+        detail: { value: selectedValue },
+        bubbles: true,
+        ...this._dom.eventOptions,
+      })
+    );
   }
 
   private async _waitForCondition(
     selector: string,
     condition: WaitOptions['condition'],
-    timeout?: number
+    timeout: number | undefined,
+    guard: MutationGuard
   ): Promise<void> {
     const maxWait = timeout ?? this._config.timeout;
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWait) {
+      guard.checkpoint();
       let element: HTMLElement | null = null;
 
       // First try as CSS selector
@@ -1444,7 +1736,7 @@ export class DOMActions {
         return;
       }
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await this._sleep(100, guard);
     }
 
     throw new AutomationError(`Wait condition not met within ${maxWait}ms`, 'EXECUTION_TIMEOUT', {
