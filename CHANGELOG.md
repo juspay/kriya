@@ -1,6 +1,6 @@
 ## 2.1.0 (2026-10-07)
 
-* feat(agent): accept a configurable list of model prefixes in the TypeSafe adapter ([d6cbc83](https://github.com/juspay/kriya/commit/d6cbc83))
+- feat(agent): accept a configurable list of model prefixes in the TypeSafe adapter ([d6cbc83](https://github.com/juspay/kriya/commit/d6cbc83))
 
 ## 2.0.0 (2026-10-07)
 

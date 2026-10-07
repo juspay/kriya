@@ -81,6 +81,7 @@ type Runtime = {
   readonly endpoint: string | undefined;
   readonly model: string;
   readonly modelPrefixes: readonly string[] | undefined;
+  readonly clauseSplitValid: boolean;
   readonly http: TaskHttp;
   readonly timeoutMs: number;
   readonly retry: TaskRetryPolicy;
@@ -366,6 +367,7 @@ const createRuntime = (config: TypeSafeTaskDeciderConfig): Runtime => {
   });
   const maxOptions = positive(config.maxOptions);
   const evidenceQuestions = positive(config.evidenceQuestions);
+  const clauseSplit = config.completionClauseSplit;
   const maxRequestBytes = Math.min(
     positive(config.maxRequestBytes) ?? TASK_TYPESAFE_DEFAULTS.maxRequestBytes,
     TASK_TYPESAFE_LIMITS.requestBytesCeiling
@@ -378,6 +380,8 @@ const createRuntime = (config: TypeSafeTaskDeciderConfig): Runtime => {
         ? config.model
         : TASK_TYPESAFE_DEFAULTS.model,
     modelPrefixes: resolveModelPrefixes(config.allowedModelPrefixes),
+    clauseSplitValid:
+      clauseSplit === undefined || clauseSplit === 'punctuation' || clauseSplit === 'conjunction',
     http: config.http ?? defaultHttp,
     timeoutMs: positive(config.timeoutMs) ?? TASK_TYPESAFE_DEFAULTS.timeoutMs,
     retry: resolveRetry(config.retry),
@@ -385,6 +389,7 @@ const createRuntime = (config: TypeSafeTaskDeciderConfig): Runtime => {
     build: {
       maxRequestBytes,
       rotate,
+      clauseSplit: clauseSplit === 'conjunction' ? 'conjunction' : 'punctuation',
       ...(maxOptions === undefined
         ? {}
         : { maxOptions: Math.min(Math.floor(maxOptions), TASK_TYPESAFE_LIMITS.apiMaxOptions) }),
@@ -972,6 +977,9 @@ const refusal = (
   }
   if (runtime.modelPrefixes === undefined) {
     return failure('INVALID_REQUEST', 'TypeSafe allowed model prefixes are not valid', false);
+  }
+  if (!runtime.clauseSplitValid) {
+    return failure('INVALID_REQUEST', 'TypeSafe completion clause split is not valid', false);
   }
   if (runtime.credential() === '') {
     return failure('INVALID_REQUEST', 'TypeSafe API key is empty', false);

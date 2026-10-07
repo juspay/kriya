@@ -34,6 +34,7 @@ import type {
   TaskCollectedEvidence,
   TaskCommitmentClass,
   TaskCompletionVerdict,
+  TaskCompletionClauseSplit,
   TaskElement,
   TaskEstimateRequestBytesFn,
   TaskEstimateRequestTokensFn,
@@ -86,6 +87,7 @@ type Settings = {
   readonly maxRequestBytes: number;
   readonly evidenceQuestions: number | undefined;
   readonly rotate: boolean;
+  readonly clauseSplit: TaskCompletionClauseSplit;
 };
 
 type Ranked = { readonly element: TaskElement; readonly index: number };
@@ -384,6 +386,49 @@ const MAX_OPTION_GROUPS = 8;
 // Small helpers
 // ---------------------------------------------------------------------------------------------
 
+const splitOnConjunction = (clause: string): readonly string[] => {
+  const parts: string[] = [];
+  let current = '';
+  let quote: string | undefined;
+  let escaped = false;
+  for (let index = 0; index < clause.length; index += 1) {
+    const character = clause.charAt(index);
+    if (character === '\\') {
+      current += character;
+      escaped = !escaped;
+      continue;
+    }
+    if (!escaped) {
+      if (character === quote) {
+        quote = undefined;
+      } else if (quote === undefined && character === '"') {
+        quote = '"';
+      } else if (quote === undefined && character === String.fromCharCode(0x201c)) {
+        quote = String.fromCharCode(0x201d);
+      }
+    }
+    const conjunction =
+      !escaped && quote === undefined && (index === 0 || /\s/.test(clause.charAt(index - 1)))
+        ? /^and(?:\s+|$)/i.exec(clause.slice(index))
+        : null;
+    const punctuation =
+      !escaped && quote === undefined
+        ? /^\.\s+(?=[A-Z])|^,\s+(?:and\s+)?/.exec(clause.slice(index))
+        : null;
+    const separator = conjunction ?? punctuation;
+    escaped = false;
+    if (separator === null) {
+      current += character;
+    } else {
+      parts.push(current);
+      current = '';
+      index += separator[0].length - 1;
+    }
+  }
+  const fragments = [...parts, current].map(part => part.trim()).filter(part => part !== '');
+  return fragments.length > 0 ? fragments : [clause];
+};
+
 const clean = (text: string | undefined, maxChars: number): string =>
   sanitizeUntrustedText(text ?? '', maxChars);
 
@@ -474,6 +519,7 @@ const resolveSettings = (options: TaskQuestionBuildOptions | undefined): Setting
     maxRequestBytes,
     evidenceQuestions: finiteNumber(options?.evidenceQuestions),
     rotate: options?.rotate !== false,
+    clauseSplit: options?.clauseSplit === 'conjunction' ? 'conjunction' : 'punctuation',
   };
 };
 
@@ -2026,7 +2072,9 @@ const assembleCompletion = (plan: CompletionPlan, shape: Shape): TaskQuestionSet
   // complete request remains in state so a fragment keeps its original relationships.
   const clauses =
     request.expectAnswer === false
-      ? request.goal.split(/\.\s+(?=[A-Z])|,\s+(?:and\s+)?/).filter(clause => clause.trim())
+      ? settings.clauseSplit === 'conjunction'
+        ? splitOnConjunction(request.goal)
+        : request.goal.split(/\.\s+(?=[A-Z])|,\s+(?:and\s+)?/).filter(clause => clause.trim())
       : [request.goal];
   const requirements =
     clauses.length > 8 ? [...clauses.slice(0, 7), clauses.slice(7).join(', ')] : clauses;

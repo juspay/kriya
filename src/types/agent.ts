@@ -2035,6 +2035,9 @@ export type TaskRetryPolicy = {
   readonly maxRetryAfterMs: number;
 };
 
+/** Completion requirement segmentation; conjunction splitting is an explicit caller choice. */
+export type TaskCompletionClauseSplit = 'punctuation' | 'conjunction';
+
 export type TypeSafeTaskDeciderConfig = {
   /**
    * Node-side only. Never serialized, logged, traced or placed in a page. A function keeps the key out of
@@ -2067,6 +2070,8 @@ export type TypeSafeTaskDeciderConfig = {
   readonly maxOptions?: number;
   /** Number of evidence questions in the completion request. Default 2. */
   readonly evidenceQuestions?: number;
+  /** State-change goals may additionally split at unquoted standalone "and". Default 'punctuation'. */
+  readonly completionClauseSplit?: TaskCompletionClauseSplit;
   /** Ask commitment questions in forward and reversed order and compare. Default true. */
   readonly confirmCommitment?: boolean;
   /**
@@ -3344,6 +3349,8 @@ export type TaskQuestionBuildOptions = {
   readonly maxOptions?: number;
   readonly maxRequestBytes?: number;
   readonly evidenceQuestions?: number;
+  /** State-change completion requirements only. Default 'punctuation'; answer goals remain whole. */
+  readonly clauseSplit?: TaskCompletionClauseSplit;
   /** Rotate criteria deterministically by step. Default true. */
   readonly rotate?: boolean;
 };

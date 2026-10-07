@@ -25,3 +25,7 @@ Caller floors: action 0.2, argument 0.3, completion 0.4, against library default
 
 - Design and public contract: [task-agent-contract.md](task-agent-contract.md), [task-agent.md](task-agent.md).
 - How to run the live harness: [e2e/README.md](../e2e/README.md).
+
+## Optional completion clause splitting
+
+`completionClauseSplit: 'conjunction'` is an opt-in adapter configuration for state-change goals. The default remains `'punctuation'`, including for Jev; no provider is automatically opted in. It preserves quoted conjunctions, the whole goal context, overflow requirements and existing verdict/confidence composition. Scratch Perplexity experiments motivated this option but do not validate this implementation or establish a calibrated non-Jev provider. The new frozen-package validation is recorded in the draft PR.

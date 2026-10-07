@@ -335,6 +335,7 @@ export type {
   TaskHttpResponse,
   TaskHttp,
   TaskRetryPolicy,
+  TaskCompletionClauseSplit,
   TypeSafeTaskDeciderConfig,
   TaskGrant,
   TaskGrantEntry,
