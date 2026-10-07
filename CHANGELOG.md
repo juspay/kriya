@@ -1,3 +1,13 @@
+## 2.0.0 (2026-10-07)
+
+* feat(agent): add a general Jev-driven TaskAgent with a strict executor and research guide ([95e2ac1](https://github.com/juspay/kriya/commit/95e2ac1))
+
+### BREAKING CHANGE
+
+* Invalid AutomationEngine.executeAction inputs now resolve a
+failed result. Callers must inspect result.success instead of relying on
+promise rejection.
+
 ## 1.2.0 (2026-10-04)
 
 - feat(core): scope automation to DOM roots and location providers ([d63f8ad](https://github.com/juspay/kriya/commit/d63f8ad))
