@@ -13,14 +13,7 @@ import { DEFAULT_CONFIG } from '@/types';
 import { installLayoutStubs, mountHtml, resetDom } from './helpers/domHarness';
 
 type FakeMethod =
-  | 'navigate'
-  | 'click'
-  | 'fill'
-  | 'wait'
-  | 'press'
-  | 'select'
-  | 'setChecked'
-  | 'scroll';
+  'navigate' | 'click' | 'fill' | 'wait' | 'press' | 'select' | 'setChecked' | 'scroll';
 type FakeHandler = (
   options: unknown,
   guard: MutationGuard,

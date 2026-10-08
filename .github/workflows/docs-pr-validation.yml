@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
   PYTHON_VERSION: '3.11'
 
 jobs:
@@ -36,12 +36,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -71,6 +71,7 @@ jobs:
             **/*.md
             !node_modules/**/*.md
             !dist/**/*.md
+            !docs/api-generated/**/*.md
             !CHANGELOG.md
 
       - name: 📖 TypeDoc API generation
@@ -87,14 +88,13 @@ jobs:
       - name: 🏗️ MkDocs build
         id: mkdocs
         continue-on-error: true
-        # TODO: restore --strict once mkdocs.yml nav is reconciled with actual docs/
-        run: mkdocs build --clean
+        run: mkdocs build --strict --clean
 
       - name: 🔗 Link validation
         id: links
         continue-on-error: true
         # Pinned to commit SHA for security (v1)
-        uses: gaurav-nelson/github-action-markdown-link-check@499c1e7f3637c131334fa8e937c45144f79d72d2
+        uses: gaurav-nelson/github-action-markdown-link-check@5c5dfc0ac2e225883c0e5f03a85311ec2830d368
         with:
           use-quiet-mode: 'yes'
           use-verbose-mode: 'yes'
@@ -102,7 +102,7 @@ jobs:
 
       - name: 📤 Upload docs artifact
         if: always() && hashFiles('site/**') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-build-${{ github.sha }}
           path: site
@@ -110,11 +110,11 @@ jobs:
 
       # Every preceding step is `continue-on-error: true` so that link validation
       # and artifact upload always run and all statuses reach the PR comment.
-      # MkDocs is the only blocking gate — fail the job here if it failed.
-      - name: Enforce MkDocs build success
-        if: steps.mkdocs.outcome == 'failure'
+      # All four documentation checks are blocking gates.
+      - name: Enforce documentation generation success
+        if: steps.markdown.outcome == 'failure' || steps.typedoc.outcome == 'failure' || steps.mkdocs.outcome == 'failure' || steps.links.outcome == 'failure'
         run: |
-          echo "❌ MkDocs build failed — see '🏗️ MkDocs build' step above."
+          echo "❌ Documentation validation failed — inspect the checks above."
           exit 1
 
   comment:
@@ -155,7 +155,7 @@ jobs:
             const lk = process.env.LK_STATUS;
             const emoji = (s) => s === 'success' ? ':white_check_mark:' : s === 'failure' ? ':x:' : s === 'skipped' ? ':fast_forward:' : ':warning:';
             const label = (s) => s === 'success' ? 'Passed' : s === 'failure' ? 'Failed' : s === 'skipped' ? 'Skipped' : 'Unknown';
-            const blocking = [mk];
+            const blocking = [md, td, mk, lk];
             const allBlockingPassed = blocking.every((s) => s === 'success');
             const overall = allBlockingPassed
               ? ':rocket: **Documentation validation passed**'

@@ -51,3 +51,7 @@ e2e/official-typesafe/docs/
 
 # Acceptance receipts, copied byte-for-byte from the runs that produced them
 e2e/acceptance/**/*.json
+
+# Generated API and site output
+docs/api-generated/
+site/

@@ -9,10 +9,10 @@ import crypto from 'node:crypto';
 import { getEventListeners } from 'node:events';
 import fs from 'node:fs';
 import http from 'node:http';
-import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { loadPlaywright } from './browser.mjs';
 import {
   DECIDER_FAULT_MODES,
   FAULT_LABEL,
@@ -3081,8 +3081,7 @@ async function main() {
   await runCheapHardeningChecks();
   await runImportCheck();
 
-  const require = createRequire('/tmp/amazon-guide/package.json');
-  const { chromium } = require('playwright');
+  const { chromium } = loadPlaywright({});
   const executablePath = findChromium();
   let browser;
   let server;

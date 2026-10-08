@@ -43,6 +43,7 @@
       }
     ],
     "@semantic-release/changelog",
+    "./scripts/semantic-release-format-plugin.cjs",
     [
       "@semantic-release/npm",
       {

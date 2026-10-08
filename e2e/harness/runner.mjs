@@ -270,7 +270,19 @@ function createJevRecorder(run) {
 }
 
 function createFaultRecorder(run) {
-  return { record: entry => run.faultNotes.push(entry) };
+  return {
+    record: entry => {
+      run.faultNotes.push(entry);
+      if (
+        run.scenario.run?.cancelWhenFaultFires === true &&
+        entry.event === 'fired' &&
+        entry.layer === 'decider' &&
+        entry.mode === 'slow'
+      ) {
+        run.cancelTimer = setTimeout(() => run.controller?.abort(), run.scenario.run.cancelAfterMs);
+      }
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -817,7 +829,7 @@ async function executeScenario(run, args) {
   }
   const controller = new AbortController();
   run.controller = controller;
-  if (scenario.run?.cancelAfterMs !== undefined) {
+  if (scenario.run?.cancelAfterMs !== undefined && scenario.run.cancelWhenFaultFires !== true) {
     run.cancelTimer = setTimeout(() => controller.abort(), scenario.run.cancelAfterMs);
   }
   const deadline = new Promise(resolve => {

@@ -7,7 +7,7 @@ package build, imports nothing from `src/` and adds no dependency. A run drives 
 (Node side coordinator, remote host, TypeSafe decider) and injects the real `dist/index.umd.js` bridge into
 every document of a real headless Chromium, against locally served controlled apps, with the live Jev model.
 
-```
+```text
 e2e/
   run.mjs                CLI (this file's subject)
   apps/<family>.mjs      controlled apps: catalog, settings, shipping, checkout (3 variants each, fault switches)

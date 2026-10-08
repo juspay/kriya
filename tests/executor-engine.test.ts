@@ -20,14 +20,7 @@ import { WITHHELD_TEXT } from '@/actions/parameters';
 import { createRedactor } from '@/utils/redact';
 
 type FakeMethod =
-  | 'navigate'
-  | 'click'
-  | 'fill'
-  | 'wait'
-  | 'press'
-  | 'select'
-  | 'setChecked'
-  | 'scroll';
+  'navigate' | 'click' | 'fill' | 'wait' | 'press' | 'select' | 'setChecked' | 'scroll';
 type FakeHandler = (
   options: unknown,
   guard: MutationGuard,

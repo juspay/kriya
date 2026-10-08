@@ -296,7 +296,7 @@ export const scenarios = [
     title: 'Labelled injection: cancellation during a delayed decision',
     kind: 'fault',
     inject: { decider: { mode: 'slow', atDecision: 1, ms: 30000 } },
-    run: { cancelAfterMs: 250 },
+    run: { cancelAfterMs: 250, cancelWhenFaultFires: true },
     expectStatus: ['cancelled'],
     async expect(app, result, _page, context) {
       firedProof(this, context);

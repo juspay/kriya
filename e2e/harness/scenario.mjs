@@ -593,7 +593,12 @@ function validateRun(run, errors) {
     errors.push('run must be an object');
     return;
   }
-  checkKeys(run, ['budgets', 'cancelAfterMs', 'allowRunLoss'], 'run', errors);
+  checkKeys(
+    run,
+    ['budgets', 'cancelAfterMs', 'cancelWhenFaultFires', 'allowRunLoss'],
+    'run',
+    errors
+  );
   if (run.budgets !== undefined) {
     if (!isPlainObject(run.budgets)) {
       errors.push('run.budgets must be an object');
@@ -615,6 +620,12 @@ function validateRun(run, errors) {
   }
   if (run.allowRunLoss !== undefined && typeof run.allowRunLoss !== 'boolean') {
     errors.push('run.allowRunLoss must be a boolean');
+  }
+  if (run.cancelWhenFaultFires !== undefined && typeof run.cancelWhenFaultFires !== 'boolean') {
+    errors.push('run.cancelWhenFaultFires must be a boolean');
+  }
+  if (run.cancelWhenFaultFires === true && run.cancelAfterMs === undefined) {
+    errors.push('run.cancelWhenFaultFires requires cancelAfterMs');
   }
 }
 
@@ -928,6 +939,12 @@ function validateScenarioUnchecked(scenario, options) {
   validateAuthorization(scenario.authorization, errors);
   validateAppOptions(scenario, options.apps, errors);
   validateRun(scenario.run, errors);
+  if (
+    scenario.run?.cancelWhenFaultFires === true &&
+    (scenario.kind !== 'fault' || scenario.inject?.decider?.mode !== 'slow')
+  ) {
+    errors.push('run.cancelWhenFaultFires requires a slow decider fault');
+  }
   validateResume(scenario.resume, sensitive, errors);
   validateInject(scenario, errors);
 

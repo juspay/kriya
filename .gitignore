@@ -114,3 +114,7 @@ e2e/.build.lock
 
 # Local immutable TypeSafe documentation snapshots
 e2e/official-typesafe/docs/
+
+# Generated documentation (authored docs remain tracked)
+docs/api-generated/
+site/

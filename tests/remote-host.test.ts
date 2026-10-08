@@ -1948,13 +1948,11 @@ describe('execute when the transport loses the call', () => {
   });
 
   it('lost timeout consults waitForDocument too', async () => {
-    const waitForDocument = jest.fn(
-      async (): Promise<TaskDocumentInfo | null> => ({
-        documentId: DOC_B,
-        url: `${FIXTURE_ORIGIN}/orders`,
-        ready: true,
-      })
-    );
+    const waitForDocument = jest.fn(async (): Promise<TaskDocumentInfo | null> => ({
+      documentId: DOC_B,
+      url: `${FIXTURE_ORIGIN}/orders`,
+      ready: true,
+    }));
     const { host } = build(
       { hello: nextDocument(), execute: () => lost('timeout') },
       { transport: { waitForDocument } }
@@ -3081,13 +3079,11 @@ describe('navigation waiting', () => {
   });
 
   it('confirms a waitForDocument answer with hello: a hello that is not usable does not count', async () => {
-    const waitForDocument = jest.fn(
-      async (): Promise<TaskDocumentInfo | null> => ({
-        documentId: DOC_B,
-        url: FIXTURE_URL,
-        ready: true,
-      })
-    );
+    const waitForDocument = jest.fn(async (): Promise<TaskDocumentInfo | null> => ({
+      documentId: DOC_B,
+      url: FIXTURE_URL,
+      ready: true,
+    }));
     const { host, fake } = build(
       {
         hello: sequence(

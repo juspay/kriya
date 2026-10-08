@@ -39,6 +39,8 @@ import type {
   TaskExchange,
   TaskExchangeAttempt,
   TaskExchangeUsage,
+  TaskChoiceDiagnostics,
+  TaskDeciderConfidenceProfile,
   TaskHttp,
   TaskHttpRequest,
   TaskQuestionBuildOptions,
@@ -50,6 +52,7 @@ import type {
 } from '@/types';
 import { sanitizeUntrustedText } from '@/utils/sanitize';
 import { createRedactor } from '@/utils/redact';
+import { copyConfidenceProfile } from './confidence';
 import {
   assertGoalPreserved,
   buildActionQuestions,
@@ -61,7 +64,11 @@ import {
   questionRotations,
 } from './request';
 
-type Answer = { readonly choice: string; readonly confidence: number };
+type Answer = {
+  readonly choice: string;
+  readonly confidence: number;
+  readonly diagnostics: TaskChoiceDiagnostics;
+};
 type Answers = Readonly<Record<string, Answer>>;
 
 type Parsed<T> =
@@ -88,6 +95,9 @@ type Runtime = {
   readonly build: TaskQuestionBuildOptions;
   readonly confirmCommitment: boolean;
   readonly rotate: boolean;
+  readonly captureProbabilities: boolean;
+  readonly confidenceProfile?: TaskDeciderConfidenceProfile;
+  readonly validConfidenceProfile: boolean;
   readonly allowBrowserKey: boolean;
   readonly credential: () => string;
   readonly scrubCredentialText: (value: string) => string;
@@ -371,6 +381,13 @@ const createRuntime = (config: TypeSafeTaskDeciderConfig): Runtime => {
     TASK_TYPESAFE_LIMITS.requestBytesCeiling
   );
   const rotate = config.rotateOptions !== false;
+  const profileDescriptor = Object.getOwnPropertyDescriptor(config, 'confidenceProfile');
+  const profileData =
+    profileDescriptor === undefined
+      ? !('confidenceProfile' in config)
+      : 'value' in profileDescriptor;
+  const offeredProfile: unknown = profileData ? profileDescriptor?.value : undefined;
+  const confidenceProfile = copyConfidenceProfile(offeredProfile);
   return {
     endpoint: validateEndpoint(config.endpoint, config.allowedHosts),
     model:
@@ -393,6 +410,10 @@ const createRuntime = (config: TypeSafeTaskDeciderConfig): Runtime => {
         : { evidenceQuestions: Math.floor(evidenceQuestions) }),
     },
     confirmCommitment: config.confirmCommitment !== false,
+    captureProbabilities: config.captureProbabilities === true,
+    confidenceProfile,
+    validConfidenceProfile:
+      profileData && (offeredProfile === undefined || confidenceProfile !== undefined),
     rotate,
     allowBrowserKey: config.allowBrowserKey === true,
     credential,
@@ -604,6 +625,13 @@ const checkAnswer = (
       false
     );
   }
+  if (
+    Object.values(Object.getOwnPropertyDescriptors(value)).some(
+      descriptor => !('value' in descriptor)
+    )
+  ) {
+    return invalidAnswer(key, 'is not JSON answer data');
+  }
   const choice = own(value, 'choice');
   if (typeof choice !== 'string') {
     return invalidAnswer(key, 'has no choice');
@@ -619,8 +647,51 @@ const checkAnswer = (
   if (!isProbability(confidence)) {
     return invalidAnswer(key, 'has a confidence outside 0 to 1');
   }
-  const problem = checkProbabilities(key, choice, own(value, 'probabilities'), criteria);
-  return problem ?? { choice, confidence };
+  const raw = own(value, 'probabilities');
+  if (!isRecord(raw)) {
+    return invalidAnswer(key, 'has no probabilities');
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(raw);
+  if (Object.values(descriptors).some(descriptor => !('value' in descriptor))) {
+    return invalidAnswer(key, 'has probabilities that are not JSON data');
+  }
+  const snapshot = Object.fromEntries(
+    Object.entries(descriptors).map(([name, descriptor]) => [name, descriptor.value as unknown])
+  );
+  const problem = checkProbabilities(key, choice, snapshot, criteria);
+  if (problem) {
+    return problem ?? invalidAnswer(key, 'has no probabilities');
+  }
+  const probabilities = Object.fromEntries(
+    criteria.map(name => [name, own(snapshot, name) as number])
+  );
+  const selectedProbability = probabilities[choice] ?? 0;
+  const runnerUpProbability = Math.max(
+    0,
+    ...criteria.filter(name => name !== choice).map(name => probabilities[name] ?? 0)
+  );
+  const sum = Object.values(probabilities).reduce((total, probability) => total + probability, 0);
+  const entropy =
+    criteria.length < 2
+      ? 0
+      : Object.values(probabilities).reduce((total, probability) => {
+          const normalized = probability / sum;
+          return normalized === 0 ? total : total - normalized * Math.log(normalized);
+        }, 0) / Math.log(criteria.length);
+  return {
+    choice,
+    confidence,
+    diagnostics: {
+      probabilities,
+      selectedProbability,
+      runnerUpProbability,
+      margin: selectedProbability - runnerUpProbability,
+      entropy: Math.min(1, Math.max(0, entropy)),
+      ...(probabilities[TASK_NONE_APPROPRIATE] === undefined
+        ? {}
+        : { noneProbability: probabilities[TASK_NONE_APPROPRIATE] }),
+    },
+  };
 };
 
 const readUsage = (value: unknown): TaskExchangeUsage | undefined => {
@@ -925,6 +996,7 @@ const exchangeFor = (
   return stripUndefined({
     stage: plan.stage,
     provider: PROVIDER,
+    confidenceKind: runtime.confidenceProfile?.kind,
     requestedModel: runtime.model,
     model: validated?.model,
     requestId: last.requestId,
@@ -943,7 +1015,11 @@ const exchangeFor = (
         : Object.fromEntries(
             Object.entries(validated.answers).map(([key, answer]) => [
               key,
-              { choice: answer.choice, confidence: answer.confidence },
+              {
+                choice: answer.choice,
+                confidence: answer.confidence,
+                ...(runtime.captureProbabilities ? { diagnostics: answer.diagnostics } : {}),
+              },
             ])
           ),
     error: telemetry.error?.message,
@@ -972,6 +1048,9 @@ const refusal = (
   }
   if (runtime.modelPrefixes === undefined) {
     return failure('INVALID_REQUEST', 'TypeSafe allowed model prefixes are not valid', false);
+  }
+  if (!runtime.validConfidenceProfile) {
+    return failure('INVALID_REQUEST', 'TypeSafe confidence profile is not valid', false);
   }
   if (runtime.credential() === '') {
     return failure('INVALID_REQUEST', 'TypeSafe API key is empty', false);
@@ -1382,6 +1461,12 @@ export const createTypeSafeTaskDecider: TaskCreateTypeSafeDeciderFn = (config): 
   const live = runtime;
   return {
     supportsRequirements: true,
+    ...(live.endpoint === undefined ||
+    live.modelPrefixes === undefined ||
+    !live.validConfidenceProfile
+      ? { initializationError: 'INVALID_CONFIGURATION' as const }
+      : {}),
+    ...(live.confidenceProfile === undefined ? {} : { confidenceProfile: live.confidenceProfile }),
     chooseAction: (request: TaskChooseActionRequest, context) =>
       guarded(() =>
         execute(

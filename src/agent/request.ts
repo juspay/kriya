@@ -1160,7 +1160,11 @@ const actionTargetDraft = (
       goal: plan.request.goal,
       operation,
       rules: [
-        ...TARGET_RULES,
+        ...TARGET_RULES.map(rule =>
+          plan.summary.independentRead === true && operation === 'CLICK' && rule === TARGET_RULES[2]
+            ? 'state.expected records verified preparation; initialPage cannot override it. Diverged data needs correction. independentRead can hide controls again; revealing a collapsed section or inactive tab can match the task.'
+            : rule
+        ),
         ...(operation === 'SCROLL'
           ? [
               'The page target scrolls the whole page to reveal controls or content beyond the visible area; it is appropriate when scrolling can advance the goal.',
@@ -1197,12 +1201,20 @@ const assembleAction = (plan: ActionPlan, shape: Shape): TaskQuestionSet => {
       (request.offers.operations.includes('DONE') &&
         !request.goalRequirements?.some(requirement => !requirement.satisfied))
   );
-  const operationEntries = [...offerable, ...sentinels].map(
-    (operation): Entry => [operation, OPERATION_DESCRIPTIONS[operation as TaskOperation]]
-  );
+  const operationEntries = [...offerable, ...sentinels].map((operation): Entry => [
+    operation,
+    OPERATION_DESCRIPTIONS[operation as TaskOperation],
+  ]);
   const operationDraft: Draft = {
     key: TASK_QUESTION_KEYS.operation,
-    instructions: { goal: request.goal, rules: ACTION_RULES.join(' ') },
+    instructions: {
+      goal: request.goal,
+      rules: ACTION_RULES.map(rule =>
+        plan.summary.independentRead === true && rule === ACTION_RULES[2]
+          ? 'Use supplied data (including optional details), state.goalRequirements and recent actions. Keep correct data; independentRead can reset view-only states.'
+          : rule
+      ).join(' '),
+    },
     entries: operationEntries,
   };
   return {
@@ -1242,29 +1254,27 @@ const candidateEntries = (
   candidates: readonly TaskCandidateView[],
   compact: boolean
 ): readonly Entry[] =>
-  candidates.map(
-    (candidate): Entry => [
-      candidate.id,
-      flatRecord({
-        // A sensitive candidate is only ever the word sensitive, whatever the view carries.
-        value: candidate.sensitive
-          ? SENSITIVE_CANDIDATE_VALUE
-          : clean(candidate.preview, compact ? COMPACT_VALUE_CHARS : CANDIDATE_PREVIEW_CHARS),
-        source: candidate.source,
-        inputPath:
-          candidate.source === 'input'
-            ? clean(candidate.inputPath, TASK_LIMITS.descriptionChars) || undefined
-            : undefined,
-        optionGroup: candidate.sensitive
-          ? undefined
-          : clean(candidate.optionGroup, TASK_LIMITS.labelChars) || undefined,
-        code: candidate.sensitive
-          ? undefined
-          : clean(candidate.code, TASK_LIMITS.labelChars) || undefined,
-        label: clean(candidate.label, compact ? COMPACT_LABEL_CHARS : TASK_LIMITS.labelChars),
-      }),
-    ]
-  );
+  candidates.map((candidate): Entry => [
+    candidate.id,
+    flatRecord({
+      // A sensitive candidate is only ever the word sensitive, whatever the view carries.
+      value: candidate.sensitive
+        ? SENSITIVE_CANDIDATE_VALUE
+        : clean(candidate.preview, compact ? COMPACT_VALUE_CHARS : CANDIDATE_PREVIEW_CHARS),
+      source: candidate.source,
+      inputPath:
+        candidate.source === 'input'
+          ? clean(candidate.inputPath, TASK_LIMITS.descriptionChars) || undefined
+          : undefined,
+      optionGroup: candidate.sensitive
+        ? undefined
+        : clean(candidate.optionGroup, TASK_LIMITS.labelChars) || undefined,
+      code: candidate.sensitive
+        ? undefined
+        : clean(candidate.code, TASK_LIMITS.labelChars) || undefined,
+      label: clean(candidate.label, compact ? COMPACT_LABEL_CHARS : TASK_LIMITS.labelChars),
+    }),
+  ]);
 
 const AUTOCOMPLETE_PATH_NAMES: Readonly<Record<string, readonly string[]>> = {
   name: ['name', 'fullname'],
@@ -1407,7 +1417,7 @@ const assembleArgument = (
         .join(' '),
     },
     entries:
-      candidates.length === 0
+      candidates.length === 0 && !assessed
         ? []
         : [
             ...candidateEntries(
@@ -1549,10 +1559,9 @@ const assembleArgument = (
         : {}),
     }),
     questions: finalizeDrafts(
-      (request.purpose === 'requirement' ||
-        request.purpose === 'activation' ||
-        request.purpose === 'validation') &&
-        candidates.length > 0
+      request.purpose === 'requirement' ||
+        request.purpose === 'validation' ||
+        (request.purpose === 'activation' && candidates.length > 0)
         ? [applicability, draft]
         : [draft],
       request.step,
@@ -1679,11 +1688,16 @@ export const buildArgumentQuestions: TaskBuildArgumentQuestionsFn = (request, op
   const fits = (set: TaskQuestionSet): boolean =>
     estimateRequestBytes(set, MODEL_ALLOWANCE) <= limits.budget &&
     utf8Length(JSON.stringify(set.state)) <= limits.stateBudget;
-  if (fits(complete) || count <= 1) {
+  // A genuinely empty assessment can ask the semantic sentinels; byte trimming must not turn
+  // supplied data into REQUIRED_UNAVAILABLE. Preserve a real candidate whenever one was offered.
+  const minimumCandidates = count === 0 ? 0 : 1;
+  if (fits(complete) || count <= minimumCandidates) {
     return complete;
   }
-  const reduced = largestFitting(1, count - 1, candidateCount => fits(build(candidateCount)));
-  return build(reduced ?? 1);
+  const reduced = largestFitting(minimumCandidates, count - 1, candidateCount =>
+    fits(build(candidateCount))
+  );
+  return build(reduced ?? minimumCandidates);
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1812,9 +1826,10 @@ export const buildCommitmentQuestions: TaskBuildCommitmentQuestionsFn = (
     elements,
     waitDurationsMs: [],
   });
-  const forward = TASK_COMMITMENT_CLASSES.map(
-    (name): Entry => [name, COMMITMENT_DESCRIPTIONS[name]]
-  );
+  const forward = TASK_COMMITMENT_CLASSES.map((name): Entry => [
+    name,
+    COMMITMENT_DESCRIPTIONS[name],
+  ]);
   const offset = settings.rotate ? rotationOffset(request.step, 0, forward.length) : 0;
   const rotated = orderCriteria(TASK_QUESTION_KEYS.commitment, forward, offset);
   const entries = order === 'reverse' ? [...rotated].reverse() : rotated;
@@ -1877,16 +1892,14 @@ const evidenceEntries = (
   evidence: readonly TaskCollectedEvidence[],
   compact: boolean
 ): readonly Entry[] =>
-  evidence.map(
-    (item): Entry => [
-      item.id,
-      flatRecord({
-        evidence: `[${item.id}] ${item.label}`.trim(),
-        text: item.text,
-        url: compact ? undefined : item.url,
-      }),
-    ]
-  );
+  evidence.map((item): Entry => [
+    item.id,
+    flatRecord({
+      evidence: `[${item.id}] ${item.label}`.trim(),
+      text: item.text,
+      url: compact ? undefined : item.url,
+    }),
+  ]);
 
 type CompletionPlan = {
   readonly request: TaskVerifyCompletionRequest;
@@ -2012,9 +2025,10 @@ const assembleCompletion = (plan: CompletionPlan, shape: Shape): TaskQuestionSet
   };
   const evidenceChoices: Entry[] = [
     ...evidenceEntries(evidence, shape.compact),
-    ...kept.map(
-      (element): Entry => [element.id, elementCriterion(element, undefined, shape.compact)]
-    ),
+    ...kept.map((element): Entry => [
+      element.id,
+      elementCriterion(element, undefined, shape.compact),
+    ]),
     noneEntry,
   ];
   const fixed = (key: string, rules: readonly string[], entries: readonly Entry[]): Draft => ({
@@ -2031,58 +2045,56 @@ const assembleCompletion = (plan: CompletionPlan, shape: Shape): TaskQuestionSet
   const requirements =
     clauses.length > 8 ? [...clauses.slice(0, 7), clauses.slice(7).join(', ')] : clauses;
   const drafts: Draft[] = [
-    ...requirements.map(
-      (requirement, index): Draft => ({
-        ...fixed(
-          index === 0
-            ? TASK_QUESTION_KEYS.completion
-            : `${TASK_QUESTION_KEYS.completionPartPrefix}${String(index + 1)}`,
-          COMPLETION_RULES,
-          TASK_COMPLETION_VERDICTS.map((name): Entry => [name, COMPLETION_DESCRIPTIONS[name]])
-        ),
-        instructions: {
-          goal: request.goal,
-          requirement,
-          rules: [
-            'Judge this requirement only in the context of state.task; every requirement must pass.',
-            ...COMPLETION_RULES,
-            ...(index === 0 && expected.length > 0 ? [COMPLETION_RESULTS_SUMMARY_RULE] : []),
-            ...(plan.summary.submittedControls?.some(control => control.observedEmptyAtSubmission)
-              ? [
-                  'observedEmptyAtSubmission is an actual blank field at the submission attempt, not a requirement or persistence verdict. Compare it with requested supplied data for omissions.',
-                ]
-              : []),
-            ...(verifiedCurrentGoalStates.length > 0
-              ? [
-                  'verifiedCurrentGoalStates are code-checked assessed/current control matches; independent saved-view matches are saved-state evidence, not a whole-task verdict.',
-                ]
-              : []),
-          ].join(' '),
-        },
-        ...(request.expectAnswer === false
-          ? {
-              entries: [
-                [
-                  'SATISFIED',
-                  'Matching action/state evidence; lasting writes need record/fresh saved view. Tests use requested prepared methods without charge; caller context needs no site proof.',
-                ],
-                [
-                  'NOT_SATISFIED',
-                  'Contradictory action/state; no real charge in a requested test is not a contradiction.',
-                ],
-                [
-                  'UNCERTAIN',
-                  'Needed action/state evidence missing; opaque verified inputs and test simulation are not missing.',
-                ],
-                [
-                  TASK_CALLER_CONTEXT_ONLY,
-                  'Caller personal reason/relationship only; no website action, quantity, preference or state constraint, including test status.',
-                ],
-              ] as readonly Entry[],
-            }
-          : {}),
-      })
-    ),
+    ...requirements.map((requirement, index): Draft => ({
+      ...fixed(
+        index === 0
+          ? TASK_QUESTION_KEYS.completion
+          : `${TASK_QUESTION_KEYS.completionPartPrefix}${String(index + 1)}`,
+        COMPLETION_RULES,
+        TASK_COMPLETION_VERDICTS.map((name): Entry => [name, COMPLETION_DESCRIPTIONS[name]])
+      ),
+      instructions: {
+        goal: request.goal,
+        requirement,
+        rules: [
+          'Judge this requirement only in the context of state.task; every requirement must pass.',
+          ...COMPLETION_RULES,
+          ...(index === 0 && expected.length > 0 ? [COMPLETION_RESULTS_SUMMARY_RULE] : []),
+          ...(plan.summary.submittedControls?.some(control => control.observedEmptyAtSubmission)
+            ? [
+                'observedEmptyAtSubmission is an actual blank field at the submission attempt, not a requirement or persistence verdict. Compare it with requested supplied data for omissions.',
+              ]
+            : []),
+          ...(verifiedCurrentGoalStates.length > 0
+            ? [
+                'verifiedCurrentGoalStates are code-checked assessed/current control matches; independent saved-view matches are saved-state evidence, not a whole-task verdict.',
+              ]
+            : []),
+        ].join(' '),
+      },
+      ...(request.expectAnswer === false
+        ? {
+            entries: [
+              [
+                'SATISFIED',
+                'Matching action/state evidence; lasting writes need record/fresh saved view. Tests use requested prepared methods without charge; caller context needs no site proof.',
+              ],
+              [
+                'NOT_SATISFIED',
+                'Contradictory action/state; no real charge in a requested test is not a contradiction.',
+              ],
+              [
+                'UNCERTAIN',
+                'Needed action/state evidence missing; opaque verified inputs and test simulation are not missing.',
+              ],
+              [
+                TASK_CALLER_CONTEXT_ONLY,
+                'Caller personal reason/relationship only; no website action, quantity, preference or state constraint, including test status.',
+              ],
+            ] as readonly Entry[],
+          }
+        : {}),
+    })),
     ...(plan.summary.submittedControls ?? []).flatMap((control, controlIndex): readonly Draft[] =>
       control.observedEmptyAtSubmission === true
         ? [
@@ -2111,30 +2123,28 @@ const assembleCompletion = (plan: CompletionPlan, shape: Shape): TaskQuestionSet
           ]
         : []
     ),
-    ...plan.unresolvedControls.map(
-      (_, controlIndex): Draft => ({
-        key: `${TASK_QUESTION_KEYS.completionPartPrefix}${String(requirements.length + (plan.summary.submittedControls?.length ?? 0) + controlIndex + 1)}`,
-        instructions: {
-          goal: request.goal,
-          unresolvedControlIndex: String(controlIndex),
-          rules: `${TASK_UNTRUSTED_DATA_RULE} Judge whether the CURRENT observed outcome satisfies the whole literal task despite the unperformed uncertain control at this index in state.unresolvedControls. Use its actual state, form/context, supplied inputs and current record evidence. This is a completion-state judgment, not scope resolution or permission to act. If the goal still needs this control's value/effect choose NOT_SATISFIED; insufficient evidence requires UNCERTAIN. A success claim or a prepared draft alone proves no lasting result.`,
-        },
-        entries: [
-          [
-            'SATISFIED',
-            'The current observed outcome satisfies the literal task despite this unperformed uncertain control.',
-          ],
-          [
-            'NOT_SATISFIED',
-            'The literal task still requires this control value or effect; the current outcome is incomplete.',
-          ],
-          [
-            'UNCERTAIN',
-            'Actual evidence cannot establish that the literal task is satisfied despite this uncertain control.',
-          ],
+    ...plan.unresolvedControls.map((_, controlIndex): Draft => ({
+      key: `${TASK_QUESTION_KEYS.completionPartPrefix}${String(requirements.length + (plan.summary.submittedControls?.length ?? 0) + controlIndex + 1)}`,
+      instructions: {
+        goal: request.goal,
+        unresolvedControlIndex: String(controlIndex),
+        rules: `${TASK_UNTRUSTED_DATA_RULE} Judge whether the CURRENT observed outcome satisfies the whole literal task despite the unperformed uncertain control at this index in state.unresolvedControls. Use its actual state, form/context, supplied inputs and current record evidence. This is a completion-state judgment, not scope resolution or permission to act. If the goal still needs this control's value/effect choose NOT_SATISFIED; insufficient evidence requires UNCERTAIN. A success claim or a prepared draft alone proves no lasting result.`,
+      },
+      entries: [
+        [
+          'SATISFIED',
+          'The current observed outcome satisfies the literal task despite this unperformed uncertain control.',
         ],
-      })
-    ),
+        [
+          'NOT_SATISFIED',
+          'The literal task still requires this control value or effect; the current outcome is incomplete.',
+        ],
+        [
+          'UNCERTAIN',
+          'Actual evidence cannot establish that the literal task is satisfied despite this uncertain control.',
+        ],
+      ],
+    })),
     ...(request.expectAnswer === false
       ? []
       : [

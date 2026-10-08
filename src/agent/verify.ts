@@ -601,15 +601,13 @@ export const collectEvidence: TaskCollectEvidenceFn = (ledger, limit) => {
       ? [{ entry, text: entry.readback.text }]
       : []
   );
-  return newest(reads, limit).map(
-    ({ entry, text }, position): TaskCollectedEvidence => ({
-      id: `e${position + 1}`,
-      ledgerSeq: entry.seq,
-      url: entry.url,
-      label: entry.command.target?.label ?? '',
-      text: capText(text, TASK_LIMITS.collectedEvidenceChars),
-    })
-  );
+  return newest(reads, limit).map(({ entry, text }, position): TaskCollectedEvidence => ({
+    id: `e${position + 1}`,
+    ledgerSeq: entry.seq,
+    url: entry.url,
+    label: entry.command.target?.label ?? '',
+    text: capText(text, TASK_LIMITS.collectedEvidenceChars),
+  }));
 };
 
 // A diverged entry carries its non-sensitive observed value so the verifier sees both values.
@@ -715,18 +713,17 @@ const runLocalSteps = (input: TaskGateInput): LocalSteps => {
     ...freshnessFailures(input),
     ...(input.allowUncertainCompletion
       ? []
-      : unresolved.map(
-          (seq): TaskGateFailure => ({ code: 'UNRESOLVED_UNCERTAIN_EFFECT', ledgerSeq: seq })
-        )),
+      : unresolved.map((seq): TaskGateFailure => ({
+          code: 'UNRESOLVED_UNCERTAIN_EFFECT',
+          ledgerSeq: seq,
+        }))),
     ...postconditions
       .filter(check => check.status === 'violated' || check.status === 'absent_violated')
-      .map(
-        (check): TaskGateFailure => ({
-          code: 'POSTCONDITION_VIOLATED',
-          ledgerSeq: check.ledgerSeq,
-          detail: check.postcondition.label,
-        })
-      ),
+      .map((check): TaskGateFailure => ({
+        code: 'POSTCONDITION_VIOLATED',
+        ledgerSeq: check.ledgerSeq,
+        detail: check.postcondition.label,
+      })),
   ];
   return { failures, postconditions, resolutions, unresolved };
 };
@@ -823,12 +820,10 @@ const verifyDecision = (input: TaskGateInput, decision: TaskCompletionDecision):
       ...verdictFailures,
       ...resolved
         .filter(item => item.evidence === undefined)
-        .map(
-          (item): TaskGateFailure => ({
-            code: 'EVIDENCE_NOT_IN_SNAPSHOT',
-            ...idDetail(item.id),
-          })
-        ),
+        .map((item): TaskGateFailure => ({
+          code: 'EVIDENCE_NOT_IN_SNAPSHOT',
+          ...idDetail(item.id),
+        })),
       ...missing,
     ],
     evidence,

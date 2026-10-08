@@ -866,6 +866,9 @@ async function validatorChecks() {
     ok(!validateScenario(goodLive({ run: { budgets: { maxCoffee: 5 } } })).ok);
     ok(!validateScenario(goodLive({ run: { speed: 1 } })).ok);
     ok(!validateScenario(goodLive({ run: { cancelAfterMs: 0 } })).ok);
+    ok(!validateScenario(goodLive({ run: { cancelWhenFaultFires: true } })).ok);
+    ok(!validateScenario(goodLive({ run: { cancelAfterMs: 50, cancelWhenFaultFires: 'yes' } })).ok);
+    ok(!validateScenario(goodLive({ run: { cancelAfterMs: 50, cancelWhenFaultFires: true } })).ok);
   });
   await check(
     'validate: app options are cross-checked against describe() when apps are given',

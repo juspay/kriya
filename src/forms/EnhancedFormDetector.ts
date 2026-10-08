@@ -454,8 +454,7 @@ export class EnhancedFormDetector {
               existingField.initialValue = checkedValues;
             } else {
               const checkedRadio = mergedElements.find(el => (el as HTMLInputElement).checked) as
-                | HTMLInputElement
-                | undefined;
+                HTMLInputElement | undefined;
               existingField.value = checkedRadio ? checkedRadio.value : '';
               existingField.initialValue = existingField.value;
             }
@@ -818,8 +817,7 @@ export class EnhancedFormDetector {
    */
   private searchContextForFormState(reactInstance: ReactFiberNode, fieldName: string): unknown {
     const deps = (reactInstance as unknown as Record<string, unknown>).dependencies as
-      | { firstContext?: unknown }
-      | undefined;
+      { firstContext?: unknown } | undefined;
     if (!deps?.firstContext) {
       return null;
     }
@@ -1037,8 +1035,7 @@ export class EnhancedFormDetector {
    */
   private setFormikValue(form: EnhancedDetectedForm, fieldName: string, value: unknown): boolean {
     const setFieldValue = form.formApi?.setFieldValue as
-      | ((field: string, value: unknown) => void)
-      | undefined;
+      ((field: string, value: unknown) => void) | undefined;
     if (setFieldValue) {
       this._forceLog(`✨ Using Formik API setFieldValue() for ${fieldName}`);
       setFieldValue(fieldName, value);
@@ -1361,8 +1358,7 @@ export class EnhancedFormDetector {
 
     // Strategy 5: React Final Form context
     const nodeDeps = (node as unknown as Record<string, unknown>).dependencies as
-      | { firstContext?: unknown }
-      | undefined;
+      { firstContext?: unknown } | undefined;
     if (nodeDeps?.firstContext) {
       let context = nodeDeps.firstContext as
         | {
