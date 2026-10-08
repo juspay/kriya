@@ -628,8 +628,7 @@ export type TaskHostError = {
 };
 
 export type TaskHostResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: TaskHostError };
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: TaskHostError };
 
 /**
  * Page-reported flags are advisory: the Node-side scrub re-checks redaction and the agent re-reads the
@@ -1785,6 +1784,17 @@ export type TaskQuestionSet = {
 
 export type TaskExchangeUsage = { readonly inputTokens: number; readonly outputTokens: number };
 
+/** Validated numerical evidence; distribution concentration is not workflow correctness. */
+export type TaskChoiceDiagnostics = {
+  readonly probabilities: Readonly<Record<string, number>>;
+  readonly selectedProbability: number;
+  readonly runnerUpProbability: number;
+  readonly margin: number;
+  /** Entropy normalized to [0,1] using the offered option count. */
+  readonly entropy: number;
+  readonly noneProbability?: number;
+};
+
 /** One HTTP attempt of an exchange: the retry evidence (status, latency, delay before the next attempt). */
 export type TaskExchangeAttempt = {
   /** 1-based. */
@@ -1799,13 +1809,16 @@ export type TaskExchangeAttempt = {
 };
 
 export type TaskExchange = {
+  /** Caller-declared confidence semantics; omitted unless a confidence profile was configured. */
+  readonly confidenceKind?: TaskDeciderConfidenceProfile['kind'];
   readonly stage: TaskDecisionStage;
+  /** Adapter/provider label; not independent proof of the transport's actual upstream route. */
   readonly provider: string;
   readonly requestedModel?: string;
   /**
-   * Resolved versioned id from the response (jev-1.13.0), never the alias. A response whose model does
-   * not start with one of the allowed prefixes (TypeSafeTaskDeciderConfig.allowedModelPrefixes, default
-   * TASK_TYPESAFE_MODEL_PREFIX) is INVALID_RESPONSE: another model answered.
+   * Response-reported model id. Jev reports its resolved version; compatible providers may echo the
+   * requested id. A response outside allowedModelPrefixes is INVALID_RESPONSE. Prefix acceptance
+   * alone does not independently verify the upstream route, alias resolution or model identity.
    */
   readonly model?: string;
   /** x-typesafe-request-id of the final attempt. */
@@ -1827,7 +1840,14 @@ export type TaskExchange = {
   /** assertGoalPreserved passed for the request that was sent, and the context goal equalled the request goal. */
   readonly goalVerified: boolean;
   readonly answers?: Readonly<
-    Record<string, { readonly choice: string; readonly confidence: number }>
+    Record<
+      string,
+      {
+        readonly choice: string;
+        readonly confidence: number;
+        readonly diagnostics?: TaskChoiceDiagnostics;
+      }
+    >
   >;
   readonly error?: string;
   /** Redacted request. Present only when captureExchanges is on. */
@@ -1960,6 +1980,10 @@ export type TaskCompletionDecision = {
 };
 
 export type TaskDecider = {
+  /** Closed initialization refusal; the coordinator rejects it before accessing the host. */
+  readonly initializationError?: 'INVALID_CONFIGURATION';
+  /** Explicit provider confidence semantics; absent profiles preserve existing floors and warnings. */
+  readonly confidenceProfile?: TaskDeciderConfidenceProfile;
   /** chooseArgument can identify final requirements without executing them. */
   readonly supportsRequirements?: boolean;
   readonly chooseAction: (
@@ -1987,8 +2011,7 @@ export type TaskDecider = {
 };
 
 export type TaskGoalCheck =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly questionKey: string };
+  { readonly ok: true } | { readonly ok: false; readonly questionKey: string };
 
 // ---------------------------------------------------------------------------------------------
 // TypeSafe adapter
@@ -2036,6 +2059,8 @@ export type TaskRetryPolicy = {
 };
 
 export type TypeSafeTaskDeciderConfig = {
+  /** Caller-declared confidence semantics and default floors; no automatic calibration is claimed. */
+  readonly confidenceProfile?: TaskDeciderConfidenceProfile;
   /**
    * Node-side only. Never serialized, logged, traced or placed in a page. A function keeps the key out of
    * enumerable properties that loggers stringify. Construction fails (INVALID_REQUEST on first call, no
@@ -2067,6 +2092,8 @@ export type TypeSafeTaskDeciderConfig = {
   readonly maxOptions?: number;
   /** Number of evidence questions in the completion request. Default 2. */
   readonly evidenceQuestions?: number;
+  /** Retain validated distributions and numerical margins in exchanges. Default false; no gate changes. */
+  readonly captureProbabilities?: boolean;
   /** Ask commitment questions in forward and reversed order and compare. Default true. */
   readonly confirmCommitment?: boolean;
   /**
@@ -2376,11 +2403,7 @@ export type TaskPostcondition =
  * absent_violated: the element is gone with no later effect, document change or submit that explains it.
  */
 export type TaskPostconditionStatus =
-  | 'holds'
-  | 'diverged'
-  | 'violated'
-  | 'retired'
-  | 'absent_violated';
+  'holds' | 'diverged' | 'violated' | 'retired' | 'absent_violated';
 
 /** How `compareFieldValues` judged an observed field value against the written one. */
 export type TaskValueMatch = 'exact' | 'equivalent' | 'different';
@@ -2565,6 +2588,32 @@ export type TaskConfidenceFloors = {
   readonly argument: number;
   readonly commitment: number;
   readonly completion: number;
+};
+
+/** Confidence is provider-specific; a matching model prefix alone does not calibrate it. */
+export type TaskDeciderConfidenceProfile = {
+  readonly kind: 'vendor_reported' | 'normalized_entropy' | 'unknown';
+  /** A caller assertion backed by its own evaluation, not inferred from the model name. */
+  readonly calibrated: boolean;
+  /** Defaults below explicit request/profile/configured floors; resume never lowers saved floors. */
+  readonly floors?: Partial<TaskConfidenceFloors>;
+};
+
+export type TaskEffectiveConfidenceProfile = {
+  readonly kind: TaskDeciderConfidenceProfile['kind'];
+  readonly calibrated: boolean;
+  readonly floors: TaskConfidenceFloors;
+};
+
+/** Shadow measurements only; semantic equivalence is a heuristic, never completion evidence. */
+export type TaskProgressDiagnostics = {
+  /** Counters restart on resume; they describe this active segment, not the checkpoint history. */
+  readonly scope: 'active_segment';
+  readonly observations: number;
+  readonly semanticChanges: number;
+  readonly cosmeticOnlyChanges: number;
+  readonly repeatedStates: number;
+  readonly maxUnchangedStreak: number;
 };
 
 /** What the caller expects from the goal. Absent keys mean "decide from the observed state". */
@@ -2786,6 +2835,8 @@ export type TaskBudgetUsage = {
 };
 
 export type TaskRunOptions = {
+  /** Opt-in semantic/cosmetic progress counters. Default false; no budget, policy or gate changes. */
+  readonly captureProgressDiagnostics?: boolean;
   readonly budgets?: Partial<TaskBudgets>;
   readonly confidence?: Partial<TaskConfidenceFloors>;
   readonly settle?: TaskSettleOptions;
@@ -2997,12 +3048,7 @@ export type TaskResumeRequest = {
 };
 
 export type TaskStatus =
-  | 'completed'
-  | 'blocked'
-  | 'needs_input'
-  | 'awaiting_approval'
-  | 'failed'
-  | 'cancelled';
+  'completed' | 'blocked' | 'needs_input' | 'awaiting_approval' | 'failed' | 'cancelled';
 
 export type TaskBlockedReason =
   | 'MODEL_BLOCKED'
@@ -3049,7 +3095,8 @@ export type TaskWarning = {
     | 'SHORT_SENSITIVE_INPUT'
     | 'LOCATION_UNVERIFIED'
     | 'ASSUMED_ROUTINE_CLASSIFICATION'
-    | 'SENSITIVE_UNCLASSIFIED_FIELD';
+    | 'SENSITIVE_UNCLASSIFIED_FIELD'
+    | 'UNCALIBRATED_DECIDER';
   readonly detail?: string;
 };
 
@@ -3071,6 +3118,10 @@ export type TaskStats = {
  * is a string, else '', and ids are always created first so the shape is complete.
  */
 export type TaskResultBase = {
+  /** Shadow counters only, when captureProgressDiagnostics is true. */
+  readonly progressDiagnostics?: TaskProgressDiagnostics;
+  /** Present only for an explicitly configured decider confidence profile. */
+  readonly confidenceProfile?: TaskEffectiveConfidenceProfile;
   readonly runId: TaskRunId;
   readonly sessionId: TaskSessionId;
   /** The caller's goal, unchanged and never passed through a redactor. */
@@ -3215,13 +3266,7 @@ export type TaskEventBody =
   | {
       readonly type: 'approval';
       readonly phase:
-        | 'requested'
-        | 'approved'
-        | 'denied'
-        | 'mismatch'
-        | 'void'
-        | 'expired'
-        | 'consumed';
+        'requested' | 'approved' | 'denied' | 'mismatch' | 'void' | 'expired' | 'consumed';
       readonly approvalId: string;
       readonly digest: TaskDigest;
     }

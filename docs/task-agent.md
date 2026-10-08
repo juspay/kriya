@@ -46,6 +46,48 @@ Commitment classification sees the actual target, its form relationships, submit
 
 Strong agreement on NONE keeps its minimum confidence at the configured commitment floor. A separate binary Choice supplies a fallback for diffuse agreement below that floor. A possible effect in the applicable fallback remains `other_commitment`; a concrete class from either class judgment cannot be overridden. The commitment floor is unchanged.
 
+A transient commitment-classifier failure gets at most one additional read-only decision attempt, within the existing cancellation, wall, model-call and failure budgets. Only retryable network/timeouts, 408, 429 and 5xx are eligible. Invalid answers and authorization failures are not retried; an execution is never retried by this mechanism. If independent completion verification is unavailable, `done_gate` reports `DECIDER_UNAVAILABLE` without counting a semantic premature-DONE judgment.
+
+The default TypeSafe transport permits two retries, or three physical HTTP attempts per send.
+The conservative default composition is two coordinator invocations × up to two adapter sends
+(including weak-presence confirmation) × three HTTP attempts: at most twelve physical sends
+for that classification path. A coordinator timeout can interrupt confirmation and start its
+additional invocation; this is why the returned-transient-error path alone understates the bound.
+This is code-derived, not a live measurement, and cancellation/deadlines can shorten it.
+The coordinator model-call budget counts decider invocations. The HTTP recorder is authoritative
+for complete physical-send accounting; a returned exchange can retain the first result when
+confirmation fails. Other configured retry limits need their own bound. Execution is not retried.
+
+Empty requirement, validation and group candidate lists retain `KEEP_CURRENT`, `REQUIRED_UNAVAILABLE` and `NONE_APPROPRIATE`. Byte fitting retains at least one real candidate when supplied candidates exist; an oversized minimal question fails before HTTP rather than presenting supplied data as absent. Ordinary empty argument requests retain their refusal behavior.
+
+When a caller uses an argument floor below 0.5, a weak judgment that rewrites an existing value
+requires an additional actual agreeing sample. An earlier deferred low-confidence sample cannot
+consume that confirmation; an unavailable confirmation leaves the requirement uncertain. Calls
+remain within the normal budgets. Two agreeing wrong judgments remain possible, so this protects
+the confirmation boundary rather than proving semantic correctness.
+
+Optional diagnostics do not change decisions or gates:
+
+```ts
+const decider = createTypeSafeTaskDecider({
+  apiKey: () => process.env.TYPESAFE_API_KEY ?? '',
+  captureProbabilities: true,
+  confidenceProfile: {
+    kind: 'vendor_reported',
+    calibrated: false,
+  },
+});
+const agent = createTaskAgent({ host, decider });
+const result = await agent.run({
+  goal,
+  options: { captureProgressDiagnostics: true },
+});
+```
+
+Validated exchanges can retain the complete offered-choice distribution, selected and runner-up probabilities, margin, normalized entropy and NONE mass. These are numerical observations, not calibrated correctness. Explicit confidence profiles copy provider semantics and optional default floors at construction. Request profile, configured run and per-run confidence overrides retain precedence. Results report effective floors, and uncalibrated profiles emit `UNCALIBRATED_DECIDER`. Resume never lowers saved floors. A prefix match or `calibrated: true` caller assertion is not independent provider acceptance.
+
+Shadow progress counters distinguish control-state changes from cosmetic page text changes and count revisited states. They restart on resume and report `scope: 'active_segment'`; they never change no-progress budgets, recovery, policy or completion evidence. The default result shape and confidence floors are unchanged when these options are absent.
+
 Form submitters are withheld for active native validation failures. Compilation also rejects submission through Enter with `FORM_INVALID` before requesting or consuming an approval. Native constraints disabled by `novalidate` do not trigger this preflight; application errors remain separate observed evidence. Server validation remains separate: valid browser controls can still be rejected by the application. After an actual submission, a visible application error bound to an empty field can trigger a focused `validation` assessment. The model decides whether resolving that error belongs to the requested workflow and selects an offered input reference or reports missing data. A request to test the rejection does not authorize correcting it. Native `novalidate` disables browser enforcement; authored required metadata and real application errors remain decision evidence.
 
 ```ts
@@ -72,4 +114,4 @@ Run the local demonstration with the private env file loaded by Node:
 node --env-file=/path/to/private.env examples/task-agent.mjs
 ```
 
-The example uses the controlled settings application, real Chromium, Jev and the package bundle. It opts into rendered offscreen controls and explicit action/argument/completion confidence floors of 0.2/0.3/0.6. The library defaults remain 0.5/0.6/0.75; the commitment floor remains 0.5. See [the e2e harness](../e2e/README.md) for scenario selection and evidence, and [the normative contract](task-agent-contract.md) for the host, resolver, approval and verification details. Verification status is tracked separately in [task-agent-status.md](task-agent-status.md).
+The example uses the controlled settings application, real Chromium, Jev and the package bundle. It opts into rendered offscreen controls and explicit action/argument/completion confidence floors of 0.2/0.3/0.6. The library defaults remain 0.5/0.6/0.75; the commitment floor remains 0.5. See [the e2e harness](https://github.com/juspay/kriya/blob/main/e2e/README.md) for scenario selection and evidence, and [the normative contract](task-agent-contract.md) for the host, resolver, approval and verification details. Verification status is tracked separately in [task-agent-status.md](task-agent-status.md).

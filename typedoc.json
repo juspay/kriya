@@ -1,7 +1,7 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["./src/index.ts"],
-  "out": "./docs",
+  "out": "./docs/api-generated",
   "name": "@juspay/kriya",
   "readme": "./README.md",
   "plugin": ["typedoc-plugin-markdown"],

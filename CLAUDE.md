@@ -138,8 +138,7 @@ export type ActionCommand = {
 };
 
 export type ExecutionResult =
-  | { success: true; data?: unknown }
-  | { success: false; error: string; code: ErrorCode };
+  { success: true; data?: unknown } | { success: false; error: string; code: ErrorCode };
 ```
 
 ### Class Implementation

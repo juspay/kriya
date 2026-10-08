@@ -1,5 +1,6 @@
 /** @type {import('jest').Config} */
 module.exports = {
+  watchman: false,
   testEnvironment: 'jsdom',
   testMatch: ['<rootDir>/tests/**/*.test.ts'],
   moduleNameMapper: {

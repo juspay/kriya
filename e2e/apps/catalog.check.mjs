@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import * as catalog from './catalog.mjs';
 
-const require = createRequire('/tmp/amazon-guide/package.json');
+const require = createRequire(
+  join(process.env.BREEZE_GUIDE_TOOLS_DIR ?? '/tmp/amazon-guide', 'package.json')
+);
 const { chromium } = require('playwright');
 
 const PINNED_CHROMIUM = `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;
@@ -299,6 +301,10 @@ const contractChecks = async titleOf => {
       await assert.rejects(
         () => catalog.startApp({ initial: { cart: ['p99'] } }),
         /unknown product id/
+      );
+      await assert.rejects(
+        () => catalog.startApp({ initial: { inventoryProof: 'true' } }),
+        /inventoryProof must be a boolean/
       );
       await assert.rejects(
         () => catalog.startApp({ faults: { slowResponseMs: -5 } }),
@@ -1975,6 +1981,261 @@ const lifecycleChecks = async () => {
 
 /* ------------------------------------------------------------------ */
 
+const inventoryChecks = async titleOf => {
+  const proof = { cart: ['p02'], wishlist: ['p24', 'p29'], inventoryProof: true };
+  const summary = page => page.getByRole('region', { name: 'Basket and saved items' });
+  const summaryText = page => summary(page).innerText();
+  const listing = async (app, page, variant) => {
+    await page.goto(UI[variant].listing(app));
+    await UI[variant].ready(page);
+  };
+  const reload = async (page, variant) => {
+    await page.reload();
+    await UI[variant].ready(page);
+  };
+  const postCart = (app, productId) =>
+    fetch(`${app.origin}/api/cart`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ productId }),
+    });
+
+  await check('inventory: describe documents the default-off evidence option', () => {
+    const option = catalog.describe().initialOptions.find(o => o.name === 'inventoryProof');
+    assert.ok(option);
+    assert.match(option.summary, /false by default/);
+    assert.match(option.summary, /product ids/);
+  });
+
+  for (const variant of VARIANTS) {
+    await suite(
+      `inventory ${variant} default`,
+      { variant, initial: { cart: ['p02'] } },
+      async ({ app, page }) => {
+        await check(
+          `inventory ${variant}: default has no visible proof or extra API payload`,
+          async () => {
+            await listing(app, page, variant);
+            eq(await summary(page).count(), 0);
+            const data = await (await fetch(`${app.origin}/api/products?q=earbuds`)).json();
+            assert.equal(Object.hasOwn(data, 'inventory'), false);
+            const info = await (await fetch(`${app.origin}/info/basket`)).text();
+            assert.match(info, /There is nothing to show here at the moment/);
+            assert.ok(!info.includes('inventory-summary'));
+          }
+        );
+      }
+    );
+
+    await suite(
+      `inventory ${variant} populated`,
+      { variant, initial: proof },
+      async ({ app, page, pageErrors }) => {
+        await check(
+          `inventory ${variant}: initial identities and quantities appear before listing content`,
+          async () => {
+            await listing(app, page, variant);
+            assert.equal(await summary(page).isVisible(), true);
+            const text = await summaryText(page);
+            assert.ok(text.includes(`${titleOf.p02} — Product p02 — Quantity 1`));
+            assert.ok(text.includes(`${titleOf.p24} — Product p24`));
+            assert.ok(text.includes(`${titleOf.p29} — Product p29`));
+            assert.ok(
+              await summary(page).evaluate(node =>
+                Boolean(
+                  node.compareDocumentPosition(document.querySelector('main')) &
+                  Node.DOCUMENT_POSITION_FOLLOWING
+                )
+              )
+            );
+            const body = await page.locator('body').innerText();
+            assert.ok(
+              body.indexOf('Product p29') < 2000,
+              'initial identities must precede observation text truncation'
+            );
+            eq(pageErrors, []);
+          }
+        );
+        await check(
+          `inventory ${variant}: linked basket and saved pages are current read-only records`,
+          async () => {
+            const before = app.state();
+            for (const path of [
+              '/info/cart',
+              '/info/basket',
+              '/info/bag',
+              '/info/saved',
+              '/info/wishlist',
+            ]) {
+              const html = await (await fetch(app.origin + path)).text();
+              assert.ok(html.includes(`${titleOf.p02} — Product p02 — Quantity 1`));
+              assert.ok(html.includes(`${titleOf.p24} — Product p24`));
+              assert.ok(html.includes(`${titleOf.p29} — Product p29`));
+              assert.ok(!html.includes('There is nothing to show here at the moment'));
+            }
+            eq(app.state(), before, 'info reads must not change state, searches or product visits');
+            await page.getByRole('link', { name: 'View saved items', exact: true }).click();
+            assert.ok((await summaryText(page)).includes('Product p24'));
+            await page.getByRole('link', { name: 'View basket items', exact: true }).click();
+            assert.ok((await summaryText(page)).includes('Product p02 — Quantity 1'));
+            eq(app.state(), before);
+          }
+        );
+        await check(
+          `inventory ${variant}: real writes update visible records and survive reload`,
+          async () => {
+            await listing(app, page, variant);
+            eq(
+              await clickAndStatus(page, UI[variant].add(page, EARBUDS), UI[variant].cartPath),
+              200
+            );
+            await summary(page)
+              .getByText(`${titleOf.p02} — Product p02 — Quantity 2`, { exact: true })
+              .waitFor();
+            eq(app.state().cart, [{ productId: 'p02', qty: 2 }]);
+            eq(
+              await clickAndStatus(page, UI[variant].save(page, EARBUDS), UI[variant].wishPath),
+              200
+            );
+            await summary(page)
+              .getByText(`${titleOf.p02} — Product p02`, { exact: true })
+              .waitFor();
+            eq(app.state().wishlist, ['p24', 'p29', 'p02']);
+            await reload(page, variant);
+            const text = await summaryText(page);
+            assert.ok(text.includes('Product p02 — Quantity 2'));
+            for (const id of ['p24', 'p29', 'p02']) {
+              assert.ok(text.includes(`Product ${id}`));
+            }
+            eq(pageErrors, []);
+          }
+        );
+        await check(
+          `inventory ${variant}: equal counts with different identities produce different evidence`,
+          async () => {
+            app.reset(proof);
+            await listing(app, page, variant);
+            const before = await summaryText(page);
+            app.reset({ cart: ['p15'], wishlist: ['p23', 'p28'], inventoryProof: true });
+            await reload(page, variant);
+            const after = await summaryText(page);
+            assert.notEqual(after, before);
+            assert.ok(after.includes(`${titleOf.p15} — Product p15 — Quantity 1`));
+            for (const id of ['p23', 'p28']) {
+              assert.ok(after.includes(`Product ${id}`));
+            }
+            for (const id of ['p02', 'p24', 'p29']) {
+              assert.ok(!after.includes(`Product ${id}`));
+            }
+          }
+        );
+        await check(
+          `inventory ${variant}: equal totals with changed quantity allocation produce different evidence`,
+          async () => {
+            const base = { cart: ['p02', 'p15'], wishlist: [], inventoryProof: true };
+            app.reset(base);
+            eq((await postCart(app, 'p02')).status, 200);
+            await reload(page, variant);
+            const first = await summaryText(page);
+            app.reset(base);
+            eq((await postCart(app, 'p15')).status, 200);
+            await reload(page, variant);
+            const second = await summaryText(page);
+            eq(
+              app.state().cart.reduce((sum, item) => sum + item.qty, 0),
+              3
+            );
+            assert.notEqual(first, second);
+            assert.ok(first.includes('Product p02 — Quantity 2'));
+            assert.ok(first.includes('Product p15 — Quantity 1'));
+            assert.ok(second.includes('Product p02 — Quantity 1'));
+            assert.ok(second.includes('Product p15 — Quantity 2'));
+          }
+        );
+        await check(
+          `inventory ${variant}: empty inventories and explicit disable/reset render accurately`,
+          async () => {
+            app.reset({ inventoryProof: true });
+            await reload(page, variant);
+            const text = await summaryText(page);
+            assert.ok(text.includes('No basket items.'));
+            assert.ok(text.includes('No saved items.'));
+            assert.ok(!text.includes('Product p'));
+            app.reset({ inventoryProof: false });
+            await reload(page, variant);
+            eq(await summary(page).count(), 0);
+            app.reset();
+            await reload(page, variant);
+            assert.ok((await summaryText(page)).includes('Product p02 — Quantity 1'));
+          }
+        );
+      }
+    );
+
+    for (const fault of ['failWrites', 'misleadingSuccess']) {
+      await suite(
+        `inventory ${variant} ${fault}`,
+        { variant, initial: proof, faults: { [fault]: true } },
+        async ({ app, page }) => {
+          await check(
+            `inventory ${variant}: ${fault} never paints unpersisted basket or saved records`,
+            async () => {
+              await listing(app, page, variant);
+              const initialText = await summaryText(page);
+              const expectedStatus = fault === 'failWrites' ? 500 : 200;
+              eq(
+                await clickAndStatus(page, UI[variant].add(page, EARBUDS), UI[variant].cartPath),
+                expectedStatus
+              );
+              await (
+                fault === 'failWrites'
+                  ? alertText(page, UI[variant].errText)
+                  : statusText(page, UI[variant].okText)
+              ).waitFor();
+              eq(await summaryText(page), initialText);
+              eq(
+                await clickAndStatus(page, UI[variant].save(page, EARBUDS), UI[variant].wishPath),
+                expectedStatus
+              );
+              await (
+                fault === 'failWrites'
+                  ? alertText(page, UI[variant].errSave)
+                  : statusText(page, UI[variant].okSave)
+              ).waitFor();
+              eq(await summaryText(page), initialText);
+              eq(app.state().cart, [{ productId: 'p02', qty: 1 }]);
+              eq(app.state().wishlist, ['p24', 'p29']);
+              await reload(page, variant);
+              eq(await summaryText(page), initialText);
+            }
+          );
+        }
+      );
+    }
+
+    await suite(
+      `inventory ${variant} replacement/delay`,
+      { variant, initial: proof, faults: { rerenderEveryMs: 80, slowResponseMs: 120 } },
+      async ({ app, page, pageErrors }) => {
+        await check(
+          `inventory ${variant}: delayed reads and DOM replacements retain actual records`,
+          async () => {
+            await listing(app, page, variant);
+            const initialText = await summaryText(page);
+            await sleep(250);
+            eq(await summaryText(page), initialText);
+            eq((await postCart(app, 'p02')).status, 200);
+            await reload(page, variant);
+            assert.ok((await summaryText(page)).includes('Product p02 — Quantity 2'));
+            eq(app.state().wishlist, ['p24', 'p29']);
+            eq(pageErrors, []);
+          }
+        );
+      }
+    );
+  }
+};
+
 const main = async () => {
   const watchdog = setTimeout(
     () => {
@@ -1995,6 +2256,7 @@ const main = async () => {
     await faultChecks();
     await hardeningChecks();
     await lifecycleChecks();
+    await inventoryChecks(titleOf);
   } finally {
     await browser.close();
   }

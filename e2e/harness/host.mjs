@@ -287,18 +287,123 @@ export function createPlaywrightTransport({
         },
       };
     }
-    try {
-      await page.goto(url, {
-        waitUntil: 'load',
-        timeout: positive(call.timeoutMs, DEFAULT_WAIT_TIMEOUT_MS),
+    const routePattern = '**/*';
+    let scopeBlocked = false;
+    const expectedNetworkUrl = new URL(input.url);
+    expectedNetworkUrl.hash = '';
+    const forceGet = async route => {
+      const request = route.request();
+      if (!request.isNavigationRequest() || request.frame() !== page.mainFrame()) {
+        await route.fallback();
+        return;
+      }
+      if (call.signal?.aborted || page.isClosed()) {
+        await route.abort('aborted');
+        return;
+      }
+      const networkUrl = new URL(request.url());
+      networkUrl.hash = '';
+      if (
+        !input.allowedOrigins.includes(networkUrl.origin) ||
+        networkUrl.href !== expectedNetworkUrl.href
+      ) {
+        scopeBlocked = true;
+        await route.abort('blockedbyclient');
+        return;
+      }
+      const headers = { ...request.headers() };
+      delete headers['content-type'];
+      delete headers['content-length'];
+      const response = await route.fetch({
+        method: 'GET',
+        postData: '',
+        headers,
+        maxRedirects: 0,
+        timeout: Math.min(
+          positive(call.timeoutMs, DEFAULT_WAIT_TIMEOUT_MS),
+          DEFAULT_WAIT_TIMEOUT_MS
+        ),
       });
+      if (response.status() >= 300 && response.status() < 400) {
+        scopeBlocked = true;
+        await route.abort('blockedbyclient');
+        return;
+      }
+      await route.fulfill({ response });
+    };
+    try {
+      // Reload creates a new realm even for a hash route. Interception makes it an
+      // independent GET, including when the current document came from a POST.
+      const previous = await page.evaluate(readyDocumentInPage, {
+        name: bridgeGlobal,
+        previous: null,
+      });
+      if (!previous?.documentId) {
+        return {
+          ok: false,
+          error: {
+            code: 'OBSERVE_FAILED',
+            message: 'independent bridge unavailable',
+            retryable: true,
+          },
+        };
+      }
+      const timeoutMs = Math.min(
+        positive(call.timeoutMs, DEFAULT_WAIT_TIMEOUT_MS),
+        DEFAULT_WAIT_TIMEOUT_MS
+      );
+      await page.route(routePattern, forceGet);
+      if (call.signal?.aborted || page.isClosed()) {
+        return {
+          ok: false,
+          error: { code: 'CANCELLED', message: 'independent read cancelled', retryable: false },
+        };
+      }
+      if (page.url() !== input.url) {
+        return {
+          ok: false,
+          error: {
+            code: 'DOCUMENT_CHANGED',
+            message: 'independent read outside scope',
+            retryable: false,
+          },
+        };
+      }
+      await page.reload({
+        waitUntil: 'load',
+        timeout: timeoutMs,
+      });
+      if (scopeBlocked) {
+        return {
+          ok: false,
+          error: {
+            code: 'DOCUMENT_CHANGED',
+            message: 'independent redirect outside scope',
+            retryable: false,
+          },
+        };
+      }
       if (call.signal?.aborted) {
         return {
           ok: false,
           error: { code: 'CANCELLED', message: 'independent read cancelled', retryable: false },
         };
       }
-      const found = await waitForDocument({ timeoutMs: call.timeoutMs, signal: call.signal });
+      const found = await waitForDocument({
+        previousDocumentId: previous.documentId,
+        timeoutMs,
+        signal: call.signal,
+      });
+      if (found && (found.url !== input.url || page.url() !== input.url)) {
+        return {
+          ok: false,
+          error: {
+            code: 'DOCUMENT_CHANGED',
+            message: 'independent view changed',
+            retryable: false,
+          },
+        };
+      }
       return found
         ? { ok: true, value: found }
         : {
@@ -312,8 +417,18 @@ export function createPlaywrightTransport({
     } catch {
       return {
         ok: false,
-        error: { code: 'OBSERVE_FAILED', message: 'independent read failed', retryable: true },
+        error: call.signal?.aborted
+          ? { code: 'CANCELLED', message: 'independent read cancelled', retryable: false }
+          : scopeBlocked
+            ? {
+                code: 'DOCUMENT_CHANGED',
+                message: 'independent read outside scope',
+                retryable: false,
+              }
+            : { code: 'OBSERVE_FAILED', message: 'independent read failed', retryable: true },
       };
+    } finally {
+      await page.unroute(routePattern, forceGet).catch(() => undefined);
     }
   };
 

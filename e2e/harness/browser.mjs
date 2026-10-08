@@ -6,7 +6,7 @@ import path from 'node:path';
 export const VIEWPORT = Object.freeze({ width: 1280, height: 800 });
 
 const DEFAULT_TOOLS_DIR = '/tmp/amazon-guide';
-const PREFERRED_CHROMIUM = `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;
+const PREFERRED_CHROMIUM = `${os.homedir()}/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;
 const CHROMIUM_EXECUTABLE =
   'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 const DIAGNOSTIC_LIMIT = 200;
@@ -79,7 +79,7 @@ export async function newScenarioContext(browser, { umd } = {}) {
   if (typeof umd !== 'string' || umd.trim().length === 0) {
     throw new TypeError('newScenarioContext requires the UMD bundle text');
   }
-  const context = await browser.newContext({ viewport: { ...VIEWPORT } });
+  const context = await browser.newContext({ viewport: { ...VIEWPORT }, serviceWorkers: 'block' });
   let page;
   const consoleLines = [];
   const pageErrors = [];

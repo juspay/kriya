@@ -61,6 +61,7 @@ const buildConfig = {
     commonjs(),
     typescript({
       tsconfig: './tsconfig.json',
+      outputToFilesystem: true,
       declaration: false,
       declarationMap: false,
     }),

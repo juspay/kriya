@@ -260,13 +260,11 @@ export const flattenInputs: TaskFlattenInputsFn = (inputs, declarations) => {
 };
 
 export const inputRules: TaskInputRulesFn = leaves =>
-  leaves.map(
-    (leaf): TaskInputRule => ({
-      path: leaf.path,
-      sensitive: leaf.sensitive,
-      ...(leaf.bind === undefined ? {} : { bind: leaf.bind }),
-    })
-  );
+  leaves.map((leaf): TaskInputRule => ({
+    path: leaf.path,
+    sensitive: leaf.sensitive,
+    ...(leaf.bind === undefined ? {} : { bind: leaf.bind }),
+  }));
 
 export const summarizeInputs: TaskSummarizeInputsFn = (leaves, options) => {
   const previews = options?.previews !== false;

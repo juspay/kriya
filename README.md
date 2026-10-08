@@ -20,6 +20,11 @@ Kriya is a TypeScript library that takes action commands from ANY AI and execute
 
 ## Installation
 
+The published library supports Node 20.8.1 and later. Development installs use Node
+22.22.2 or later in the 22 series, or Node 24.15 or later, because the release tools
+require a newer runtime. CI installs the tools on Node 24 and separately checks the
+library on Node 20, 22 and 24.
+
 ```bash
 npm install @juspay/kriya
 ```
@@ -450,6 +455,15 @@ engine->disposeEngine
 ```
 
 Everything the TypeScript API exposes has a ReScript binding — action builders (`navigate`, `click`, `fill`, `wait`, `press`, `screenshot`, `submitForm`, `fillForm`), engine lifecycle, event listeners, page-context capture, and screenshot capture.
+
+## TaskAgent decision diagnostics
+
+TaskAgent can retain decision distributions with `captureProbabilities: true`, report explicit
+provider confidence semantics through `confidenceProfile`, and measure progress with
+`captureProgressDiagnostics: true`. These options preserve the default decisions and thresholds.
+Profiles describe caller assertions; model-prefix matching does not establish calibration or the
+actual upstream route. See [TaskAgent usage](https://github.com/juspay/kriya/blob/main/docs/task-agent.md) for the configuration and
+[verification status](https://github.com/juspay/kriya/blob/main/docs/task-agent-status.md) for evidence and limitations.
 
 ## License
 

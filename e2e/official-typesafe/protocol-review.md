@@ -1,6 +1,6 @@
 # Official TypeSafe protocol review
 
-Reviewed 2026-10-04 using the installed [TypeSafe skill](~/.codex/skills/typesafe-ai/SKILL.md) and current official pages discovered through [llms.txt](https://docs.typesafe.ai/llms.txt). This is documentation verification and experiment design. No credentials, model calls, source changes, builds or runtime correctness claims.
+Reviewed 2026-10-04 using the installed [TypeSafe skill](https://github.com/typesafe-ai/skills/blob/65a39f393687675ce170e6094757de20370365b9/skills/typesafe-ai/SKILL.md) and current official pages discovered through [llms.txt](https://docs.typesafe.ai/llms.txt). This is documentation verification and experiment design. No credentials, model calls, source changes, builds or runtime correctness claims.
 
 ## Wire fields and typed meanings
 

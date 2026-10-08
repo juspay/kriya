@@ -12,6 +12,7 @@ import type {
   TaskRunOptions,
   TaskBudgets,
   TaskConfidenceFloors,
+  TaskDeciderConfidenceProfile,
   TaskBudgetUsage,
   TaskObservation,
   TaskHostCapabilities,
@@ -129,6 +130,8 @@ import {
   isObservedHistoryEntry,
 } from './verify';
 import { goalRequirementKey, goalRequirementHolds } from './requirements';
+import { copyConfidenceProfile } from './confidence';
+import { createProgressTracker } from './progress';
 
 /** A choice below this confidence did not hold a majority of the model's probability mass. */
 const MAJORITY_CONFIDENCE = 0.5;
@@ -186,6 +189,7 @@ type RunState = {
   exclusionFingerprint?: string;
   repeats: Set<string>;
   progressFingerprint?: string;
+  progressDiagnostics?: ReturnType<typeof createProgressTracker>;
   completionProbe?: string;
   failedCompletionContext?: string;
   blockedCompletionContext?: string;
@@ -264,10 +268,14 @@ const descriptionValid = (value: unknown): boolean =>
     sanitizeUntrustedText(value) === value);
 const finiteNonnegative = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0;
+const validProgressOption = (options: TaskRunOptions | undefined): boolean =>
+  options?.captureProgressDiagnostics === undefined ||
+  typeof options.captureProgressDiagnostics === 'boolean';
 const validOptions = (options: TaskRunOptions | undefined): boolean =>
   options === undefined ||
   (jsonData(options) &&
     !hasUnsafeKey(options) &&
+    validProgressOption(options) &&
     Object.values(options.budgets ?? {}).every(finiteNonnegative) &&
     Object.values(options.confidence ?? {}).every(
       value => finiteNonnegative(value) && value <= 1
@@ -279,7 +287,11 @@ const validOptions = (options: TaskRunOptions | undefined): boolean =>
       options.minEvidence,
     ].every(value => value === undefined || finiteNonnegative(value)) &&
     (!options.settle || Object.values(options.settle).every(finiteNonnegative)));
-const normalizeOptions = (request: TaskRequest, configured?: TaskRunOptions): TaskRunOptions => {
+const normalizeOptions = (
+  request: TaskRequest,
+  configured?: TaskRunOptions,
+  confidenceProfile?: TaskDeciderConfidenceProfile
+): TaskRunOptions => {
   const options = { ...configured, ...request.options };
   return {
     ...options,
@@ -291,6 +303,7 @@ const normalizeOptions = (request: TaskRequest, configured?: TaskRunOptions): Ta
     },
     confidence: {
       ...TASK_DEFAULT_CONFIDENCE,
+      ...confidenceProfile?.floors,
       ...request.profile?.confidence,
       ...configured?.confidence,
       ...request.options?.confidence,
@@ -561,7 +574,32 @@ const safeUrls = <T>(value: T, redactor: Redactor, mode: 'typed' | 'data' = 'typ
 const hasCommitment = (effects: readonly TaskEffectKind[]): boolean =>
   effects.some(isTaskCommitmentEffect);
 class CoordinatorRuntime {
-  constructor(private readonly _config: TaskAgentConfig) {}
+  private readonly _confidenceProfile: TaskDeciderConfidenceProfile | undefined;
+  private readonly _confidenceProfileInvalid: boolean;
+  constructor(private readonly _config: TaskAgentConfig) {
+    let profile: TaskDeciderConfidenceProfile | undefined;
+    let invalid = false;
+    try {
+      const marker = Object.getOwnPropertyDescriptor(_config.decider, 'initializationError');
+      invalid =
+        marker === undefined
+          ? 'initializationError' in _config.decider
+          : !('value' in marker) || marker.value !== undefined;
+      const descriptor = Object.getOwnPropertyDescriptor(_config.decider, 'confidenceProfile');
+      if (descriptor === undefined) {
+        invalid ||= 'confidenceProfile' in _config.decider;
+      } else if (!('value' in descriptor)) {
+        invalid = true;
+      } else if (descriptor.value !== undefined) {
+        profile = copyConfidenceProfile(descriptor.value as unknown);
+        invalid ||= profile === undefined;
+      }
+    } catch {
+      invalid = true;
+    }
+    this._confidenceProfile = profile;
+    this._confidenceProfileInvalid = invalid;
+  }
   private readonly _clock = (): number => {
     try {
       const now = (this._config.options?.clock ?? Date.now)();
@@ -672,6 +710,18 @@ class CoordinatorRuntime {
       ledger: safeUrls(state.ledger, state.redactor),
       exchanges: safeUrls(state.exchanges, state.redactor),
       warnings: safeUrls(state.warnings, state.redactor),
+      ...(state.progressDiagnostics
+        ? { progressDiagnostics: state.progressDiagnostics.snapshot() }
+        : {}),
+      ...(this._confidenceProfile
+        ? {
+            confidenceProfile: {
+              kind: this._confidenceProfile.kind,
+              calibrated: this._confidenceProfile.calibrated,
+              floors: { ...state.floors },
+            },
+          }
+        : {}),
       startedAt: state.startedAt,
       finishedAt: this._clock(),
       ...(state.observation ? { finalObservation: summarizeObservation(state.observation) } : {}),
@@ -870,13 +920,11 @@ class CoordinatorRuntime {
         }
         return call(controller.signal).then(value => ({ ok: true, value }) as Boundary<T>);
       })
-      .catch(
-        (error: unknown): Boundary<T> => ({
-          ok: false,
-          reason: 'error',
-          message: state.redactor.scrub(errorText(error)),
-        })
-      );
+      .catch((error: unknown): Boundary<T> => ({
+        ok: false,
+        reason: 'error',
+        message: state.redactor.scrub(errorText(error)),
+      }));
     try {
       return await Promise.race([work, stop]);
     } finally {
@@ -891,7 +939,8 @@ class CoordinatorRuntime {
   private readonly _deciderCall = async <T>(
     state: RunState,
     stage: TaskDecisionStage,
-    call: (context: TaskCallContext) => Promise<TaskDeciderResult<T>>
+    call: (context: TaskCallContext) => Promise<TaskDeciderResult<T>>,
+    retryCommitment = false
   ): Promise<TaskDeciderResult<T> | undefined> => {
     const stopped = this._wallOrCancel(state);
     if (stopped) {
@@ -952,6 +1001,26 @@ class CoordinatorRuntime {
       state.usage.deciderFailures += 1;
       if (state.usage.deciderFailures > state.budgets.maxDeciderFailures) {
         state.terminal = this._fail(state, 'DECIDER_FAILED', value.error.message);
+      }
+      const error = value.error;
+      const transientStatus =
+        error.status === undefined
+          ? error.code !== 'HTTP_ERROR'
+          : error.status === 408 ||
+            error.status === 429 ||
+            (error.status >= 500 && error.status < 600);
+      if (
+        retryCommitment &&
+        stage === 'commitment' &&
+        !state.terminal &&
+        error.retryable &&
+        transientStatus &&
+        (error.code === 'TIMEOUT' ||
+          error.code === 'NETWORK' ||
+          error.code === 'RATE_LIMITED' ||
+          error.code === 'HTTP_ERROR')
+      ) {
+        return this._deciderCall(state, stage, call);
       }
     } else {
       state.usage.deciderFailures = 0;
@@ -1183,6 +1252,11 @@ class CoordinatorRuntime {
         'The page left the authorized origins.'
       );
       return undefined;
+    }
+    try {
+      state.progressDiagnostics?.observe(observation);
+    } catch {
+      state.progressDiagnostics = undefined;
     }
     this._emit(state, {
       type: 'observed',
@@ -2142,6 +2216,19 @@ class CoordinatorRuntime {
       (element.state.value ?? '') === '' &&
       candidates.some(candidate => candidate.source === 'input'));
 
+  private readonly _needsRewriteConfirmation = (
+    state: RunState,
+    element: TaskElement,
+    operation: TaskHostOperation,
+    candidates: readonly TaskArgumentCandidate[],
+    decision: TaskArgumentDecision
+  ): boolean =>
+    decision.kind === 'candidate' &&
+    Number.isFinite(decision.confidence) &&
+    decision.confidence >= state.floors.argument &&
+    decision.confidence < MAJORITY_CONFIDENCE &&
+    this._rewritesCurrentValue(element, operation, candidates, decision);
+
   /**
    * The decision to use after a second sample. The second replaces the first only when it clears the unchanged floor and
    * agrees, or fills with supplied data more confidently than the first kept the field empty. A below-majority rewrite of an
@@ -2162,9 +2249,7 @@ class CoordinatorRuntime {
       second.confidence <= 1;
     if (
       first.kind === 'candidate' &&
-      first.confidence >= state.floors.argument &&
-      first.confidence < MAJORITY_CONFIDENCE &&
-      this._rewritesCurrentValue(element, operation, candidates, first)
+      this._needsRewriteConfirmation(state, element, operation, candidates, first)
     ) {
       if (secondClears && second.kind === 'candidate' && second.candidateId === first.candidateId) {
         return first;
@@ -2337,11 +2422,15 @@ class CoordinatorRuntime {
         );
       let result = await ask();
       const sampleKey = `${key}|${observation.documentId}`;
+      const requiresConfirmation =
+        result?.ok &&
+        this._needsRewriteConfirmation(state, element, operation, pool.candidates, result.decision);
       if (
         result?.ok &&
         !state.terminal &&
-        !state.resampled.has(sampleKey) &&
-        this._wantsSecondOpinion(state, element, operation, pool.candidates, result.decision)
+        (requiresConfirmation ||
+          (!state.resampled.has(sampleKey) &&
+            this._wantsSecondOpinion(state, element, operation, pool.candidates, result.decision)))
       ) {
         state.resampled.add(sampleKey);
         const second = await ask();
@@ -2359,6 +2448,11 @@ class CoordinatorRuntime {
           } else if (decision !== result.decision) {
             result = { ...result, decision };
           }
+        } else if (requiresConfirmation) {
+          result = {
+            ...result,
+            decision: { kind: 'uncertain_requirement', confidence: result.decision.confidence },
+          };
         }
       }
       if (!result?.ok || state.terminal) {
@@ -2696,6 +2790,7 @@ class CoordinatorRuntime {
       )
     );
     if (!verified || !verified.ok) {
+      this._emit(state, { type: 'done_gate', passed: false, failures: ['DECIDER_UNAVAILABLE'] });
       if (verified && !verified.ok) {
         state.completionProbe = undefined;
       }
@@ -3181,20 +3276,24 @@ class CoordinatorRuntime {
         }
       } else {
         const classifier = this._config.decider.classifyCommitment;
-        const result = await this._deciderCall(state, 'commitment', context =>
-          classifier(
-            {
-              goal: state.request.goal,
-              step: state.usage.steps,
-              confidenceFloor: state.floors.commitment,
-              observation,
-              command: redacted,
-              target: element,
-              form,
-              maxStateBytes: TASK_LIMITS.modelStateBytes,
-            },
-            context
-          )
+        const result = await this._deciderCall(
+          state,
+          'commitment',
+          context =>
+            classifier(
+              {
+                goal: state.request.goal,
+                step: state.usage.steps,
+                confidenceFloor: state.floors.commitment,
+                observation,
+                command: redacted,
+                target: element,
+                form,
+                maxStateBytes: TASK_LIMITS.modelStateBytes,
+              },
+              context
+            ),
+          true
         );
         if (state.terminal) {
           return state.terminal;
@@ -4787,7 +4886,9 @@ class CoordinatorRuntime {
     resumeOptions?: TaskRunOptions
   ): RunState => {
     const now = this._clock();
-    const options = resumeOptions ?? normalizeOptions(request, this._config.options?.run);
+    const options =
+      resumeOptions ??
+      normalizeOptions(request, this._config.options?.run, this._confidenceProfile);
     const inputs = request.inputs ?? {};
     const declarations = request.inputDeclarations ?? [];
     const leaves = flattenInputs(inputs, declarations);
@@ -4803,6 +4904,13 @@ class CoordinatorRuntime {
       priorElapsed: checkpointData?.usage.elapsedMs ?? 0,
       options,
       budgets: { ...TASK_DEFAULT_BUDGETS, ...options.budgets },
+      ...(options.captureProgressDiagnostics === true
+        ? {
+            progressDiagnostics: createProgressTracker(
+              options.budgets?.maxSteps ?? TASK_DEFAULT_BUDGETS.maxSteps
+            ),
+          }
+        : {}),
       floors: { ...TASK_DEFAULT_CONFIDENCE, ...options.confidence },
       usage: checkpointData ? { ...checkpointData.usage } : zeroUsage(),
       inputs,
@@ -4816,7 +4924,8 @@ class CoordinatorRuntime {
       ),
       exchanges: [],
       trace: [],
-      warnings: [],
+      warnings:
+        this._confidenceProfile?.calibrated === false ? [{ code: 'UNCALIBRATED_DECIDER' }] : [],
       submittedControls: [...(checkpointData?.submittedControls ?? [])],
       groupDocuments: new Map(),
       validationAssessed: new Set(),
@@ -5039,6 +5148,15 @@ class CoordinatorRuntime {
     let state: RunState | undefined;
     try {
       state = this._createState(request);
+      if (this._confidenceProfileInvalid) {
+        return this._fail(state, 'INVALID_REQUEST', 'The decider configuration is invalid.');
+      }
+      if (
+        !validProgressOption(request.options) ||
+        !validProgressOption(this._config.options?.run)
+      ) {
+        return this._fail(state, 'INVALID_REQUEST', 'The progress diagnostics option is invalid.');
+      }
       return await this._invoke(state, signal);
     } catch {
       const sentinel =
@@ -5052,6 +5170,13 @@ class CoordinatorRuntime {
   ): Promise<TaskResult> => {
     let state: RunState | undefined;
     try {
+      if (this._confidenceProfileInvalid) {
+        return this._fail(
+          this._createState({ goal: '' }),
+          'INVALID_REQUEST',
+          'The decider configuration is invalid.'
+        );
+      }
       if (!this._validCheckpoint(request.checkpoint)) {
         return this._fail(
           this._createState({ goal: '' }),
@@ -5094,7 +5219,10 @@ class CoordinatorRuntime {
       for (const declaration of inputResolution?.inputDeclarations ?? []) {
         declarationMap.set(declaration.path, declaration);
       }
-      const options = tightenOptions(saved.request.options, request.options);
+      const savedOptions = this._confidenceProfile?.floors
+        ? tightenOptions(saved.request.options, { confidence: this._confidenceProfile.floors })
+        : saved.request.options;
+      const options = tightenOptions(savedOptions, request.options);
       const taskRequest: TaskRequest = {
         goal: saved.request.goal,
         startUrl: saved.request.startUrl,

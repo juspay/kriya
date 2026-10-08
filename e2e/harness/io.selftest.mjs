@@ -2193,8 +2193,8 @@ async function runBrowserChecks() {
       );
       eq(
         contextOptions,
-        { viewport: { width: 1280, height: 800 } },
-        'only the viewport is configured'
+        { viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' },
+        'only the viewport and service-worker blocking are configured'
       );
       await Promise.all([scenario.close(), scenario.close()]);
       await scenario.close();
@@ -2282,8 +2282,21 @@ async function runBrowserChecks() {
           path.join(toolsDir, 'node_modules', 'playwright', 'index.js'),
           "module.exports = { chromium: { launch() {} }, marker: 'fake-tools' };"
         );
+        const defaultFixture = path.join(toolsDir, 'default-playwright.cjs');
+        fs.writeFileSync(
+          defaultFixture,
+          "module.exports = { chromium: { launch() {} }, marker: 'fake-default' };"
+        );
         const probe = `
+        import Module from 'node:module';
         import { loadPlaywright } from ${JSON.stringify(pathToFileURL(path.join(HERE, 'browser.mjs')).href)};
+        const resolve = Module._resolveFilename;
+        Module._resolveFilename = function(request, parent, ...rest) {
+          if (request === 'playwright' && parent?.filename === '/tmp/amazon-guide/package.json') {
+            return ${JSON.stringify(defaultFixture)};
+          }
+          return Reflect.apply(resolve, this, [request, parent, ...rest]);
+        };
         const loaded = loadPlaywright({});
         process.stdout.write(typeof loaded.chromium.launch === 'function' ? (loaded.marker ?? 'real') : 'broken');
       `;
@@ -2296,7 +2309,11 @@ async function runBrowserChecks() {
           return [result.status, result.stdout, result.stderr.split('\n')[0]];
         };
         eq(run(toolsDir), [0, 'fake-tools', ''], 'override directory is used');
-        eq(run(''), [0, 'real', ''], 'an empty override falls back to the default tools directory');
+        eq(
+          run(''),
+          [0, 'fake-default', ''],
+          'an empty override resolves from the exact default tools directory'
+        );
       } finally {
         fs.rmSync(toolsDir, { recursive: true, force: true });
       }

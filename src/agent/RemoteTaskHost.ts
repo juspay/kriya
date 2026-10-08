@@ -159,9 +159,7 @@ type LostCall = {
 };
 
 type Sent =
-  | { readonly kind: 'reply'; readonly reply: Reply }
-  | LostCall
-  | { readonly kind: 'invalid' };
+  { readonly kind: 'reply'; readonly reply: Reply } | LostCall | { readonly kind: 'invalid' };
 
 type HostState = {
   hello: TaskBridgeHello | undefined;
@@ -218,8 +216,7 @@ type ExecFrame = {
 };
 
 type ExecuteSettled =
-  | { readonly kind: 'sent'; readonly sent: Sent }
-  | { readonly kind: 'grace_expired' };
+  { readonly kind: 'sent'; readonly sent: Sent } | { readonly kind: 'grace_expired' };
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers

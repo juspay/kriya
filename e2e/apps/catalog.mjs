@@ -391,6 +391,34 @@ function escapeHtml(value) {
   });
 }
 
+function renderInventory(inventory) {
+  if (!inventory) {
+    return '';
+  }
+  const basket = inventory.cart.length
+    ? `<ul>${inventory.cart.map(item => `<li>${escapeHtml(item.title)} — Product ${escapeHtml(item.productId)} — Quantity ${escapeHtml(item.qty)}</li>`).join('')}</ul>`
+    : '<p>No basket items.</p>';
+  const saved = inventory.saved.length
+    ? `<ul>${inventory.saved.map(item => `<li>${escapeHtml(item.title)} — Product ${escapeHtml(item.productId)}</li>`).join('')}</ul>`
+    : '<p>No saved items.</p>';
+  return `<section id="inventory-summary" aria-label="Basket and saved items" style="padding:8px 36px;background:#fff;border-bottom:1px solid #ddd">
+    <h2>Basket items</h2>${basket}
+    <h2>Saved items</h2>${saved}
+    <p><a href="/info/basket">View basket items</a> · <a href="/info/saved">View saved items</a></p>
+  </section>`;
+}
+
+function inventoryPatch(inventory) {
+  if (!inventory) {
+    return {};
+  }
+  return {
+    inventory,
+    cartCount: inventory.cart.reduce((sum, item) => sum + item.qty, 0),
+    wishlist: inventory.saved.map(item => item.productId),
+  };
+}
+
 function formatPrice(value) {
   return '$' + Number(value).toFixed(2);
 }
@@ -512,6 +540,8 @@ function renderFooterC(draft, note, withNewsletter) {
 
 const CLIENT_HELPERS = [
   escapeHtml,
+  renderInventory,
+  inventoryPatch,
   formatPrice,
   starText,
   buildQuery,
@@ -542,6 +572,7 @@ function clientA(boot) {
     loadError: false,
     cartCount: boot.cartCount,
     wishlist: boot.wishlist,
+    inventory: boot.inventory ?? null,
     banner: null,
     nlDraft: '',
     nlNote: null,
@@ -672,6 +703,7 @@ function clientA(boot) {
       : '';
 
   const renderAll = () => `${renderHeaderA(S.cartCount, S.qDraft)}
+    ${renderInventory(S.inventory)}
     <div class="crumbs"><a href="/">Home</a> / <span>All products</span></div>
     <main class="wrap">
       <aside id="sidebar" aria-label="Filters">${renderSidebar()}</aside>
@@ -681,6 +713,10 @@ function clientA(boot) {
     <div id="toast" class="toast-host">${renderToast()}</div>`;
 
   const paint = () => {
+    const inventory = $('#inventory-summary');
+    if (inventory) {
+      inventory.outerHTML = renderInventory(S.inventory);
+    }
     const side = $('#sidebar');
     const res = $('#results');
     if (side) side.innerHTML = renderSidebar();
@@ -733,7 +769,12 @@ function clientA(boot) {
       if (!res.ok) throw new Error('bad status');
       const data = await res.json();
       if (mine !== token) return;
-      set({ results: data.products, loading: false, loadError: false });
+      set({
+        results: data.products,
+        loading: false,
+        loadError: false,
+        ...inventoryPatch(data.inventory),
+      });
     } catch {
       if (mine !== token) return;
       set({ loading: false, loadError: true });
@@ -771,6 +812,7 @@ function clientA(boot) {
       if (!res.ok) throw new Error('write failed');
       const data = await res.json();
       onOk(data);
+      set(inventoryPatch(data.inventory));
       showBanner('success', okText);
     } catch {
       showBanner('error', errText);
@@ -887,6 +929,7 @@ function clientC(boot) {
     loadError: false,
     cartCount: boot.cartCount,
     wishlist: boot.wishlist,
+    inventory: boot.inventory ?? null,
     banner: null,
     dialogOpen: false,
     dlgDraft: '',
@@ -986,6 +1029,7 @@ function clientC(boot) {
       : '';
 
   const renderAll = () => `${renderHeaderC(S.cartCount, true)}
+    ${renderInventory(S.inventory)}
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">
         <p class="eyebrow">Spring edit</p>
@@ -1009,6 +1053,10 @@ function clientC(boot) {
     <div id="toast" class="toast-host">${renderToast()}</div>`;
 
   const paint = () => {
+    const inventory = $('#inventory-summary');
+    if (inventory) {
+      inventory.outerHTML = renderInventory(S.inventory);
+    }
     const f = $('#filters');
     const r = $('#results');
     if (f) f.innerHTML = renderFilters();
@@ -1066,7 +1114,12 @@ function clientC(boot) {
       if (!res.ok) throw new Error('bad status');
       const data = await res.json();
       if (mine !== token) return;
-      set({ results: data.products, loading: false, loadError: false });
+      set({
+        results: data.products,
+        loading: false,
+        loadError: false,
+        ...inventoryPatch(data.inventory),
+      });
     } catch {
       if (mine !== token) return;
       set({ loading: false, loadError: true });
@@ -1110,6 +1163,7 @@ function clientC(boot) {
       if (!res.ok) throw new Error('write failed');
       const data = await res.json();
       onOk(data);
+      set(inventoryPatch(data.inventory));
       showBanner('success', okText);
     } catch {
       showBanner('error', errText);
@@ -1407,9 +1461,18 @@ const toIdList = (value, name) => {
 
 const normalizeInitial = initial => {
   const source = initial ?? {};
-  const unknown = Object.keys(source).filter(key => !['cart', 'wishlist'].includes(key));
+  const unknown = Object.keys(source).filter(
+    key => !['cart', 'wishlist', 'inventoryProof'].includes(key)
+  );
   if (unknown.length > 0) throw new TypeError(`Unknown initial option(s): ${unknown.join(', ')}`);
-  return { cart: toIdList(source.cart, 'cart'), wishlist: toIdList(source.wishlist, 'wishlist') };
+  if (source.inventoryProof !== undefined && typeof source.inventoryProof !== 'boolean') {
+    throw new TypeError('initial.inventoryProof must be a boolean');
+  }
+  return {
+    cart: toIdList(source.cart, 'cart'),
+    wishlist: toIdList(source.wishlist, 'wishlist'),
+    inventoryProof: source.inventoryProof === true,
+  };
 };
 
 const normalizeFaults = faults => {
@@ -1693,7 +1756,7 @@ const describeActiveB = search => {
   return parts.join(' · ');
 };
 
-const renderPageB = ({ search, results, state, flash, back, rerenderEveryMs }) => {
+const renderPageB = ({ search, results, state, flash, back, rerenderEveryMs, inventory }) => {
   const flashHtml = flash
     ? `<div class="flash ${flash.kind}" role="${flash.kind === 'error' ? 'alert' : 'status'}">${escapeHtml(flash.text)}</div>`
     : '';
@@ -1718,6 +1781,7 @@ const renderPageB = ({ search, results, state, flash, back, rerenderEveryMs }) =
     results === null ? 'Parcelhouse - Home' : 'Parcelhouse - Search results',
     CSS_B,
     `${renderHeaderB(cartCount)}
+${renderInventory(inventory)}
 <main class="page">
 ${flashHtml}
 ${results === null ? '<h1 class="lead">Everyday essentials for home, desk and trail</h1>' : '<h1 class="sr">Search results</h1>'}
@@ -1816,6 +1880,11 @@ export function describe() {
         name: 'wishlist',
         summary: 'Array of product ids (p01..p30) already saved to the wishlist.',
       },
+      {
+        name: 'inventoryProof',
+        summary:
+          'Optional boolean, false by default. Shows current basket product ids, titles and quantities and saved product ids and titles near the top of listing pages, with read-only basket and saved-items pages.',
+      },
     ],
   };
 }
@@ -1825,11 +1894,28 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
   const fault = normalizeFaults(faults);
   const baseline = normalizeInitial(initial);
   let state = freshState(baseline);
+  let inventoryProof = baseline.inventoryProof;
   let log = [];
   let seq = 0;
 
   const cartCount = () => state.cart.reduce((sum, item) => sum + item.qty, 0);
   const snapshot = () => JSON.parse(JSON.stringify(state));
+  const inventoryPayload = () =>
+    inventoryProof
+      ? {
+          inventory: {
+            cart: state.cart.map(item => ({
+              productId: item.productId,
+              title: PRODUCT_BY_ID.get(item.productId).title,
+              qty: item.qty,
+            })),
+            saved: state.wishlist.map(productId => ({
+              productId,
+              title: PRODUCT_BY_ID.get(productId).title,
+            })),
+          },
+        }
+      : {};
   const timers = new Set();
   const pause = () =>
     fault.slowResponseMs > 0
@@ -1915,6 +2001,7 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
     popular: POPULAR_SEARCHES,
     cartCount: cartCount(),
     wishlist: [...state.wishlist],
+    ...inventoryPayload(),
     rerenderEveryMs: fault.rerenderEveryMs,
     misleading: fault.misleadingSuccess,
   });
@@ -1950,6 +2037,7 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
       flash,
       back,
       rerenderEveryMs: fault.rerenderEveryMs,
+      ...inventoryPayload(),
     });
   };
 
@@ -2006,6 +2094,7 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
         query: { q: search.q, ...search.filters, sort: search.sort },
         count: results.length,
         products: results,
+        ...inventoryPayload(),
       });
       return;
     }
@@ -2014,7 +2103,7 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
       await pause();
       const outcome = writeCart(body);
       if (outcome.status !== 200) sendJson(res, outcome.status, { error: outcome.error });
-      else sendJson(res, 200, { ok: true, cartCount: cartCount() });
+      else sendJson(res, 200, { ok: true, cartCount: cartCount(), ...inventoryPayload() });
       return;
     }
 
@@ -2023,7 +2112,7 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
       const saved = body.saved === true || body.saved === 'true';
       const outcome = writeWishlist(String(body.productId ?? ''), saved);
       if (outcome.status !== 200) sendJson(res, outcome.status, { error: outcome.error });
-      else sendJson(res, 200, { ok: true, wishlist: [...state.wishlist] });
+      else sendJson(res, 200, { ok: true, wishlist: [...state.wishlist], ...inventoryPayload() });
       return;
     }
 
@@ -2049,6 +2138,7 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
           flash: null,
           back: `${path}${url.search}`,
           rerenderEveryMs: fault.rerenderEveryMs,
+          ...inventoryPayload(),
         })
       );
       return;
@@ -2115,14 +2205,19 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
 
     if (method === 'GET' && path.startsWith('/info/')) {
       const slug = decodeURIComponent(path.slice('/info/'.length)).toLowerCase();
-      const title = INFO_TITLES[slug] ?? titleCase(slug || 'page');
+      const inventoryPage =
+        inventoryProof && ['cart', 'basket', 'bag', 'saved', 'wishlist'].includes(slug);
+      const title =
+        inventoryPage && ['saved', 'wishlist'].includes(slug)
+          ? 'Your saved items'
+          : (INFO_TITLES[slug] ?? titleCase(slug || 'page'));
       sendHtml(
         res,
         200,
         renderStaticPage(
           variant,
           title,
-          `<h1>${escapeHtml(title)}</h1><p>There is nothing to show here at the moment.</p><p><a href="/">Back to the store</a></p>`,
+          `<h1>${escapeHtml(title)}</h1>${inventoryPage ? renderInventory(inventoryPayload().inventory) : '<p>There is nothing to show here at the moment.</p>'}<p><a href="/">Back to the store</a></p>`,
           cartCount()
         )
       );
@@ -2150,7 +2245,9 @@ export async function startApp({ port = 0, variant = 'A', initial = {}, faults =
   });
 
   const reset = nextInitial => {
-    state = freshState(nextInitial === undefined ? baseline : normalizeInitial(nextInitial));
+    const next = nextInitial === undefined ? baseline : normalizeInitial(nextInitial);
+    state = freshState(next);
+    inventoryProof = next.inventoryProof;
     log = [];
     seq = 0;
   };

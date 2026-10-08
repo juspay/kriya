@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
   PYTHON_VERSION: '3.11'
 
 jobs:
@@ -33,12 +33,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -68,11 +68,10 @@ jobs:
           fi
 
       - name: Build MkDocs site
-        # TODO: restore --strict once mkdocs.yml nav is reconciled with actual docs/
-        run: mkdocs build --clean
+        run: mkdocs build --strict --clean
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 

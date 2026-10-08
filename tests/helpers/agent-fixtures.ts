@@ -897,8 +897,7 @@ export type FakeHostOptions = {
   readonly observations?: readonly (TaskObservation | HostScriptError)[];
   /** Consumed in order, then the honest default per operation. */
   readonly outcomes?: readonly (
-    | TaskExecutionOutcome
-    | ((request: TaskCommandRequest) => TaskExecutionOutcome)
+    TaskExecutionOutcome | ((request: TaskCommandRequest) => TaskExecutionOutcome)
   )[];
   /**
    * Default: the url and origin of the observation served last (the first scripted one before any is
@@ -1225,8 +1224,7 @@ export type FakeExecutor = {
 /** A TaskActionExecutor that records calls and plays scripted results, then succeeds with effect applied. */
 export function makeFakeExecutor(
   script: readonly (
-    | ExecutionResult
-    | ((action: ActionCommand, options?: ExecutionOptions) => ExecutionResult)
+    ExecutionResult | ((action: ActionCommand, options?: ExecutionOptions) => ExecutionResult)
   )[] = []
 ): FakeExecutor {
   const calls: ExecutorCall[] = [];

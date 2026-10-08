@@ -511,8 +511,7 @@ export class FormRegistry {
       }
 
       let fiber = (formElement as unknown as Record<string, unknown>)[reactKey] as
-        | ReactFiberNode
-        | undefined;
+        ReactFiberNode | undefined;
       let attempts = 0;
       const maxAttempts = 20;
 
@@ -580,8 +579,7 @@ export class FormRegistry {
 
       // Strategy 4: Look in React context
       const deps = (fiber as unknown as Record<string, unknown>).dependencies as
-        | { firstContext?: unknown }
-        | undefined;
+        { firstContext?: unknown } | undefined;
       if (deps?.firstContext) {
         this._forceLog('🔍 Checking React context for form API...');
         let context = deps.firstContext as
