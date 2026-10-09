@@ -56,3 +56,8 @@ export const DEFAULT_CONTEXT_CAPTURE_CONFIG: ContextCaptureConfig = {
   includeElementData: true,
   maxElementsPerPage: 100,
 } as const;
+
+/** Minimal custom form-registry adapter accepted by ContextCapture. */
+export type FormRegistryLike = {
+  readonly getFormContext?: () => readonly FormContext[];
+};

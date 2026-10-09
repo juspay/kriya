@@ -3,7 +3,7 @@
   "entryPoints": ["./src/index.ts"],
   "out": "./docs/api-generated",
   "name": "@juspay/kriya",
-  "readme": "./README.md",
+  "readme": "none",
   "plugin": ["typedoc-plugin-markdown"],
   "theme": "default",
   "excludePrivate": true,
@@ -29,5 +29,24 @@
     "notExported": true,
     "invalidLink": true,
     "notDocumented": false
-  }
+  },
+  "intentionallyNotExported": [
+    "ACTION_TYPES",
+    "TASK_HOST_OPERATIONS",
+    "TASK_TARGET_OPERATIONS",
+    "TASK_ROUTINE_EFFECTS",
+    "TASK_COMMITMENT_EFFECTS",
+    "TASK_COMMITMENT_CLASSES",
+    "TASK_ARGUMENT_SLOTS",
+    "TASK_ARGUMENT_SOURCES",
+    "TASK_KEYS",
+    "TASK_SCROLL_DIRECTIONS",
+    "TASK_CHECKED_CHOICES",
+    "TASK_COMPLETION_VERDICTS",
+    "TASK_ANSWER_CHOICES",
+    "TASK_ELEMENT_KINDS",
+    "GUIDE_OPERATIONS",
+    "GUIDE_ELEMENT_OPERATIONS"
+  ],
+  "treatWarningsAsErrors": true
 }

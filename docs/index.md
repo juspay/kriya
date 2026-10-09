@@ -1,11 +1,11 @@
 # Kriya
 
-Kriya provides browser automation primitives and a TaskAgent that combines an injected
-host, typed decider and execution policy. Completion requires fresh evidence and
-independent verification; commitments require authorized effects or bound approvals.
+Turn a user goal into browser actions with scoped permissions, exact targets and checked outcomes.
+Use the execution engine directly or combine the TaskAgent with a typed decider and execution host.
 
-- [TaskAgent guide](task-agent.md): setup, supported operations and public APIs.
+- [Integration guide](integration/index.md): placement, complete setup, configuration and application lifecycle.
+- [TaskAgent design guide](task-agent.md): requirements, policy, observation and completion semantics.
 - [Verification status](task-agent-status.md): package-specific evidence and limitations.
-- [Public contract](task-agent-contract.md): execution, policy and completion rules.
-- [Generated API reference](api-generated/README.md): exported functions and types.
-- [Source repository](https://github.com/juspay/kriya).
+- [Public contract](task-agent-contract.md): exact execution, transport and verification rules.
+- [Generated API](api-generated/README.md): public functions and types.
+- [Source and README](https://github.com/juspay/kriya).

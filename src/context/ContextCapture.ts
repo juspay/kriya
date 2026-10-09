@@ -5,6 +5,7 @@ import type {
   EventCallback,
   EventType,
   FormContext,
+  FormRegistryLike,
   FormFieldContext,
   FormFieldValue,
   PageContext,
@@ -22,14 +23,6 @@ import html2canvas from 'html2canvas';
  * returns heterogeneous shapes that share a common core (name, type, value).
  */
 type CustomFieldInfo = Record<string, unknown>;
-
-/**
- * Minimal shape of the FormRegistry surface used by ContextCapture.
- * Typed loosely here to avoid a circular import with FormRegistry.
- */
-type FormRegistryLike = {
-  getFormContext?: () => readonly FormContext[];
-};
 
 // Debug logs describe a value by its size only; the value itself never reaches the console.
 const mask = (value: unknown): string => `[${String(value ?? '').length} chars]`;
@@ -50,6 +43,7 @@ export class ContextCapture {
     this.addEventListener = null;
   }
 
+  /** Registers the caller's form-context reader without owning its lifecycle. */
   public setFormRegistry(formRegistry: FormRegistryLike): void {
     this._formRegistry = formRegistry;
   }

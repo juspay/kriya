@@ -1,6 +1,4 @@
 #!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 set -e
 
 echo "🚀 Pre-push validations..."
@@ -20,7 +18,9 @@ node scripts/security-check.cjs --quick
 echo "📦 Build validation..."
 node scripts/build-validations.cjs
 
-echo "🧩 ReScript bindings compile..."
-npm run build:rescript
+echo "📦 Consumer package and integration examples..."
+npm run build
+npm run verify:package
+npm run docs:verify
 
 echo "✅ Pre-push validations passed."

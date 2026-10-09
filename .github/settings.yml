@@ -3,8 +3,8 @@
 
 repository:
   name: kriya
-  description: 'Pure automation execution engine for web actions. Execute action commands from any AI.'
-  homepage: https://github.com/juspay/kriya
+  description: 'Browser automation with typed task decisions, scoped execution, approvals and evidence-based completion.'
+  homepage: https://juspay.github.io/kriya/
   topics:
     - automation
     - web-automation

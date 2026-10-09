@@ -1,15 +1,9 @@
 #!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 set -e
-
-# Fast, staged-only formatting & linting first
 npx lint-staged --no-stash
-
-# Comprehensive local pre-commit gate:
-#   ESLint (strict), Prettier, tsc, gitleaks (if installed),
-#   env consistency, debug-statement scan, large-file check.
-# Safe to run even when gitleaks isn't present locally — it warns.
-if [ -x "scripts/pre-commit.sh" ]; then
-  bash scripts/pre-commit.sh
+npm run validate
+node scripts/security-check.cjs --quick
+node scripts/check-staged.mjs
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --config .gitleaks.toml
 fi

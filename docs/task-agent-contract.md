@@ -1014,7 +1014,7 @@ Every live scenario also asserts: each recorded decider question has `instructio
 30. Every numeric default (floors, durations, budgets, `TASK_LIMITS`, TypeSafe defaults) is provisional until M4 records live evidence (D5).
 31. Identical twins in the same region keep `.n`; across snapshots they fail closed (void or absent), so a page that inserts an identical twin between pause and resume costs one extra approval.
 32. `agent.ts` comments cite `docs/task-agent-contract.md`, which M5b creates; until M5b lands the path dangles, by design and by one packet's work.
-33. The `ActionType` and `ErrorCode` unions are widened, `rescript/Kriya.res` and `dist/` typings are stale until M5b and the final gate, and `executeAction` now returns results where the legacy path rejected: the migration text is an M5b deliverable.
+33. The `ActionType` and `ErrorCode` unions are widened, the generated `dist/` typings are checked at the final package gate, and `executeAction` now returns results where the legacy path rejected: the migration text is an M5b deliverable.
 
 Post-audit risks (added by the orchestrator, numbering continues after the table above):
 

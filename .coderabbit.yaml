@@ -28,13 +28,13 @@ reviews:
     base_branches:
       - main
   path_filters:
+    - '**/*'
     - '!dist/**'
     - '!build/**'
     - '!coverage/**'
     - '!node_modules/**'
     - '!**/*.min.js'
     - '!**/*.bundle.js'
-    - '!package-lock.json'
     - '!pnpm-lock.yaml'
   path_instructions:
     - path: 'src/**/*.ts'
