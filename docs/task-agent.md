@@ -104,14 +104,16 @@ Sensitive inputs require an input declaration and an allowed binding. Sensitive 
 
 Cancellation propagates to observation, decision and execution. `lastEffect` records `none`, `applied` or `uncertain`. Uncertain lasting changes, sensitive fills and same-document commands are excluded from automatic retries. A pure preparatory fill can proceed in a later authoritative allowed document only when a unique non-sensitive field lacks the required value and the same confident reference remains offered. A caller can resolve other uncertain effects from independently checked state on resume. Engine success alone does not prove completion or persistence.
 
-The executor adds strict target, checked-state, select, scroll and press parameters and corresponding error codes. Existing command entrypoints remain available. `executeAction` now fulfills with a structured failure result instead of rejecting for action failures; callers should inspect the returned success/error fields. ReScript action and error variants include the additions.
+The executor adds strict target, checked-state, select, scroll and press parameters and corresponding error codes. Existing command entrypoints remain available. `executeAction` now fulfills with a structured failure result instead of rejecting for action failures; callers should inspect the returned success/error fields. The TypeScript action and error types include the additions.
 
 `createResearchRequest(question)` applies the restricted read/navigation/scroll/wait profile. `toResearchResult(result)` maps it to the existing research result shape. The existing ResearchGuide and click guide remain available.
 
 Run the local demonstration with the private env file loaded by Node:
 
 ```sh
-node --env-file=/path/to/private.env examples/task-agent.mjs
+npm run build
+npx playwright install chromium
+BREEZE_GUIDE_TOOLS_DIR="$PWD" node --env-file=/path/to/private.env examples/task-agent.mjs
 ```
 
-The example uses the controlled settings application, real Chromium, Jev and the package bundle. It opts into rendered offscreen controls and explicit action/argument/completion confidence floors of 0.2/0.3/0.6. The library defaults remain 0.5/0.6/0.75; the commitment floor remains 0.5. See [the e2e harness](https://github.com/juspay/kriya/blob/main/e2e/README.md) for scenario selection and evidence, and [the normative contract](task-agent-contract.md) for the host, resolver, approval and verification details. Verification status is tracked separately in [task-agent-status.md](task-agent-status.md).
+Run from the repository root with its contributor dependencies installed. The tools-directory setting uses the repository Playwright installation instead of a machine-specific external folder. This demonstration makes live TypeSafe calls and may incur provider charges. The example uses the controlled settings application, real Chromium, Jev and the package bundle. It opts into rendered offscreen controls and explicit action/argument/completion confidence floors of 0.2/0.3/0.6. The library defaults remain 0.5/0.6/0.75; the commitment floor remains 0.5. See [the e2e harness](https://github.com/juspay/kriya/blob/main/e2e/README.md) for scenario selection and evidence, and [the normative contract](task-agent-contract.md) for the host, resolver, approval and verification details. Verification status is tracked separately in [task-agent-status.md](task-agent-status.md).

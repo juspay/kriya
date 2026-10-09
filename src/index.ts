@@ -86,6 +86,7 @@ export type {
 
 export { AutomationError, DEFAULT_CONFIG } from '@/types';
 
+/** Creates a document-scoped engine; initialize after mount and dispose with the owning view. */
 export function createAutomationEngine(config?: Partial<AutomationConfig>): WebAutomataAPI {
   const engine = new AutomationEngine(config);
 
@@ -492,4 +493,34 @@ export type {
   ActionCheckedState,
   ActionSubmitInfo,
   ActionOutcome,
+} from '@/types';
+
+// Types referenced by the supported public API are directly importable.
+export type {
+  GuideHttp,
+  TaskObservedGoalLabelMatch,
+  TaskObservedGoalCodeMatch,
+  TaskVerifiedCurrentGoalState,
+  TaskVerifiedPreparationFact,
+  TaskPreservedOriginalValueFact,
+  TaskSubmittedControl,
+  TaskPageEvidence,
+  TaskGoalRequirementView,
+  ChoiceQuestion,
+  TaskGoalRequirement,
+  ClipRegion,
+  GuideElementOperation,
+  GuideOption,
+  EnhancedDetectedForm,
+  FormRegistryLike,
+  EnhancedFormDetectorConfig,
+  FormState,
+} from '@/types';
+
+export type {
+  EnhancedFormField,
+  DetectedFormApi,
+  ChoiceCriterion,
+  GuideHttpResponse,
+  GuideHttpRequest,
 } from '@/types';

@@ -2022,9 +2022,10 @@ export type TaskHttpRequest = {
   /** Never contains Authorization. */
   readonly headers: Readonly<Record<string, string>>;
   /**
-   * Returns the API key. Only code that actually sends the request calls it (the default fetch path,
-   * once per attempt); a recorder or logger that serializes this object sees no key. The adapter also
-   * never builds an error message from a caught error or a response body, and never sets `cause`.
+   * Returns the API key to trusted adapter/HTTP code. The adapter consults its reader for validation
+   * and redaction; the default fetch sender attaches Authorization once per attempt. Serializing this
+   * object omits the function and contains no key. Never invoke it in a recorder or logger. The adapter
+   * never builds an error message from a caught error or response body, and never sets `cause`.
    */
   readonly credential: () => string;
   readonly body: string;

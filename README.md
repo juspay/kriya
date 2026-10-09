@@ -1,470 +1,137 @@
-# @juspay/kriya
+# Kriya
 
-Pure automation execution engine for web actions - no AI, no UI. Execute action commands from any AI (OpenAI, Claude, Gemini, etc.) and handle web automation tasks.
+**Turn a user's goal into browser actions—with permissions, exact targets and checked outcomes.**
 
-## Overview
+Kriya is a TypeScript browser automation library for teams building assistants inside web
+applications or controlling a browser from Node. Use its execution engine when you already know
+what to do, or its TaskAgent when a typed decision provider should choose the next action.
+Your application owns the browser session, user data, permissions and approval experience.
 
-Kriya is a TypeScript library that takes action commands from ANY AI and executes web automation tasks like clicking, filling forms, navigation, and capturing page context. It provides a clean separation between AI decision-making and automation execution.
+```text
+User goal + caller inputs
+           ↓
+TaskAgent → observe → typed decision → policy → exact DOM action
+    ↑                                           ↓
+    └──────── fresh state + completion checks ───┘
+```
 
-## Features
+## What you can build
 
-- ✅ **Execute action commands** from any AI provider
-- ✅ **Form detection and registration** with automatic field mapping
-- ✅ **DOM element finding** with smart description matching
-- ✅ **Screenshot capture** with html2canvas integration
-- ✅ **Page context extraction** for AI analysis
-- ✅ **Click guide** that highlights the next control for a goal in plain language
-- ✅ **Event system** for monitoring automation progress
-- ✅ **TypeScript support** with strict type safety
-- ✅ **Production ready** with comprehensive error handling
+| Capability                    | Integration                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| Search and filter workflows   | Read, fill, select, click and inspect resulting page evidence                       |
+| Settings assistants           | Set checkboxes idempotently, preserve already-correct values and verify saved state |
+| Multi-page forms              | Keep the coordinator in Node; reinstall the bridge in each new document             |
+| Review and confirmation flows | Pause a commitment for approval bound to the exact command and reviewed context     |
+| Research assistants           | Restrict the same coordinator to reading, navigation, scrolling and waiting         |
+| Existing agent integrations   | Inject a typed decider and host, or call the execution engine directly              |
 
-## Installation
+TaskAgent's built-in TypeSafe adapter uses **Choice judgments over offered operations, targets
+and value references**. It does not generate arbitrary form text or run model-authored JavaScript.
+Data comes from caller inputs, exact goal spans, observed choices or declared resolvers. A missing
+value can return `needs_input`. A model's `DONE` proposal must pass the completion gate.
 
-The published library supports Node 20.8.1 and later. Development installs use Node
-22.22.2 or later in the 22 series, or Node 24.15 or later, because the release tools
-require a newer runtime. CI installs the tools on Node 24 and separately checks the
-library on Node 20, 22 and 24.
+## Install
 
-```bash
+```sh
 npm install @juspay/kriya
 ```
 
-## Quick Start
+The package provides ESM, CommonJS, TypeScript declarations and a browser UMD bundle
+(`dist/index.umd.js`, global `WebAutomata`). Browser actions require a mounted DOM. The coordinator
+can run in Node without a DOM; it needs an injected host to reach a browser. Node consumers need
+Node 20.8.1 or later. Contributor tooling uses Node 22.23.2 or a compatible newer version.
+
+`html2canvas` supports screenshots. Kriya does not install React, a browser binary, an AI SDK,
+a database or a server. Playwright is a separate controller choice and a development dependency
+for integration verification. No provider key is needed for direct engine actions.
+
+## First browser action
+
+Run this in your browser application after an input with `id="name"` has mounted:
 
 ```typescript
 import { createAutomationEngine } from '@juspay/kriya';
 
-// Initialize the automation engine
-const automationEngine = createAutomationEngine({
-  timeout: 5000,
-  debugMode: false,
-  screenshotOnError: true,
-});
-
-automationEngine.initialize();
-
-// Execute actions from your AI
-const actions = [
-  {
-    type: 'fillForm',
-    parameters: {
-      fields: JSON.stringify({
-        email: 'user@example.com',
-        password: 'secret123',
-      }),
-    },
-  },
-  {
-    type: 'submitForm',
-    parameters: {},
-  },
-];
-
-const results = await automationEngine.executeActions(actions);
-console.log('Automation results:', results);
-```
-
-## Core Concepts
-
-### Scoped DOM and embedded navigation
-
-Pass `root` to scope element lookup, form detection, labels, focus and utility DOM to a
-`Document`, `ShadowRoot` or `Element`. An element root includes the element itself and its
-descendants. Queries and parent traversal stay inside that root; they do not pierce nested
-shadow trees or fall back to the host document. Manually registered forms must also belong
-to the configured root. Screenshots target the element root or a shadow root's host.
-
-```typescript
-const engine = createAutomationEngine({
-  root: appElement.shadowRoot!,
-  locationProvider: {
-    getHref: () => appRouter.currentUrl,
-    getTitle: () => appRouter.currentTitle,
-    navigate: async url => {
-      await appRouter.navigate(url);
-    },
-  },
-});
+const engine = createAutomationEngine({ debugMode: false, screenshotOnError: false });
 engine.initialize();
-```
-
-`locationProvider.getHref()` is read on every capture and when resolving relative links.
-Return an absolute URL so relative links resolve against the app route.
-`getTitle()` is optional and defaults to the root's owner document title. `navigate(url)`
-may return void or a Promise; its Promise defines route completion, including when an
-action requests `waitForLoad`. Navigation errors become the existing `NETWORK_ERROR`
-result. Without a provider, navigation retains its window location and load-event behavior.
-Provider navigation also honors the action timeout.
-Provider-backed anchor hrefs are resolved before synthetic dispatch, then restored. App
-handlers can cancel navigation normally. Scoped clicks use native anchor activation once;
-they do not retry a canceled click or manually open an extra window.
-
-With an explicit root, synthetic click, input, change and keyboard events bubble and are
-composed. Native shadow form submissions are forwarded once as composed, cancellable
-submit events, preserving their submitter and propagating cancellation back to the native
-event. Form listeners are removed on disposal. Without these options, document targeting,
-default configuration and event flags retain their existing behavior.
-
-The exported types are `AutomationRoot` and `AutomationLocationProvider`; the same options
-are available in the ReScript `automationConfig` binding. This additive `feat` API is
-expected in the next minor release after 1.1.1; it has not been published by this change.
-
-### 1. Action Commands
-
-Action commands are simple JSON objects that describe what to do:
-
-```typescript
-interface ActionCommand {
-  type: 'navigate' | 'click' | 'fill' | 'fillForm' | 'submitForm' | 'screenshot' | 'wait';
-  parameters: Record<string, string>;
-  timeout?: number;
-  description?: string;
-}
-```
-
-### 2. User Flow
-
-```text
-User Message → Your AI → Action Commands → Kriya Executes
-```
-
-Example:
-
-1. User: "Fill the registration form with John Doe"
-2. Your AI: `[{type: "fillForm", parameters: {"fields": "{\"name\": \"John Doe\"}"}}]`
-3. Kriya: Executes form filling automatically
-
-## Click guide
-
-Say what you are looking for. Kriya lists the controls actually on the page, asks a decider which one is the next step, and highlights it. You click. Kriya reads the page again and moves the highlight. It does not click for you.
-
-The decider is injected, same as the rest of Kriya. `createTypeSafeDecider` is the TypeSafe Jev adapter: one `choice` for the operation and one `choice` for the target, in a single request.
-
-```typescript
-import { createClickGuide, createTypeSafeDecider } from '@juspay/kriya';
-
-const guide = createClickGuide();
-const decide = createTypeSafeDecider({
-  apiKey: process.env.TYPESAFE_API_KEY ?? '',
-});
-
-const step = await guide.start('turn off email notifications', decide);
-// step.label is the control now outlined on the page.
-// A click on that control asks for the next one.
-// guide.stop() removes the outline.
-```
-
-`mountJevGuide` puts the same loop on the page as a command bar. With an API key it asks Jev. The outline eases from one control to the next, and the corner chip shows how long the decision took.
-
-```typescript
-import { mountJevGuide } from '@juspay/kriya';
-
-const session = mountJevGuide({ apiKey: process.env.TYPESAFE_API_KEY ?? '' });
-await session.submit('turn off email notifications');
-```
-
-Open `examples/jev-stage.html` to watch the outline move. That page uses a local stand-in until a TypeSafe key is supplied.
-
-`createResearchGuide` investigates one yes/no question. Each turn sends that same question, the current page, available actions, collected passages, and action history to Jev. Jev selects what to read or where to navigate and decides when it has enough evidence to answer. There are no checkpoints, supplied destinations, expected phrases, or required number of pages. Read-only exploration may proceed with uncertain action choices; the final answer requires confidence of at least 0.60. Previously tried navigation actions and already collected passages are excluded from later choices.
-
-`examples/breeze-jev.mjs` records the question “Does breeze.in offer one-click checkout?” with live Jev requests. It uses the existing browser tools and brand assets in `/tmp/amazon-guide` by default (`BREEZE_GUIDE_TOOLS_DIR` can override that directory):
-
-```bash
-node --env-file=/path/to/private.env examples/breeze-jev.mjs
-```
-
-The env file must supply `TYPESAFE_API_KEY` or `JEV_API_KEY`. The key stays in Node; the page sends its observations through a binding, and Node calls the [TypeSafe API](https://docs.typesafe.ai/api). Requests, responses, decisions, and verification frames go into `/tmp/amazon-guide/jev-verification/`. A successful live run updates `examples/breeze-automatic.mp4`; failed runs retain their own failure video. `BREEZE_GUIDE_QUESTION` changes the question, and `--no-publish` keeps a test run separate from the main video. The browser remains on breeze.in and excludes shopping, docs, directory embeds, and external navigation. This is an informational investigation and does not execute a purchase.
-
-Any function with the `GuideDecider` shape can stand in for Jev. A decider must choose an offered operation and, when required, an index from the corresponding target question.
-
-## API Reference
-
-### AutomationEngine
-
-The main class for executing automation tasks.
-
-```typescript
-const engine = createAutomationEngine(config);
-
-// Initialize with optional form library
-engine.initialize(formLibrary);
-
-// Execute single action
-const result = await engine.executeAction(action);
-
-// Execute multiple actions
-const results = await engine.executeActions(actions);
-
-// Capture page context for AI
-const context = await engine.capturePageContext();
-
-// Register forms manually
-engine.registerForm('login-form', formElement);
-
-// Event handling
-engine.addEventListener('action_completed', event => {
-  console.log('Action completed:', event);
-});
-```
-
-### Action Types
-
-#### Navigate
-
-```typescript
-{
-  type: 'navigate',
-  parameters: {
-    url: 'https://example.com',
-    waitForLoad: 'true'
-  }
-}
-```
-
-#### Click Elements
-
-```typescript
-{
-  type: 'click',
-  parameters: {
-    selector: 'button.submit',
-    // OR
-    description: 'submit button'
-  }
-}
-```
-
-#### Fill Form Fields
-
-```typescript
-{
-  type: 'fill',
-  parameters: {
-    selector: 'input[name="email"]',
-    value: 'user@example.com',
-    clearFirst: 'true'
-  }
-}
-```
-
-#### Fill Entire Forms
-
-```typescript
-{
-  type: 'fillForm',
-  parameters: {
-    fields: JSON.stringify({
-      email: 'user@example.com',
-      password: 'secret123',
-      fullName: 'John Doe'
-    })
-  }
-}
-```
-
-#### Submit Forms
-
-```typescript
-{
-  type: 'submitForm',
-  parameters: {
-    formId: 'optional-form-id'
-  }
-}
-```
-
-#### Take Screenshots
-
-```typescript
-{
-  type: 'screenshot',
-  parameters: {
-    fullPage: 'true',
-    quality: '0.9'
-  }
-}
-```
-
-#### Wait/Delay
-
-```typescript
-{
-  type: 'wait',
-  parameters: {
-    duration: '2000',
-    // OR
-    selector: '.loading',
-    condition: 'hidden'
-  }
-}
-```
-
-## Integration Examples
-
-### With OpenAI
-
-```typescript
-import OpenAI from 'openai';
-import { createAutomationEngine } from '@juspay/kriya';
-
-const openai = new OpenAI({ apiKey: 'your-key' });
-const automationEngine = createAutomationEngine();
-
-async function handleUserMessage(message: string) {
-  // 1. Capture page context
-  const context = await automationEngine.capturePageContext();
-
-  // 2. Send to OpenAI
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4',
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a web automation assistant. Return action commands as JSON.',
-      },
-      {
-        role: 'user',
-        content: `${message}\n\nPage context: ${JSON.stringify(context)}`,
-      },
-    ],
-  });
-
-  // 3. Execute actions
-  const actions = JSON.parse(completion.choices[0].message.content);
-  const results = await automationEngine.executeActions(actions);
-
-  return results;
-}
-```
-
-### With React Final Form
-
-```typescript
-import { createAutomationEngine } from '@juspay/kriya';
-
-// React component
-function MyForm() {
-  const formRef = useRef(null);
-
-  useEffect(() => {
-    if (formRef.current) {
-      automationEngine.registerForm('my-form', formRef.current);
-
-      return () => {
-        automationEngine.unregisterForm('my-form');
-      };
-    }
-  }, []);
-
-  return (
-    <form ref={formRef}>
-      {/* Your form fields */}
-    </form>
-  );
-}
-```
-
-## Configuration
-
-```typescript
-interface AutomationConfig {
-  timeout: number; // Default action timeout (5000ms)
-  retryAttempts: number; // Retry failed actions (3)
-  screenshotOnError: boolean; // Capture screenshots on errors (true)
-  debugMode: boolean; // Enable debug logging (false)
-  formDetectionEnabled: boolean; // Auto-detect forms (true)
-  contextCaptureEnabled: boolean; // Enable context capture (true)
-}
-```
-
-## Error Handling
-
-```typescript
 try {
-  const result = await automationEngine.executeAction(action);
-
-  if (!result.success) {
-    console.error('Action failed:', result.error, result.errorCode);
+  const target = document.querySelector<HTMLInputElement>('#name');
+  if (target !== null) {
+    const result = await engine.executeAction(
+      { type: 'fill', parameters: { strict: 'true', value: 'Ada Lovelace' } },
+      { target }
+    );
+    if (!result.success) {
+      document.body.dataset.automationError = result.errorCode ?? 'unknown';
+    }
   }
-} catch (error) {
-  if (error instanceof AutomationError) {
-    console.error('Automation error:', error.code, error.message);
-  }
+} finally {
+  engine.dispose();
 }
 ```
 
-## Events
+Strict execution uses the supplied element and refuses stale or invalid targets. Action failures
+fulfill with an `ExecutionResult`; inspect `success`, `error` and `effect`. See the
+[engine integration guide](docs/integration/browser-engine.md) for scoped roots, forms and events.
 
-Monitor automation progress with event listeners:
+## Add goal-driven execution
 
-```typescript
-automationEngine.addEventListener('form_filled', event => {
-  console.log(`Filled ${event.data.fieldsCount} fields`);
-});
+The [Node and Playwright guide](docs/integration/node-playwright.md) provides a complete setup
+and reusable transport. Keep the TaskAgent and TypeSafe credential in Node and inject only the
+execution bridge into each browser document. The caller sets the initial URL and allowed origins;
+the goal describes the desired outcome rather than routes, selectors or a scripted action list.
 
-automationEngine.addEventListener('action_failed', event => {
-  console.error('Action failed:', event.data.error);
-});
+For a coordinator inside your own application, use the
+[in-page integration guide](docs/integration/in-page.md) with a trusted backend decider client.
+An in-page coordinator cannot retain a run across a full document navigation.
 
-automationEngine.addEventListener('screenshot_taken', event => {
-  console.log('Screenshot captured:', event.data.width, 'x', event.data.height);
-});
+| Integrators need                                              | Documentation                                                    |
+| ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Placement, prerequisites and integration choice               | [Start here](docs/integration/index.md)                          |
+| Defaults, budgets, timeouts, observation and provider options | [Configuration reference](docs/integration/configuration.md)     |
+| Inputs, origin scope, approvals, resume and cancellation      | [Application lifecycle](docs/integration/lifecycle.md)           |
+| Privacy, transport responsibilities and durable verification  | [Security and verification](docs/integration/security.md)        |
+| Custom providers, resolvers and research mode                 | [Extension seams](docs/integration/extensions.md)                |
+| Error handling, deployment checks and common failures         | [Operations and troubleshooting](docs/integration/operations.md) |
+| v2 migration, removal of bundled ReScript bindings            | [Migration](docs/integration/migration.md)                       |
+| Exact public protocol and types                               | [TaskAgent contract](docs/task-agent-contract.md)                |
+
+## Evidence and boundaries
+
+Version 2.2.0 has a recorded controlled-app campaign covering catalog, settings, shipping and
+simulated checkout: **43/43 ordinary scenarios and 8/8 labelled fault scenarios** on one frozen
+build. Caller action/argument/commitment/completion floors were **0.2/0.3/0.5/0.4**;
+these are different from the library defaults **0.5/0.6/0.5/0.75**. Earlier failed runs are retained.
+These figures describe that campaign, not arbitrary-site accuracy or a default-settings benchmark.
+See [verification status and limits](docs/task-agent-status.md) and the
+[acceptance ledger](e2e/acceptance/README.md).
+
+The current observer does not offer iframe, canvas, contenteditable, file upload or drag-and-drop
+operations. A custom widget may need caller-provided observation/accessibility integration.
+Page text and success toasts alone cannot prove a durable write. Provider confidence is not a
+calibrated probability of task success. A new provider needs its own acceptance evaluation.
+
+## Develop and verify
+
+```sh
+nvm use
+npm ci
+npx playwright install chromium
+npm run validate
+npm test -- --runInBand
+npm run build
+npm run verify:package
+npm run docs:verify
 ```
 
-## Browser Support
+Integration verification uses a scripted decider and local Chromium, with **no provider calls**.
+It checks the documented examples, packed-package consumers, full document navigation and
+negative controls. To build the documentation website, install `docs-requirements.txt` in a Python
+virtual environment, then run `npm run docs:api` and `npm run docs:build`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for reproducible gates and release setup.
 
-- Chrome 80+
-- Firefox 75+
-- Safari 13+
-- Edge 80+
+## License and support
 
-## TypeScript Support
-
-Fully typed with strict TypeScript configuration. No `any` types in production code.
-
-## ReScript Support
-
-Kriya ships first-class ReScript bindings in the `rescript/` folder. No need to hand-roll your own.
-
-**Requirements:** `rescript >= 11` and `@rescript/core >= 1.0`.
-
-**Setup** — in your own `rescript.json`:
-
-```json
-{
-  "bs-dependencies": ["@rescript/core", "@juspay/kriya"],
-  "bsc-flags": ["-open RescriptCore"]
-}
-```
-
-**Usage:**
-
-```rescript
-open Kriya
-
-let engine = createEngine(~debugMode=true, ~timeout=10000)
-engine->initialize
-
-let result = await engine->executeAction(navigate(~url="https://example.com"))
-
-// Fill a form by dict
-let fields = Dict.fromArray([("name", "Alice"), ("email", "alice@example.com")])
-let _ = await engine->executeFormFill(~fields)
-
-engine->disposeEngine
-```
-
-Everything the TypeScript API exposes has a ReScript binding — action builders (`navigate`, `click`, `fill`, `wait`, `press`, `screenshot`, `submitForm`, `fillForm`), engine lifecycle, event listeners, page-context capture, and screenshot capture.
-
-## TaskAgent decision diagnostics
-
-TaskAgent can retain decision distributions with `captureProbabilities: true`, report explicit
-provider confidence semantics through `confidenceProfile`, and measure progress with
-`captureProgressDiagnostics: true`. These options preserve the default decisions and thresholds.
-Profiles describe caller assertions; model-prefix matching does not establish calibration or the
-actual upstream route. See [TaskAgent usage](https://github.com/juspay/kriya/blob/main/docs/task-agent.md) for the configuration and
-[verification status](https://github.com/juspay/kriya/blob/main/docs/task-agent-status.md) for evidence and limitations.
-
-## License
-
-MIT
+[MIT](LICENSE) · [Releases](https://github.com/juspay/kriya/releases) ·
+[Issues](https://github.com/juspay/kriya/issues) · [Security reporting](SECURITY.md)

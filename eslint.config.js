@@ -4,7 +4,6 @@
 import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import eslintPluginPrettier from 'eslint-plugin-prettier';
 
 export default [
   js.configs.recommended,
@@ -24,9 +23,6 @@ export default [
         ...globals.node,
         ...globals.es2021,
       },
-    },
-    plugins: {
-      prettier: eslintPluginPrettier,
     },
     rules: {
       // Base rules replaced by the @typescript-eslint equivalents below.
@@ -90,9 +86,6 @@ export default [
         ...globals.node,
         ...globals.es2021,
       },
-    },
-    plugins: {
-      prettier: eslintPluginPrettier,
     },
     rules: {
       'no-unused-vars': 'off',

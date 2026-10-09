@@ -10,7 +10,7 @@ const production = !process.env.ROLLUP_WATCH;
 
 const baseConfig = {
   input: 'src/index.ts',
-  external: ['react', 'react-final-form', 'html2canvas'],
+  external: ['html2canvas'],
 };
 
 const buildConfig = {
@@ -20,23 +20,21 @@ const buildConfig = {
       file: 'dist/index.cjs',
       format: 'cjs',
       exports: 'named',
-      sourcemap: true,
+      sourcemap: 'hidden',
     },
     {
       file: 'dist/index.esm.js',
       format: 'es',
       exports: 'named',
-      sourcemap: true,
+      sourcemap: 'hidden',
     },
     {
       file: 'dist/index.umd.js',
       format: 'umd',
       name: 'WebAutomata',
       exports: 'named',
-      sourcemap: true,
+      sourcemap: 'hidden',
       globals: {
-        react: 'React',
-        'react-final-form': 'ReactFinalForm',
         html2canvas: 'html2canvas',
       },
     },

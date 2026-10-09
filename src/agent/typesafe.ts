@@ -613,6 +613,7 @@ const checkProbabilities = (
   return undefined;
 };
 
+/** Validates only own JSON data, offered choices and consistent probabilities from the untrusted response. */
 const checkAnswer = (
   key: string,
   value: unknown,
@@ -660,7 +661,7 @@ const checkAnswer = (
   );
   const problem = checkProbabilities(key, choice, snapshot, criteria);
   if (problem) {
-    return problem ?? invalidAnswer(key, 'has no probabilities');
+    return problem;
   }
   const probabilities = Object.fromEntries(
     criteria.map(name => [name, own(snapshot, name) as number])

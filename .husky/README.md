@@ -1,36 +1,11 @@
-# Husky Git Hooks
+# Git hooks
 
-This directory contains Git hooks managed by [Husky](https://typicode.github.io/husky/).
+Husky is installed by npm prepare for repository contributors.
 
-## Available Hooks
+- pre-commit runs lint-staged without a stash, full source lint/format/type checks, quick security/staged-file checks and optional redacted gitleaks.
+- commit-msg enforces conventional commit subjects.
+- pre-push runs types, lint, tests, security/build validation, package build and consumer/integration checks.
 
-### pre-commit
-
-Runs before commits to check code quality:
-
-- Linting with ESLint
-- Formatting with Prettier
-- Type checking (if TypeScript)
-
-### commit-msg
-
-Validates commit messages using commitlint to ensure they follow conventional commit format.
-
-### pre-push
-
-Runs before pushing to remote:
-
-- Run tests
-- Build check
-
-## Installation
-
-Hooks are automatically installed when running:
-
-```bash
-npm install
-```
-
-## Customization
-
-To modify hooks, edit the files in the `.husky` directory or update the husky configuration in `package.json`.
+Install the contributor Node version and Chromium before using the full gate. See CONTRIBUTING.md.
+Hooks run checks; they do not authorize a push, paid provider run or merge. ReScript is no longer
+part of the build. Unique local evidence and other worktrees must not be deleted by cleanup scripts.

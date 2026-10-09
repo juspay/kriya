@@ -55,3 +55,6 @@ e2e/acceptance/**/*.json
 # Generated API and site output
 docs/api-generated/
 site/
+
+# Documentation build environment
+.venv/

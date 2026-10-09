@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Kriya is a pure automation execution engine for web actions. It executes action commands from ANY AI (OpenAI, Claude, Gemini, etc.) and handles web automation tasks like clicking, filling forms, navigation, and capturing page context.
+Kriya provides a browser execution engine and a DOM-independent TaskAgent with injected host, typed decider and policy. Consumer integration guides live in docs/integration and runnable examples in docs/examples. Keep credentials outside the page and completion evidence separate from action dispatch. ReScript bindings are no longer shipped.
 
 ## STRICT Code Conventions (MUST follow)
 

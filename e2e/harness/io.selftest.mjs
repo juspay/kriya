@@ -2547,6 +2547,59 @@ async function runHostChecks() {
     }
   );
 
+  for (const [name, currentUrl, url] of [
+    ['malformed current URL', `not a url ${HOST_SECRET}`, () => `not a url ${HOST_SECRET}`],
+    [
+      'throwing URL getter',
+      'http://127.0.0.1:9/',
+      () => {
+        throw new Error(`controller unavailable ${HOST_SECRET}`);
+      },
+    ],
+  ]) {
+    await check(`host: refresh returns HOST_UNAVAILABLE for a ${name}`, async () => {
+      const calls = { evaluate: 0, route: 0, reload: 0, unroute: 0 };
+      const page = fakePage({
+        url,
+        evaluate: async () => {
+          calls.evaluate += 1;
+          return { documentId: 'doc_before' };
+        },
+        route: async () => {
+          calls.route += 1;
+        },
+        reload: async () => {
+          calls.reload += 1;
+        },
+        unroute: async () => {
+          calls.unroute += 1;
+        },
+      });
+      const transport = createPlaywrightTransport({ page });
+      let result;
+      let rejected = false;
+      try {
+        result = await transport.refresh({
+          url: currentUrl,
+          allowedOrigins: ['http://127.0.0.1:9'],
+        });
+      } catch {
+        rejected = true;
+      }
+      ok(!rejected, 'refresh returns a result rather than rejecting');
+      eq(
+        result,
+        {
+          ok: false,
+          error: { code: 'HOST_UNAVAILABLE', message: 'page url unavailable', retryable: true },
+        },
+        'normalized controller failure'
+      );
+      ok(!JSON.stringify(result).includes(HOST_SECRET), 'raw controller text is withheld');
+      eq(calls, { evaluate: 0, route: 0, reload: 0, unroute: 0 }, 'no page work or reload');
+    });
+  }
+
   await check('host: waitForDocument never rejects when the page throws', async () => {
     const transport = createPlaywrightTransport({
       page: fakePage({
@@ -3434,8 +3487,9 @@ async function runModuleChecks() {
     }
   );
 
+  const transportSource = '../../docs/examples/playwright-transport.mjs';
   const sources = Object.fromEntries(
-    files.map(file => [file, fs.readFileSync(path.join(HERE, file), 'utf8')])
+    [...files, transportSource].map(file => [file, fs.readFileSync(path.join(HERE, file), 'utf8')])
   );
 
   await check('module: no module imports from src/, dist/ or the repo package', async () => {
@@ -3444,7 +3498,12 @@ async function runModuleChecks() {
         match => match[1]
       );
       ok(
-        imports.every(name => name.startsWith('node:') || name.startsWith('./')),
+        imports.every(
+          name =>
+            name.startsWith('node:') ||
+            name.startsWith('./') ||
+            (file === 'host.mjs' && name === transportSource)
+        ),
         `${file}: imports ${show(imports)}`
       );
       ok(!/\bsrc\/|\bdist\//.test(imports.join(' ')), `${file}: no src or dist import`);
@@ -3473,8 +3532,9 @@ async function runModuleChecks() {
       ok(index > start && index < end, 'the call is inside defaultFetchSend');
       ok(
         !/\.credential\b/.test(sources['host.mjs']) &&
+          !/\.credential\b/.test(sources[transportSource]) &&
           !/\.credential\b/.test(sources['browser.mjs']),
-        'host and browser never touch it'
+        'host, transport and browser never touch it'
       );
     }
   );

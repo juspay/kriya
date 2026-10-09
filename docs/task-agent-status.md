@@ -24,7 +24,7 @@ no library source changed afterward.
 
 The production dependency audit has zero findings. The development audit retains 14 findings
 (12 high, 2 moderate), including an unpatched brace parser and bundled npm dependencies.
-Release publication and a real Perplexity campaign have not run. Current delivery and videos:
+Version 2.2.0 was subsequently published on 9 October 2026; its public npm tarball passed consumer and Chromium smoke checks and matches the accepted ESM/UMD pair above. A real Perplexity campaign has not run. Current delivery and videos:
 [hosted closeout artifact](https://chatgpt.com/space/page_aa0d3f2ebba88191b422acec93bfe748).
 
 ## Reliability follow-up checkpoint (8 October 2026)

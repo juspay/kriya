@@ -55,9 +55,6 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: ReScript bindings compile
-        run: npm run build:rescript
-
   build-check:
     name: 📦 Build & Package Check
     runs-on: ubuntu-latest
@@ -77,6 +74,18 @@ jobs:
       - name: Build package
         run: npm run build
 
+      - name: Test contributor tooling
+        run: npm run test:tooling
+
+      - name: Verify consumer package
+        run: npm run verify:package
+
+      - name: Install integration browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify integration examples
+        run: npm run docs:verify
+
       - name: Verify package contents
         run: |
           echo "📦 Dry-run packaging:"
@@ -84,6 +93,31 @@ jobs:
           echo ""
           echo "📂 dist/ contents:"
           ls -la dist/
+
+  package-windows:
+    name: 📦 Windows Package Check
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Test contributor tooling
+        run: npm run test:tooling
+
+      - name: Verify consumer package
+        run: npm run verify:package
 
   quality-gate:
     name: 🛡️ Code Quality & Security Gate
@@ -131,7 +165,7 @@ jobs:
         run: node scripts/security-check.cjs
 
       - name: 📈 TypeScript strict check
-        run: npx tsc --noEmit --strict --project tsconfig.json
+        run: npx tsc --noEmit --incremental false --strict --project tsconfig.json
 
       - name: 📊 Quality metrics (non-blocking)
         id: metrics
