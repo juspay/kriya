@@ -97,6 +97,66 @@ An in-page coordinator cannot retain a run across a full document navigation.
 | v2 migration, removal of bundled ReScript bindings            | [Migration](docs/integration/migration.md)                       |
 | Exact public protocol and types                               | [TaskAgent contract](docs/task-agent-contract.md)                |
 
+## Integration developer starter prompt
+
+Copy this prompt into your implementation agent or developer brief. Replace the bracketed fields
+with your application details; choose one workflow for the first integration.
+
+```text
+Integrate @juspay/kriya into [application/repository] to support [specific user workflow].
+Reference: https://github.com/juspay/kriya (docs/integration/ and docs/examples/).
+
+Application stack: [framework, backend and package manager]
+Trusted application origins: [independently configured allowlist]
+Test entry URL and session: [authorized URL and test-account setup; no secrets]
+Desired outcome and input fields: [observable result; input names and sensitivity]
+Decision provider, if needed: [TypeSafe or existing typed decider; backend endpoint]
+Approval owner and saved-state proof: [user interface and authoritative read/API]
+
+Inspect the application's existing architecture, authentication and conventions first.
+Verify the installed/published Kriya version and available public exports. Read its
+README, public types, TaskAgent contract and integration guides: start here,
+configuration, lifecycle, security, operations, and the chosen placement guide.
+If documentation comes from main, compare it with the installed version before
+copying code. A merged PR is not proof of an npm release. Report real API gaps.
+
+Implement one end-to-end workflow using the smallest suitable integration:
+
+1. Choose the placement and explain why. Use createAutomationEngine when our code
+   already selects actions; an in-page TaskAgent for same-document tasks; or a
+   Node TaskAgent with RemoteTaskHost for full navigation. Use named public imports.
+   Start from the documented examples; Playwright transport files are application
+   templates, not package exports. Preserve the application's existing architecture.
+2. Configure the authenticated user/session, trusted origins, supported operations,
+   budgets, timeouts and provider on the trusted side. Validate incoming URLs against
+   the configured allowlist; never construct authorization from the URL being checked.
+   For remote execution, install the bridge before the first navigation and in each
+   new document. Keep the coordinator alive outside documents that can be replaced.
+3. Pass an outcome-oriented goal and structured inputs. Keep provider credentials in
+   the backend/controller. Declare sensitive input paths and target/origin bindings;
+   keep values out of goals, model-visible labels, logs and recorded transport data.
+   Use exact current targets; never execute model-authored JavaScript or invent data.
+4. For TaskAgent, handle completed, needs_input, awaiting_approval, blocked, failed and cancelled.
+   Build real input/approval UI and checkpoint ownership. Approval must bind to the
+   exact reviewed command and context; never auto-approve. Add effect grants only
+   for consent our application actually holds. Support resume, cancellation and cleanup.
+5. Verify completion from fresh evidence. For saved changes, use an authoritative
+   backend read or a safe independent GET view for the same user and task. A click,
+   local field value or success toast is insufficient. Reconcile uncertain effects
+   before retrying a write; cancellation is not rollback. Keep default safeguards.
+6. Prove the workflow without provider calls first; use a scripted TaskAgent decider. Test
+   success, already-correct no-op, missing input, approval/denial/context changes,
+   forbidden origin, stale DOM, cancellation, failed writes and misleading success.
+   Test full document navigation when used. Mark unsupported surfaces explicitly.
+   Run bounded live-provider acceptance only with approved credentials and budget;
+   record the exact package, provider/model, configuration and observed outcome.
+
+Deliver the working integration, configuration example without secrets, automated
+tests, a short runbook and reproducible proof. Separate wiring tests from live-model
+acceptance; list unresolved gaps and commands actually run. Do not claim arbitrary
+website support or weaken origin, approval or completion checks to make a demo pass.
+```
+
 ## Evidence and boundaries
 
 Version 2.2.0 has a recorded controlled-app campaign covering catalog, settings, shipping and
