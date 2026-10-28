@@ -1,5 +1,3 @@
-import resolve from '@rollup/plugin-node-resolve';
-import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 import terser from '@rollup/plugin-terser';
 import dts from 'rollup-plugin-dts';
@@ -52,11 +50,6 @@ const buildConfig = {
         { find: '@/utils', replacement: path.resolve('./src/utils') },
       ],
     }),
-    resolve({
-      browser: true,
-      preferBuiltins: false,
-    }),
-    commonjs(),
     typescript({
       tsconfig: './tsconfig.json',
       outputToFilesystem: true,

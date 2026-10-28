@@ -21,10 +21,9 @@
     "url": "https://github.com/sponsors/juspay"
   },
   "engines": {
-    "node": ">=20.8.1",
-    "npm": ">=10.0.0"
+    "node": ">=22.0.0"
   },
-  "packageManager": "npm@10.9.0",
+  "packageManager": "pnpm@10.34.7",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.esm.js",
@@ -79,9 +78,9 @@
   "scripts": {
     "build": "rollup -c",
     "build:watch": "rollup -c -w",
-    "dev": "npm run build:watch",
+    "dev": "pnpm run build:watch",
     "clean": "node scripts/clean.mjs",
-    "reset": "npm run clean && rm -rf node_modules && npm ci",
+    "reset": "pnpm run clean && rm -rf node_modules && pnpm install --frozen-lockfile",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -91,24 +90,24 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:staged": "node scripts/format-staged.cjs",
-    "audit": "npm audit --audit-level=high --omit=dev",
-    "validate": "npm run lint && npm run format:check && npm run type-check",
+    "audit": "pnpm audit --audit-level=high --prod",
+    "validate": "pnpm run lint && pnpm run format:check && pnpm run type-check",
     "validate:env": "node scripts/env-validation.cjs",
     "validate:security": "node scripts/security-check.cjs",
     "validate:build": "node scripts/build-validations.cjs",
     "validate:commit": "node scripts/commit-validation.cjs",
-    "validate:all": "npm run validate && npm run validate:env && npm run validate:security && npm run validate:build && npm test",
-    "check:all": "npm run validate && npm run validate:commit && npm run audit",
+    "validate:all": "pnpm run validate && pnpm run validate:env && pnpm run validate:security && pnpm run validate:build && pnpm test",
+    "check:all": "pnpm run validate && pnpm run validate:commit && pnpm run audit",
     "quality:metrics": "node scripts/quality-metrics.cjs",
-    "quality:report": "npm run quality:metrics && echo 'Quality metrics saved to quality-metrics.json'",
-    "quality:all": "npm run lint && npm run format:check && npm run quality:metrics",
+    "quality:report": "pnpm run quality:metrics && echo 'Quality metrics saved to quality-metrics.json'",
+    "quality:all": "pnpm run lint && pnpm run format:check && pnpm run quality:metrics",
     "docs:build": "mkdocs build --strict --clean",
     "docs:serve": "mkdocs serve",
     "docs:gh-deploy": "mkdocs gh-deploy --force",
     "docs:api": "typedoc --treatWarningsAsErrors",
     "prepare": "husky",
-    "prepublishOnly": "npm run clean && npm run build && npm run verify:package",
-    "pre-push": "npm run validate:all",
+    "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run verify:package",
+    "pre-push": "pnpm run validate:all",
     "release": "semantic-release",
     "release:dry-run": "semantic-release --dry-run",
     "test:semantic-release": "semantic-release --dry-run --no-ci",
@@ -120,39 +119,37 @@
     "html2canvas": "^1.4.1"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
-    "@eslint/js": "^9.39.5",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@eslint/js": "^10.0.1",
     "@rollup/plugin-alias": "^6.0.0",
-    "@rollup/plugin-commonjs": "^29.0.3",
-    "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.3.0",
-    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/commit-analyzer": "^13.0.1",
-    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/git": "^11.0.1",
     "@semantic-release/github": "^12.0.10",
     "@semantic-release/npm": "^13.2.0",
     "@semantic-release/release-notes-generator": "^14.1.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^25.9.9",
-    "eslint": "^9.39.5",
+    "@types/node": "^26.6.5",
+    "eslint": "^10.13.0",
     "globals": "^17.13.0",
     "husky": "^9.1.7",
     "jest": "^30.5.2",
     "jest-environment-jsdom": "^30.5.2",
-    "lint-staged": "^16.4.0",
-    "prettier": "^3.9.9",
-    "rollup": "^4.64.2",
+    "lint-staged": "^17.6.0",
+    "playwright": "^1.64.1",
+    "prettier": "^3.9.10",
+    "rollup": "^4.64.12",
     "rollup-plugin-dts": "^6.5.1",
     "semantic-release": "^25.0.9",
-    "ts-jest": "^29.4.14",
+    "ts-jest": "^29.4.15",
     "tslib": "^2.8.1",
     "typedoc": "^0.28.20",
-    "typedoc-plugin-markdown": "^4.13.1",
+    "typedoc-plugin-markdown": "^4.14.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.71.1",
-    "playwright": "^1.64.0"
+    "typescript-eslint": "^8.72.0"
   },
   "browserslist": [
     "> 1%",
@@ -172,9 +169,13 @@
       "prettier --write"
     ]
   },
-  "overrides": {
-    "@istanbuljs/load-nyc-config": {
-      "js-yaml": "^4.3.2"
-    }
+  "pnpm": {
+    "overrides": {
+      "@istanbuljs/load-nyc-config>js-yaml": "^4.3.2"
+    },
+    "ignoredBuiltDependencies": [
+      "@parcel/watcher",
+      "unrs-resolver"
+    ]
   }
 }

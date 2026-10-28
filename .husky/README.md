@@ -1,6 +1,6 @@
 # Git hooks
 
-Husky is installed by npm prepare for repository contributors.
+Husky is installed by the prepare script during `pnpm install` for repository contributors.
 
 - pre-commit runs lint-staged without a stash, full source lint/format/type checks, quick security/staged-file checks and optional redacted gitleaks.
 - commit-msg enforces conventional commit subjects.

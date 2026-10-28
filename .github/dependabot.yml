@@ -23,6 +23,8 @@ updates:
       interval: 'weekly'
       day: 'monday'
       time: '04:00'
+    cooldown:
+      default-days: 7
     reviewers:
       - 'juspay-maintainers'
     assignees:
@@ -32,8 +34,6 @@ updates:
       - 'automated'
     ignore:
       # Ignore major version updates for these packages
-      - dependency-name: 'eslint'
-        versions: ['>= 10.a']
       - dependency-name: 'prettier'
         versions: ['>= 4.a', '< 5']
 
@@ -46,6 +46,8 @@ updates:
       interval: 'weekly'
       day: 'monday'
       time: '04:00'
+    cooldown:
+      default-days: 7
     reviewers:
       - 'juspay-maintainers'
     labels:

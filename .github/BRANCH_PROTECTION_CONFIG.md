@@ -15,8 +15,8 @@ Required GitHub settings to enforce Kriya's quality pipeline. Apply via **Settin
 
 Add these contexts (names must match exactly):
 
-- `🧪 Test (Node 20)`
 - `🧪 Test (Node 22)`
+- `🧪 Test (Node 24)`
 - `📦 Build & Package Check`
 - `🛡️ Code Quality & Security Gate`
 - `🔒 Single Commit Policy Validation`
@@ -58,7 +58,7 @@ REPO=kriya
 # Branch protection
 gh api "repos/$OWNER/$REPO/branches/main/protection" \
   --method PUT \
-  --field required_status_checks='{"strict":true,"contexts":["🧪 Test (Node 20)","🧪 Test (Node 22)","📦 Build & Package Check","🛡️ Code Quality & Security Gate","🔒 Single Commit Policy Validation"]}' \
+  --field required_status_checks='{"strict":true,"contexts":["🧪 Test (Node 22)","🧪 Test (Node 24)","📦 Build & Package Check","🛡️ Code Quality & Security Gate","🔒 Single Commit Policy Validation"]}' \
   --field enforce_admins=false \
   --field required_pull_request_reviews='{"required_approving_review_count":1,"dismiss_stale_reviews":true,"require_code_owner_reviews":true}' \
   --field restrictions=null \

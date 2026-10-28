@@ -9,10 +9,10 @@ TypeScript declarations for the complete option shapes.
 | Component             | Required setup                                                                 |
 | --------------------- | ------------------------------------------------------------------------------ |
 | Browser engine/bridge | Modern ES2020-capable browser with a mounted DOM                               |
-| Node coordinator      | Node 20.8.1 or later; injected TaskHost and TaskDecider                        |
+| Node coordinator      | Node 22 or later; injected TaskHost and TaskDecider                            |
 | TypeSafe adapter      | Node-side credential callback; HTTPS endpoint and permitted model prefix       |
 | Playwright template   | Caller-installed Playwright/Chromium, dedicated authenticated context          |
-| Repository tooling    | Node 22.23.2 or a compatible newer release; npm; Python for MkDocs             |
+| Repository tooling    | Node 24.22.1 or a compatible newer release; pnpm; Python for MkDocs            |
 | Production package    | html2canvas for screenshot implementation; no React/ReScript peer installation |
 
 ## Coordinator and request

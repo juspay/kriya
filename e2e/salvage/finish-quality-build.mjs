@@ -63,9 +63,6 @@ const checks = await Promise.all([
     'tests/resolver.test.ts',
     'tests/commands.test.ts',
     'tests/verify.test.ts',
-    'docs/task-agent.md',
-    'docs/task-agent-contract.md',
-    'docs/task-agent-status.md',
   ]),
 ]);
 const protectedFiles = JSON.parse(

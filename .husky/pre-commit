@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
-npx lint-staged --no-stash
-npm run validate
+pnpm exec lint-staged --no-stash
+pnpm run validate
 node scripts/security-check.cjs --quick
 node scripts/check-staged.mjs
 if command -v gitleaks >/dev/null 2>&1; then

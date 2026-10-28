@@ -1610,8 +1610,8 @@ async function envChecks() {
     const oldNode = preflight({ ...base, nodeVersion: '18.19.0' });
     ok(oldNode.exitCode === 2 && oldNode.nodeOk === false);
     ok(
-      preflight({ ...base, nodeVersion: '20.8.1' }).ok &&
-        !preflight({ ...base, nodeVersion: '20.8.0' }).ok
+      preflight({ ...base, nodeVersion: '22.0.0' }).ok &&
+        !preflight({ ...base, nodeVersion: '21.7.3' }).ok
     );
   });
   await check(

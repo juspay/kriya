@@ -92,4 +92,4 @@ persistence evidence but does not bypass the model verifier or other completion 
 
 The template uses the page's main world and reports no isolated-world guarantee. For untrusted
 sites, assess the stronger extension/CDP isolation and transport contract your deployment needs.
-See [security](security.md) and the [public contract](../task-agent-contract.md).
+See [security](security.md).

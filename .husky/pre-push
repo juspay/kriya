@@ -4,13 +4,13 @@ set -e
 echo "🚀 Pre-push validations..."
 
 echo "📘 Type checking..."
-npm run type-check
+pnpm run type-check
 
 echo "🔍 ESLint..."
-npm run lint
+pnpm run lint
 
 echo "🧪 Tests..."
-npm test
+pnpm test
 
 echo "🔒 Security check..."
 node scripts/security-check.cjs --quick
@@ -19,8 +19,8 @@ echo "📦 Build validation..."
 node scripts/build-validations.cjs
 
 echo "📦 Consumer package and integration examples..."
-npm run build
-npm run verify:package
-npm run docs:verify
+pnpm run build
+pnpm run verify:package
+pnpm run docs:verify
 
 echo "✅ Pre-push validations passed."

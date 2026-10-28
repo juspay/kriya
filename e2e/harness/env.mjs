@@ -12,7 +12,7 @@ export const EXIT_CODES = Object.freeze({
   EVIDENCE: 4,
 });
 
-export const MIN_NODE_VERSION = '20.8.1';
+export const MIN_NODE_VERSION = '22.0.0';
 export const DEFAULT_TOOLS_DIR = '/tmp/amazon-guide';
 
 const PREFERRED_CHROMIUM = `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;

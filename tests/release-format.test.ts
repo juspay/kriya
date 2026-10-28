@@ -24,7 +24,28 @@ const FIXTURE_ROOT =
 const FORMAT_PLUGIN = './scripts/semantic-release-format-plugin.cjs';
 const loadPlugin = createRequire(join(REPO_ROOT, 'package.json'));
 const formatPlugin = loadPlugin(join(REPO_ROOT, FORMAT_PLUGIN)) as PreparePlugin;
-const changelogPlugin = loadPlugin('@semantic-release/changelog') as PreparePlugin;
+// @semantic-release/changelog is ESM-only and Jest runs this suite as CommonJS, so the real
+// plugin executes in a child Node process with the same prepare(config, context) contract.
+const changelogPlugin: PreparePlugin = {
+  prepare: async (config, context) => {
+    const script = [
+      "import * as plugin from '@semantic-release/changelog';",
+      'const { config, cwd, nextRelease } = JSON.parse(process.argv[1]);',
+      'const logger = { log() {}, error() {} };',
+      'await plugin.prepare(config, { cwd, nextRelease, logger });',
+    ].join('\n');
+    execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        script,
+        JSON.stringify({ config, cwd: context.cwd, nextRelease: context.nextRelease }),
+      ],
+      { cwd: REPO_ROOT, stdio: 'pipe' }
+    );
+  },
+};
 const prettierCli = require.resolve('prettier/bin/prettier.cjs');
 const releaseConfig = JSON.parse(readFileSync(join(REPO_ROOT, '.releaserc.json'), 'utf8')) as {
   plugins: ReleasePlugin[];

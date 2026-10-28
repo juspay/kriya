@@ -1133,11 +1133,10 @@ export class FormRegistry {
       }
       this._forceLog('✅ Found dropdown');
 
-      // Find the option to select
-      let optionToSelect: HTMLElement | null = null;
-
-      // Look for exact data-dropdown-value match (case-insensitive)
-      optionToSelect = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
+      // Find the option to select: exact data-dropdown-value match first
+      let optionToSelect: HTMLElement | null = dropdown.querySelector(
+        `[data-dropdown-value="${value}"]`
+      ) as HTMLElement;
       if (!optionToSelect) {
         // Try case-insensitive search
         const allOptions = dropdown.querySelectorAll('[data-dropdown-value]');

@@ -115,7 +115,4 @@ nav:
       - Extension seams: integration/extensions.md
       - Operations: integration/operations.md
       - Migration: integration/migration.md
-  - TaskAgent Guide: task-agent.md
-  - Verification Status: task-agent-status.md
-  - Public Contract: task-agent-contract.md
   - Generated API: api-generated/README.md

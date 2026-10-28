@@ -108,8 +108,8 @@ branches:
       required_status_checks:
         strict: true
         contexts:
-          - '🧪 Test (Node 20)'
           - '🧪 Test (Node 22)'
+          - '🧪 Test (Node 24)'
           - '📦 Build & Package Check'
           - '🛡️ Code Quality & Security Gate'
           - '🔒 Single Commit Policy Validation'

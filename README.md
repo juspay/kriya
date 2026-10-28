@@ -40,7 +40,8 @@ npm install @juspay/kriya
 The package provides ESM, CommonJS, TypeScript declarations and a browser UMD bundle
 (`dist/index.umd.js`, global `WebAutomata`). Browser actions require a mounted DOM. The coordinator
 can run in Node without a DOM; it needs an injected host to reach a browser. Node consumers need
-Node 20.8.1 or later. Contributor tooling uses Node 22.23.2 or a compatible newer version.
+Node 22 or later (Node 20 reached end of life in April 2026). Contributor tooling uses Node 24.22.1
+or a compatible newer version.
 
 `html2canvas` supports screenshots. Kriya does not install React, a browser binary, an AI SDK,
 a database or a server. Playwright is a separate controller choice and a development dependency
@@ -95,7 +96,6 @@ An in-page coordinator cannot retain a run across a full document navigation.
 | Custom providers, resolvers and research mode                 | [Extension seams](docs/integration/extensions.md)                |
 | Error handling, deployment checks and common failures         | [Operations and troubleshooting](docs/integration/operations.md) |
 | v2 migration, removal of bundled ReScript bindings            | [Migration](docs/integration/migration.md)                       |
-| Exact public protocol and types                               | [TaskAgent contract](docs/task-agent-contract.md)                |
 
 ## Evidence and boundaries
 
@@ -104,8 +104,7 @@ simulated checkout: **43/43 ordinary scenarios and 8/8 labelled fault scenarios*
 build. Caller action/argument/commitment/completion floors were **0.2/0.3/0.5/0.4**;
 these are different from the library defaults **0.5/0.6/0.5/0.75**. Earlier failed runs are retained.
 These figures describe that campaign, not arbitrary-site accuracy or a default-settings benchmark.
-See [verification status and limits](docs/task-agent-status.md) and the
-[acceptance ledger](e2e/acceptance/README.md).
+See the [acceptance ledger](e2e/acceptance/README.md).
 
 The current observer does not offer iframe, canvas, contenteditable, file upload or drag-and-drop
 operations. A custom widget may need caller-provided observation/accessibility integration.
@@ -116,19 +115,19 @@ calibrated probability of task success. A new provider needs its own acceptance 
 
 ```sh
 nvm use
-npm ci
-npx playwright install chromium
-npm run validate
-npm test -- --runInBand
-npm run build
-npm run verify:package
-npm run docs:verify
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+pnpm run validate
+pnpm test --runInBand
+pnpm run build
+pnpm run verify:package
+pnpm run docs:verify
 ```
 
 Integration verification uses a scripted decider and local Chromium, with **no provider calls**.
 It checks the documented examples, packed-package consumers, full document navigation and
 negative controls. To build the documentation website, install `docs-requirements.txt` in a Python
-virtual environment, then run `npm run docs:api` and `npm run docs:build`.
+virtual environment, then run `pnpm run docs:api` and `pnpm run docs:build`.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for reproducible gates and release setup.
 
 ## License and support

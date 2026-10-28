@@ -333,6 +333,13 @@ const BAD_UMD = String.raw`(function (global) { global.WebAutomata = {}; })(glob
 const pageHtml = (title, body) =>
   `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${body}</body></html>`;
 
+// Fixture pages echo request values; escape them so the harness never serves reflected markup.
+const escapeHtml = value =>
+  String(value ?? '').replace(
+    /[&<>"']/g,
+    char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]
+  );
+
 const START_BODY = `<h1 id="h">Start page</h1>
 <a id="go" href="/second?via=link">Go second</a>
 <form id="f" method="POST" action="/post"><input name="q" value="hello"><button id="submit" type="submit">Send</button></form>
@@ -357,13 +364,16 @@ async function startPageServer() {
         send(
           pageHtml(
             'Second',
-            `<h1 id="h">Second</h1><p id="info">via=${url.searchParams.get('via')}</p>`
+            `<h1 id="h">Second</h1><p id="info">via=${escapeHtml(url.searchParams.get('via'))}</p>`
           )
         );
       } else if (url.pathname === '/post') {
         const q = new URLSearchParams(body).get('q');
         send(
-          pageHtml('Posted', `<h1 id="h">Posted</h1><p id="info">method=${req.method} q=${q}</p>`)
+          pageHtml(
+            'Posted',
+            `<h1 id="h">Posted</h1><p id="info">method=${req.method} q=${escapeHtml(q)}</p>`
+          )
         );
       } else if (url.pathname === '/slow') {
         setTimeout(() => send(pageHtml('Slow', '<h1 id="h">Slow</h1>')), 1200);
@@ -374,9 +384,9 @@ async function startPageServer() {
         send(
           pageHtml(
             'Cookie',
-            `<p>cookie ${value}</p><script>localStorage.setItem('scn', '${value}')</script>`
+            `<p>cookie ${escapeHtml(value)}</p><script>localStorage.setItem('scn', ${JSON.stringify(String(value ?? ''))})</script>`
           ),
-          { 'set-cookie': `scn=${value}; Path=/` }
+          { 'set-cookie': `scn=${encodeURIComponent(String(value ?? ''))}; Path=/` }
         );
       } else if (url.pathname === '/diag') {
         send(pageHtml('Diag', '<script>console.log("diag-line")</script>'));

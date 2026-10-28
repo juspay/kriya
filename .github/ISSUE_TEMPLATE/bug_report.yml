@@ -72,9 +72,9 @@ body:
       label: Node.js Version
       description: What version of Node.js are you using?
       options:
+        - '26.x'
+        - '24.x'
         - '22.x'
-        - '20.x'
-        - '18.x'
         - Other (please specify)
     validations:
       required: true

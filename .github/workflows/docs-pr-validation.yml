@@ -36,25 +36,28 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
           cache-dependency-path: docs-requirements.txt
 
       - name: Install Node dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install MkDocs dependencies
         run: |
@@ -80,7 +83,7 @@ jobs:
         run: |
           if [ -f "typedoc.json" ]; then
             echo "Generating TypeDoc..."
-            npx typedoc
+            pnpm exec typedoc
           else
             echo "No typedoc.json — skipping"
           fi
@@ -102,7 +105,7 @@ jobs:
 
       - name: 📤 Upload docs artifact
         if: always() && hashFiles('site/**') != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: docs-build-${{ github.sha }}
           path: site
@@ -137,7 +140,7 @@ jobs:
 
       - name: Post PR comment
         if: steps.check-permissions.outputs.can_comment == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         env:
           MD_STATUS: ${{ needs.validate.outputs.markdown_status }}
           TD_STATUS: ${{ needs.validate.outputs.typedoc_status }}
