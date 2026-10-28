@@ -895,7 +895,7 @@ const attemptOnce = async <T>(
 const backoffDelay = (runtime: Runtime, retryIndex: number): number => {
   const { baseDelayMs, maxDelayMs, jitter } = runtime.retry;
   const raw = Math.min(maxDelayMs, baseDelayMs * 2 ** retryIndex);
-  let draw = 0;
+  let draw: number;
   try {
     const drawn = runtime.random();
     draw = Number.isFinite(drawn) ? clamp(drawn, 0, 1) : 0;

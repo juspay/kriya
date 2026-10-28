@@ -1,4 +1,4 @@
-// ESLint v9 configuration for @juspay/kriya
+// ESLint flat configuration for @juspay/kriya
 // Mirrors the balanced-strict ruleset used in sibling Juspay repos
 // (neurolink / shooter / yama) so quality bars are consistent across projects.
 import js from '@eslint/js';

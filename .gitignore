@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 npm-debug.log*
+.pnpm-debug.log*
+.pnpm-store/
 yarn-debug.log*
 yarn-error.log*
 

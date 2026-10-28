@@ -1636,10 +1636,10 @@ export class DOMActions {
     }
 
     // Find the option to select (try multiple strategies)
-    let optionToSelect: HTMLElement | null = null;
-
     // Strategy 1: Look for exact data-dropdown-value match
-    optionToSelect = dropdown.querySelector(`[data-dropdown-value="${value}"]`) as HTMLElement;
+    let optionToSelect: HTMLElement | null = dropdown.querySelector(
+      `[data-dropdown-value="${value}"]`
+    ) as HTMLElement;
 
     // Strategy 2: Look for exact text content match
     if (!optionToSelect) {
@@ -1721,10 +1721,8 @@ export class DOMActions {
 
     while (Date.now() - startTime < maxWait) {
       guard.checkpoint();
-      let element: HTMLElement | null = null;
-
       // First try as CSS selector
-      element = this._dom.querySelector(selector) as HTMLElement;
+      let element: HTMLElement | null = this._dom.querySelector(selector) as HTMLElement;
 
       // If not found by CSS selector, try text-based search (like _findElement does)
       if (!element) {
@@ -2061,10 +2059,8 @@ export class DOMActions {
 
   private _extractSelectBoxButtonText(element: HTMLElement): string {
     // Try to extract button text from Euler dashboard SelectBox components
-    let text = '';
-
     // PRIMARY: Check for Euler-specific data-button-text attribute
-    text = element.getAttribute('data-button-text') || '';
+    let text = element.getAttribute('data-button-text') || '';
     if (text) {
       return text.toLowerCase();
     }
@@ -2127,10 +2123,8 @@ export class DOMActions {
 
   private _extractFormFieldName(element: HTMLElement): string {
     // Extract field name from Euler dashboard FormRenderer fields
-    let name = '';
-
     // PRIMARY: Check for Euler-specific data attributes
-    name = element.getAttribute('data-component-field-wrapper') || '';
+    let name = element.getAttribute('data-component-field-wrapper') || '';
     if (name) {
       return name.toLowerCase();
     }

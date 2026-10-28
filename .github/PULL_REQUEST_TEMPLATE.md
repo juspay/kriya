@@ -33,7 +33,7 @@
 - [ ] Code is strictly typed — no `any`, no `@ts-ignore`, no non-null `!`
 - [ ] No `console.log`/`debugger` left in `src/`
 - [ ] All public library functions return a typed `Result` (no throws)
-- [ ] `npm run lint`, `npm run type-check`, `npm test`, `npm run build` all pass locally
+- [ ] `pnpm run lint`, `pnpm run type-check`, `pnpm test`, `pnpm run build` all pass locally
 - [ ] No hardcoded secrets or credentials
 - [ ] DOM writes avoid `innerHTML`/`eval`/`new Function`
 - [ ] Documentation updated (README / docs/ / JSDoc on public API)

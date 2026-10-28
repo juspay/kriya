@@ -578,7 +578,7 @@ class CoordinatorRuntime {
   private readonly _confidenceProfileInvalid: boolean;
   constructor(private readonly _config: TaskAgentConfig) {
     let profile: TaskDeciderConfidenceProfile | undefined;
-    let invalid = false;
+    let invalid: boolean;
     try {
       const marker = Object.getOwnPropertyDescriptor(_config.decider, 'initializationError');
       invalid =

@@ -1,33 +1,23 @@
 # Examples
 
-This directory contains example implementations and usage demonstrations for @juspay/kriya.
+Standalone demonstrations for @juspay/kriya. They are not part of the package build and are not
+type-checked or linted by the repository gates; the checked, shipped examples live in
+`docs/examples/` and are exercised by `pnpm run docs:verify`.
 
-## Available Examples
+| File                | What it shows                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------------- |
+| `basic-usage.ts`    | Creating an automation engine from source and dispatching typed actions                       |
+| `click-guide.ts`    | Driving the click guide with the TypeSafe decider (needs `TYPESAFE_API_KEY`)                  |
+| `task-agent.mjs`    | Running the compiled TaskAgent against the controlled settings app with real Chromium and Jev |
+| `breeze-jev.mjs`    | Recording a live Breeze walkthrough with Jev decisions (needs `TYPESAFE_API_KEY`)             |
+| `breeze-chrome.mjs` | Shared presentation layer used by the Breeze recording                                        |
+| `jev-stage.html`    | Static stage page used by the Breeze recording                                                |
 
-### Basic Usage
-
-See `basic-example.js` for a simple demonstration of core functionality.
-
-### Advanced Usage
-
-Check `advanced-example.js` for more complex use cases and patterns.
-
-## Running Examples
+Run the Node demos from the repository root after `pnpm install --frozen-lockfile && pnpm run build`, for example:
 
 ```bash
-node examples/basic-example.js
-node examples/advanced-example.js
+node --env-file=/path/to/private.env examples/task-agent.mjs
 ```
 
-## Creating New Examples
-
-When adding new examples:
-
-1. Include clear comments explaining each step
-2. Add error handling
-3. Use realistic but simple data
-4. Update this README with a description
-
-## Contributing
-
-Examples help new users understand the project. If you find an example unclear or missing, please contribute!
+Live demos call a paid provider; nothing here runs without an explicit key. When adding an example,
+keep it self-contained, handle errors explicitly and describe it in this table.

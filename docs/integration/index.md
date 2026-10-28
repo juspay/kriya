@@ -41,7 +41,7 @@ The repository and npm package include the same small examples under `docs/examp
 `browser-engine.ts`, `in-page-task.ts`, `approval.ts`, `task-agent-node.mjs` and
 `playwright-transport.mjs`. TypeScript examples import the public package, not private source.
 The Node factory accepts an injected decider, so it can be exercised without a paid model call.
-`npm run docs:verify` type-checks and executes these examples in Chromium.
+`pnpm run docs:verify` type-checks and executes these examples in Chromium.
 
 The [configuration reference](configuration.md) distinguishes consumer runtime requirements,
 contributor tooling and optional provider/browser-controller setup. No configuration JSON or

@@ -5,8 +5,7 @@ import type { ChoiceQuestion, ResearchGuideOptions, ResearchResult } from './gui
 /*
  * TaskAgent contract. Everything here is DOM-free. Data that crosses the host/transport boundary is
  * JSON-serializable (no functions, no Map, no undefined-bearing arrays). Function-valued types are
- * in-process seams only. Full semantics: docs/task-agent-contract.md (the normative sections of the
- * contract notes, copied into the repository by the docs packet; references below name its sections).
+ * in-process seams only.
  *
  * Id format rule: ids are `<prefix>_<hex>` with an underscore. Never `<word>-<hex>`: strings like
  * `task-<32 hex>` match the OpenAI-key pattern of scripts/security-check.cjs and fail the blocking scan.
@@ -325,7 +324,7 @@ export type Redactor = {
    * It scrubs TEXT only: strings under identity-bearing keys (`id`, `signature`, `fingerprint`, `digest`,
    * `nonce`, `integrity`, `requestId`, `callId` and any key ending in `Id` or `Ids`) are left untouched, so
    * a short hex-looking secret can never corrupt a snapshot id or a signature and make an element
-   * untargetable. Callers scrub text fields of observations explicitly (contract section 11).
+   * untargetable. Callers scrub text fields of observations explicitly.
    */
   readonly scrubDeep: <T>(value: T) => T;
   /**
@@ -632,7 +631,7 @@ export type TaskHostResult<T> =
 
 /**
  * Page-reported flags are advisory: the Node-side scrub re-checks redaction and the agent re-reads the
- * capabilities after every document change. Every flag has a consequence (docs/task-agent-contract.md section 4.4).
+ * capabilities after every document change. Every flag has a consequence.
  */
 export type TaskHostCapabilities = {
   readonly hostKind: 'in_page' | 'remote' | 'custom';
@@ -969,7 +968,7 @@ export type TaskBridgeResponse<M extends TaskBridgeMethod = TaskBridgeMethod> = 
  * Object.defineProperty(value: Object.freeze(endpoint), writable: false, configurable: false).
  * Installing never overwrites: an existing property of that name fails the install (handle.ok false).
  * Node never trusts what the endpoint returns about origin, capabilities or outcomes beyond what the
- * transport's own location confirms (docs/task-agent-contract.md section 12.2).
+ * transport's own location confirms.
  */
 export type TaskBridgeEndpoint = {
   readonly protocol: typeof TASK_BRIDGE_PROTOCOL;
@@ -2123,7 +2122,7 @@ export const TASK_TYPESAFE_DEFAULTS = {
   evidenceQuestions: 2,
 } as const;
 
-/** Facts about the Jev API that the adapter clamps to (contract section 8A). */
+/** Facts about the Jev API that the adapter clamps to. */
 export const TASK_TYPESAFE_LIMITS = {
   /** Options per choice question the API accepts (documented). */
   apiMaxOptions: 255,
@@ -2173,7 +2172,7 @@ export type TaskAuthorization = {
    * else the host's authoritative location, else (flagged LOCATION_UNVERIFIED) the first observation.
    */
   readonly origins?: readonly string[];
-  /** Grants. A grant covers exactly its own effect; see the grant coverage rule in docs/task-agent-contract.md section 9. */
+  /** Grants. A grant covers exactly its own effect. */
   readonly effects?: readonly TaskGrantEntry[];
   /**
    * The caller asserts that a classified operation without a structural commit hint is routine when the
@@ -3376,8 +3375,8 @@ export type TaskAgent = {
 };
 
 // ---------------------------------------------------------------------------------------------
-// Module seams: one exported function type per cross-module function (docs/task-agent-contract.md
-// section 2). Each implementing module declares its export against its type, and the conformance test
+// Module seams: one exported function type per cross-module function. Each implementing module
+// declares its export against its type, and the conformance test
 // of the API packet (compile-checked by the gate) assigns every real export to its type here, so a
 // swapped parameter fails the build in the module that made it, not in a later wave.
 // ---------------------------------------------------------------------------------------------

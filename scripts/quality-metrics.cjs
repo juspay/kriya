@@ -14,7 +14,7 @@
  *   - Largest files (potential refactoring candidates)
  *   - TODO/FIXME count
  *   - Test coverage % if coverage-summary.json exists
- *   - npm audit summary (high+critical)
+ *   - pnpm audit summary (high+critical)
  *
  * Usage:
  *   node scripts/quality-metrics.cjs [--json-only]
@@ -156,7 +156,7 @@ function collectFileStats() {
 function collectEslintMetrics() {
   header('ESLint violations');
   try {
-    const raw = execSync('npx eslint src --format json', {
+    const raw = execSync('pnpm exec eslint src --format json', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -204,7 +204,7 @@ function summarizeEslint(results) {
 function collectTypeScriptMetrics() {
   header('TypeScript compilation');
   try {
-    execSync('npx tsc --noEmit', {
+    execSync('pnpm exec tsc --noEmit', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -246,7 +246,7 @@ function collectCoverage() {
   header('Test coverage');
   const summaryPath = path.join(ROOT, 'coverage', 'coverage-summary.json');
   if (!fs.existsSync(summaryPath)) {
-    log('  ℹ Not available (run `npm run test:coverage` to generate)', 'dim');
+    log('  ℹ Not available (run `pnpm run test:coverage` to generate)', 'dim');
     return { available: false };
   }
   try {
@@ -272,7 +272,7 @@ function collectCoverage() {
 function collectAudit() {
   header('Security audit');
   try {
-    const raw = execSync('npm audit --json --audit-level=high', {
+    const raw = execSync('pnpm audit --json --audit-level=high', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -281,7 +281,7 @@ function collectAudit() {
     try {
       return summarizeAudit(JSON.parse(err.stdout || '{}'));
     } catch {
-      log('  ⚠ npm audit unavailable', 'yellow');
+      log('  ⚠ pnpm audit unavailable', 'yellow');
       return { available: false };
     }
   }

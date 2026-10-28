@@ -1,6 +1,6 @@
 # e2e: proof that general task execution works
 
-Current pass counts and known limits are recorded in [the status page](../docs/task-agent-status.md) and the [acceptance evidence](acceptance/README.md). A failed live run remains evidence of a failed goal; assertion controls and labelled injection runs are separate proof classes.
+Current pass counts and known limits are recorded in the [acceptance evidence](acceptance/README.md). A failed live run remains evidence of a failed goal; assertion controls and labelled injection runs are separate proof classes.
 
 This directory proves the compiled Kriya TaskAgent end to end. It is plain Node ESM (`.mjs`), is not part of the
 package build, imports nothing from `src/` and adds no dependency. A run drives the real `dist/index.esm.js`
@@ -20,13 +20,13 @@ e2e/
 
 ## Prerequisites
 
-| Need               | Detail                                                                                                                                                                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node               | 20.8.1 or newer (the repository pins the same floor)                                                                                                                                                                                                                 |
-| Playwright         | resolved from `BREEZE_GUIDE_TOOLS_DIR` (default `/tmp/amazon-guide`), exactly like `e2e/apps/*.check.mjs`                                                                                                                                                            |
-| Chromium           | `executablePath` is mandatory (the Playwright revision in that directory is not installed). Lookup: `BREEZE_CHROME_PATH`, then `~/Library/Caches/ms-playwright/chromium-1234/...`, then the first installed `chromium-N`                                             |
-| Built `dist/`      | `dist/index.esm.js` and `dist/index.umd.js`, newer than every file under `src/`, exporting `createTaskAgent`, `installTaskBridge`, `createRemoteTaskHost`, `createTypeSafeTaskDecider`, `redactEnvelope`. The harness never builds: build with `npm run build` first |
-| `TYPESAFE_API_KEY` | only for live runs. Load it with `node --env-file=<file>`; the harness reads it in one place (`runner.mjs`, inside the credential callback it hands the decider) and never prints, logs or writes it                                                                 |
+| Need               | Detail                                                                                                                                                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node               | 22.0.0 or newer (the repository pins the same floor)                                                                                                                                                                                                                  |
+| Playwright         | resolved from `BREEZE_GUIDE_TOOLS_DIR` (default `/tmp/amazon-guide`), exactly like `e2e/apps/*.check.mjs`                                                                                                                                                             |
+| Chromium           | `executablePath` is mandatory (the Playwright revision in that directory is not installed). Lookup: `BREEZE_CHROME_PATH`, then `~/Library/Caches/ms-playwright/chromium-1234/...`, then the first installed `chromium-N`                                              |
+| Built `dist/`      | `dist/index.esm.js` and `dist/index.umd.js`, newer than every file under `src/`, exporting `createTaskAgent`, `installTaskBridge`, `createRemoteTaskHost`, `createTypeSafeTaskDecider`, `redactEnvelope`. The harness never builds: build with `pnpm run build` first |
+| `TYPESAFE_API_KEY` | only for live runs. Load it with `node --env-file=<file>`; the harness reads it in one place (`runner.mjs`, inside the credential callback it hands the decider) and never prints, logs or writes it                                                                  |
 
 ## Run
 

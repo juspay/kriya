@@ -39,7 +39,7 @@ auto-approving commitments or treating a success toast as persistence evidence.
 
 ## Repository verification
 
-Run npm ci under the contributor Node version, install Chromium, then run validate, Jest, build,
+Run `pnpm install --frozen-lockfile` under the contributor Node version, install Chromium, then run validate, Jest, build,
 verify:package and docs:verify. `docs:verify` type-checks the new documentation's TypeScript examples
 and performs actual Chromium checks with a scripted provider: engine fill/blank/click, in-page
 coordination, remote full navigation, completion evidence, approval binding and a forbidden origin.
@@ -57,8 +57,8 @@ administrator to select GitHub Actions as its build source; see CONTRIBUTING.md 
 
 ## Development dependency audit
 
-Production and development audits have different scopes. The current release-tool chain includes
-an unpatched braces advisory and vulnerable dependencies bundled inside npm. npm audit fix does
-not repair all of them. See [security policy](https://github.com/juspay/kriya/blob/main/SECURITY.md) for the tracked limitation.
+Production and development audits have different scopes. The release-tool chain depends on the npm
+CLI, which bundles dependencies that `pnpm audit` cannot see or replace, and Jest depends on a
+deepmerge release with no fix. See [security policy](https://github.com/juspay/kriya/blob/main/SECURITY.md) for the tracked limitation.
 Do not use audit --force to install an unrelated old release stack, silently suppress the audit,
 or claim zero development findings. This code is excluded from the consumer tarball's runtime dependencies.

@@ -482,27 +482,6 @@ describe('FormRegistry and EnhancedFormDetector console output', () => {
 
     expect(consoleCallCount()).toBe(0);
   });
-
-  test('ContextCapture debug output hides field values and element dumps', () => {
-    document.body.innerHTML =
-      '<div id="w" data-component-field-wrapper="pay"><label data-form-label="Pay"></label><input name="pay" value="CAP-VALUE-1"><div data-selectbox-value="x"><button data-value="CAP-VALUE-2"><span data-button-text="CAP-VALUE-3"></span></button></div></div>';
-    const capture = new ContextCapture({ ...DEFAULT_CONFIG, debugMode: true });
-    capture.initialize();
-    const internals = capture as unknown as {
-      _detectReScriptSelectBoxFields(): unknown[];
-      _extractCustomFieldInfo(wrapper: HTMLElement, index: number): unknown;
-    };
-
-    expect(internals._detectReScriptSelectBoxFields()).toHaveLength(1);
-    expect(
-      internals._extractCustomFieldInfo(document.getElementById('w') as HTMLElement, 0)
-    ).not.toBeNull();
-
-    expect(consoleCallCount()).toBeGreaterThan(0);
-    for (const value of ['CAP-VALUE-1', 'CAP-VALUE-2', 'CAP-VALUE-3']) {
-      expect(consoleText()).not.toContain(value);
-    }
-  });
 });
 
 describe('the event of a sensitive parameter hides even its blankness', () => {

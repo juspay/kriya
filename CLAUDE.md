@@ -228,4 +228,4 @@ type ErrorCode =
 
 ## TaskAgent additions
 
-The general task coordinator lives in `src/agent/`; only `src/agent/browser/` may access browser globals. The public contract is `docs/task-agent-contract.md` and `src/types/agent.ts`. Keep sensitive values as references until authorized execution and verify completion from a fresh observation. Use `npx tsc --noEmit --incremental false` to avoid shared build-info races.
+The general task coordinator lives in `src/agent/`; only `src/agent/browser/` may access browser globals. The public contract is `src/types/agent.ts`. Keep sensitive values as references until authorized execution and verify completion from a fresh observation. Use `pnpm exec tsc --noEmit --incremental false` to avoid shared build-info races.

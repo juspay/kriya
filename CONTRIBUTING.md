@@ -7,26 +7,27 @@ consumer. Keep runtime changes, live-provider acceptance and release/deployment 
 
 ```sh
 nvm use
-npm ci
-npx playwright install chromium
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
 ```
 
-`.nvmrc` selects Node 22.23.2. Development/release tooling needs a compatible modern Node release;
-consumer runtime support starts at Node 20.8.1 and CI exercises Node 20, 22 and 24 after installation
-under Node 24. Do not raise the consumer engine floor just to match contributor tooling.
+`.nvmrc` selects Node 24.22.1. Development/release tooling needs a compatible modern Node release;
+consumer runtime support starts at Node 22 (Node 20 reached end of life in April 2026) and CI exercises
+Node 22, 24 and 26 after installation under Node 24. Raise the consumer engine floor only when a Node
+line reaches end of life, never just to match contributor tooling.
 No API key or environment file is needed for unit/package/documentation integration checks.
 
 ## Required checks
 
 ```sh
-npm run validate
-npm test -- --runInBand
-npm run test:tooling
-npm run build
-npm run verify:package
-npm run docs:verify
-npm audit --omit=dev
-npm audit
+pnpm run validate
+pnpm test --runInBand
+pnpm run test:tooling
+pnpm run build
+pnpm run verify:package
+pnpm run docs:verify
+pnpm audit --prod
+pnpm audit
 ```
 
 The last command currently reports known development-only advisories; inspect the actual output
@@ -44,7 +45,7 @@ local acceptance evidence or generated API/site output in a commit. Preserve fai
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r docs-requirements.txt
-npm run docs:api
+pnpm run docs:api
 .venv/bin/mkdocs build --strict --clean
 ```
 

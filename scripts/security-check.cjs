@@ -3,11 +3,11 @@
 /**
  * Security Check Script
  * Scans source code and config for leaked secrets, unsafe DOM patterns,
- * and runs npm audit. Designed for CI and pre-commit use.
+ * and runs pnpm audit. Designed for CI and pre-commit use.
  *
  * Usage:
  *   node scripts/security-check.cjs          # full scan
- *   node scripts/security-check.cjs --quick  # source-only, skip npm audit
+ *   node scripts/security-check.cjs --quick  # source-only, skip pnpm audit
  */
 
 const fs = require('fs');
@@ -184,7 +184,7 @@ function runNpmAudit() {
   // Only audit production deps — dev deps like semantic-release bundle their
   // own npm, whose transitive vulns we can't override.
   try {
-    const raw = execSync('npm audit --json --audit-level=high --omit=dev', {
+    const raw = execSync('pnpm audit --json --audit-level=high --prod', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -266,10 +266,10 @@ function main() {
   }
 
   if (!QUICK) {
-    console.log(color('\nRunning npm audit...', 'dim'));
+    console.log(color('\nRunning pnpm audit...', 'dim'));
     const audit = runNpmAudit();
     if (!audit) {
-      console.log(color('⚠ npm audit could not be parsed', 'yellow'));
+      console.log(color('⚠ pnpm audit could not be parsed', 'yellow'));
     } else {
       console.log(
         `  critical=${audit.critical}  high=${audit.high}  moderate=${audit.moderate}  low=${audit.low}`

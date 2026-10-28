@@ -3,7 +3,7 @@
 set -e
 
 # 1) Commitlint (conventional-commits rules)
-npx --no -- commitlint --edit "$1"
+pnpm exec commitlint --edit "$1"
 
 # 2) Custom semantic validator (anti-patterns, typos, quality heuristics)
 if [ -f "scripts/commit-validation.cjs" ]; then

@@ -5,13 +5,13 @@
  * This script gets only staged files (git add'ed) and runs prettier only on those files
  */
 
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const path = require('path');
 
 function getChangedFiles() {
   try {
     // Get only staged files (files that have been git add'ed)
-    const stagedFiles = execSync('git diff --cached --name-only', {
+    const stagedFiles = execFileSync('git', ['diff', '--cached', '--name-only'], {
       encoding: 'utf8',
     })
       .split('\n')
@@ -74,17 +74,18 @@ function formatFiles(files) {
   try {
     console.log('🎨 Formatting changed files...');
 
+    // Run the installed Prettier binary directly: no shell, no npx download, one argv entry per path.
+    const prettierCli = require.resolve('prettier/bin/prettier.cjs');
     // Split files into chunks to avoid command line length limits
     const chunkSize = 50;
     for (let i = 0; i < files.length; i += chunkSize) {
-      const chunk = files.slice(i, i + chunkSize);
-      const filesArg = chunk.map(f => `"${f}"`).join(' ');
+      const chunk = files.slice(i, i + chunkSize).map(f => (f.startsWith('-') ? `./${f}` : f));
 
       console.log(
         `Formatting chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(files.length / chunkSize)}: ${chunk.length} files`
       );
 
-      execSync(`npx prettier --write ${filesArg}`, {
+      execFileSync(process.execPath, [prettierCli, '--write', ...chunk], {
         stdio: 'inherit',
         cwd: process.cwd(),
       });
